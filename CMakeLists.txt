@@ -109,6 +109,15 @@ set(SMI_SRC_LIST ${SMI_SRC_LIST} "${SRC_DIR}/e_smi.c")
 set(SMI_SRC_LIST ${SMI_SRC_LIST} "${SRC_DIR}/e_smi_monitor.c")
 set(SMI_SRC_LIST ${SMI_SRC_LIST} "${SRC_DIR}/e_smi_utils.c")
 
+set(SMI_EXAMPLE_EXE "e_smi_example")
+set(SMI_TOOL "e_smi_tool")
+
+add_executable(${SMI_EXAMPLE_EXE} "example/e_smi_example.c")
+add_executable(${SMI_TOOL} "example/e_smi_tool.c")
+
+target_link_libraries(${SMI_EXAMPLE_EXE} ${E_SMI_TARGET})
+target_link_libraries(${SMI_TOOL} ${E_SMI_TARGET})
+
 add_library(${E_SMI_TARGET} SHARED ${SMI_SRC_LIST} ${SMI_INC_LIST})
 target_link_libraries(${E_SMI_TARGET} pthread rt m)
 
