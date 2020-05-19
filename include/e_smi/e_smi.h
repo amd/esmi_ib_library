@@ -151,6 +151,10 @@ void esmi_exit(void);
  *  energy profile of that particular cpu, this function will read the
  *  energy counter of the given core and update the @p peenergy in micro Joules.
  *
+ *  Note: The energy status registers are accessed at core level. In a system
+ *  with SMT enabled in BIOS, the sibling threads would report duplicate values.
+ *  Aggregating the energy counters of the sibling threads is incorrect.
+ *
  *  @param[in] core_ind is a core index
  *
  *  @param[inout] penergy The energy profile of a core

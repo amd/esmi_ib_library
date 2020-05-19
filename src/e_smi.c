@@ -38,6 +38,7 @@
  * DEALINGS WITH THE SOFTWARE.
  *
  */
+#include <cpuid.h>
 #include <dirent.h>
 #include <errno.h>
 #include <math.h>
@@ -54,7 +55,7 @@
  * total number of cores and sockets in the system
  * This number is not going to change for a power cycle.
  */
-static uint32_t total_cores, total_sockets;
+static uint32_t total_cores, total_sockets, threads_per_core;
 
 /*
  * Mark them uninitalize to start with
@@ -109,6 +110,18 @@ static void detect_cpus()
 static void detect_sockets()
 {
 	total_sockets = read_index(SYSFS_SOCKET_PATH) + 1;
+}
+
+/*
+ * Detect number of threads per core
+ */
+static void detect_threads_per_core()
+{
+	uint32_t eax, ebx, ecx, edx;
+
+	threads_per_core = 1;
+	if (__get_cpuid(0x08000001e, &eax, &ebx, &ecx, &edx))
+		threads_per_core = ((ebx >> 8) & 0xff) + 1;
 }
 
 /*
@@ -251,6 +264,7 @@ esmi_status_t esmi_init()
 
 	detect_cpus();
 	detect_sockets();
+	detect_threads_per_core();
 
 	ret = create_energy_monitor();
 	if (ret == ESMI_SUCCESS) {
@@ -292,6 +306,23 @@ uint32_t esmi_get_number_of_sockets(void)
 		detect_sockets();
 	}
 	return total_sockets;
+}
+
+/*
+ * If SMT is enabled, returns number threads_per_core
+ * else, returns 0
+ */
+static int esmi_smt_status(void)
+{
+	if (threads_per_core == 0) {
+		detect_threads_per_core();
+	}
+
+	if (threads_per_core > 1) {
+		return threads_per_core;
+	} else {
+		return 0;
+	}
 }
 
 static esmi_status_t energy_get(uint32_t sensor_id, uint64_t *penergy)
@@ -358,8 +389,14 @@ static esmi_status_t hsmp_write(monitor_types_t type,
  */
 esmi_status_t esmi_core_energy_get(uint32_t core_ind, uint64_t *penergy)
 {
-	if (core_ind >= total_cores) {
-		return ESMI_INVALID_INPUT;
+	if (esmi_smt_status()) {
+		if (core_ind >= total_cores/threads_per_core &&
+		    core_ind < total_cores) {
+		/* TODO: Use linux sibling mask to identify the logical core */
+			core_ind -= total_cores/threads_per_core;
+		}
+	} else if (core_ind >= total_cores) {
+			return ESMI_INVALID_INPUT;
 	}
 
 	return energy_get(core_ind, penergy);
@@ -376,9 +413,9 @@ esmi_status_t esmi_socket_energy_get(uint32_t sock_ind, uint64_t *penergy)
 
 	/*
 	 * The hwmon enumeration of socket energy entries starts
-	 * from "total_cores + sock_ind".
+	 * from "total_cores/threads_per_core + sock_ind".
 	 */
-	return energy_get(total_cores + sock_ind, penergy);
+	return energy_get((total_cores/threads_per_core) + sock_ind, penergy);
 }
 
 /*
