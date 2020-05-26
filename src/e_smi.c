@@ -308,23 +308,6 @@ uint32_t esmi_get_number_of_sockets(void)
 	return total_sockets;
 }
 
-/*
- * If SMT is enabled, returns number threads_per_core
- * else, returns 0
- */
-static int esmi_smt_status(void)
-{
-	if (threads_per_core == 0) {
-		detect_threads_per_core();
-	}
-
-	if (threads_per_core > 1) {
-		return threads_per_core;
-	} else {
-		return 0;
-	}
-}
-
 static esmi_status_t energy_get(uint32_t sensor_id, uint64_t *penergy)
 {
 	int ret;
@@ -389,15 +372,10 @@ static esmi_status_t hsmp_write(monitor_types_t type,
  */
 esmi_status_t esmi_core_energy_get(uint32_t core_ind, uint64_t *penergy)
 {
-	if (esmi_smt_status()) {
-		if (core_ind >= total_cores/threads_per_core &&
-		    core_ind < total_cores) {
-		/* TODO: Use linux sibling mask to identify the logical core */
-			core_ind -= total_cores/threads_per_core;
-		}
-	} else if (core_ind >= total_cores) {
-			return ESMI_INVALID_INPUT;
+	if (core_ind >= total_cores) {
+		return ESMI_INVALID_INPUT;
 	}
+	core_ind %= total_cores/threads_per_core;
 
 	return energy_get(core_ind, penergy);
 }
