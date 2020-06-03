@@ -1,7 +1,7 @@
 
-# EPYC™ System Management Interface (E-SMI) Library
+# EPYC™ System Management Interface (E-SMI) In-band Library
 
-The EPYC™ System Management Interface Library, or E-SMI library, is part of the EPYC™ System Management Inband software stack. It is a C library for Linux that provides a user space interface to monitor and control the CPU's Power, Energy and Performance.
+The EPYC™ System Management Interface In-band Library, or E-SMI library, is part of the EPYC™ System Management Inband software stack. It is a C library for Linux that provides a user space interface to monitor and control the CPU's Power, Energy and Performance.
 
 # Important note about Versioning and Backward Compatibility
 The E-SMI library is currently under development, and therefore subject to change at the API level. The intention is to keep the API as stable as possible while in development, but in some cases we may need to break backwards compatibility in order to achieve future stability and usability. Following Semantic Versioning rules, while the E-SMI library is in a high state of change, the major version will remain 0, and achieving backward compatibility may not be possible.
@@ -15,7 +15,7 @@ In order to build the E-SMI library, the following components are required. Note
 * CMake (v3.5.0)
 
 #### Dowloading the source
-The source code for E-SMI is available on [Github](https://github.com/amd/esmi_library).
+The source code for E-SMI library is available on [Github](https://github.com/amd/esmi_ib_library).
 
 #### Directory stucture of the source
 Once the E-SMI library source has been cloned to a local Linux machine, the directory structure of source is as below:
@@ -37,6 +37,15 @@ The documentation PDF file can be built with the following steps (continued from
 ##### ```$ cd latex```
 ##### ```$ make```
 The reference manual, `refman.pdf` will be in the `latex` directory and `refman.rtf` will be in the `rtf` directory upon a successful build.
+
+# Dependencies
+The E-SMI Library depends on the following device drivers from Linux to manage the system management features.
+
+## Monitoring Energy counters
+The Energy counters are exposed via the RAPL MSRs and the AMD Energy driver exposes the per core and per socket information via the HWMON sys entries. The AMD Energy driver is upstreamed and available as part of Linux v5.8, this driver may be insmoded as a module.
+
+## Monitoring and Managing Power metrics, Boostlimits
+The power metrics and Boostlimits features are managed by the SMU firmware and exposed via SMN PCI config space. AMD provided Linux HSMP driver exposes this information to the user-space via sys entries.
 
 # Usage Basics
 ## Device Indices
