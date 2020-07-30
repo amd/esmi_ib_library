@@ -56,6 +56,7 @@
  * This number is not going to change for a power cycle.
  */
 static uint32_t total_cores, total_sockets, threads_per_core;
+static uint32_t cpu_family, cpu_model;
 
 /*
  * Mark them uninitalize to start with
@@ -77,10 +78,7 @@ static int read_index(char *filepath)
 
 	fp = fopen(filepath, "r");
 	if (fp == NULL) {
-		/* Always '0'th core is present, eventhough
-		 * file not found so returning '0'th index
-		 */
-		return 0;
+		return -1;
 	}
 
 	if (fscanf(fp, "%s", buf) < 0) {
@@ -97,34 +95,6 @@ static int read_index(char *filepath)
 }
 
 /*
- * Detect total number of cores in the system
- */
-static void detect_cpus()
-{
-	total_cores = read_index(SYSFS_CPU_PATH) + 1;
-}
-
-/*
- * Detect total number of sockets in the system
- */
-static void detect_sockets()
-{
-	total_sockets = read_index(SYSFS_SOCKET_PATH) + 1;
-}
-
-/*
- * Detect number of threads per core
- */
-static void detect_threads_per_core()
-{
-	uint32_t eax, ebx, ecx, edx;
-
-	threads_per_core = 1;
-	if (__get_cpuid(0x08000001e, &eax, &ebx, &ecx, &edx))
-		threads_per_core = ((ebx >> 8) & 0xff) + 1;
-}
-
-/*
  * To get the first online core on a given socket
  */
 int esmi_get_online_core_on_socket(int socket_id)
@@ -133,7 +103,7 @@ int esmi_get_online_core_on_socket(int socket_id)
 	FILE *fp;
 	int i, socket;
 
-	for (i = 0; i < MAX_CPUS; i++) {
+	for (i = 0; i < total_cores; i++) {
 		snprintf(filepath, FILEPATHSIZ,
 			 "%s/cpu%d/topology/physical_package_id",
 			 CPU_PATH, i);
@@ -181,6 +151,7 @@ char * esmi_get_err_msg(esmi_status_t esmi_err)
 		case ESMI_INTERRUPTED:
 			return "Task Interrupted";
 		case ESMI_UNEXPECTED_SIZE:
+		case ESMI_IO_ERROR:
 			return "I/O Error";
 		case ESMI_UNKNOWN_ERROR:
 			return "Unknown error";
@@ -254,6 +225,37 @@ static esmi_status_t create_hsmp_monitor(void)
 	return ESMI_SUCCESS;
 }
 
+static esmi_status_t detect_packages()
+{
+	uint32_t eax, ebx, ecx,edx;
+	int ret;
+
+	if (!__get_cpuid(1, &eax, &ebx, &ecx, &edx)) {
+		return ESMI_IO_ERROR;
+	}
+	cpu_family = ((eax >> 8) & 0xf) + ((eax >> 20) & 0xff);
+	cpu_model = ((eax >> 16) & 0xf) * 0x10 + ((eax >> 4) & 0xf);
+
+	if (!__get_cpuid(0x08000001e, &eax, &ebx, &ecx, &edx)) {
+		return ESMI_IO_ERROR;
+	}
+	threads_per_core = ((ebx >> 8) & 0xff) + 1;
+
+	ret = read_index(CPU_COUNT_PATH);
+	if(ret < 0) {
+		return ESMI_IO_ERROR;
+	}
+	total_cores = ret + 1;
+
+	ret = read_index(SOCKET_COUNT_PATH);
+	if (ret < 0) {
+		return ESMI_IO_ERROR;
+	}
+	total_sockets = ret + 1;
+
+	return ESMI_SUCCESS;
+}
+
 /*
  * First initialization function to be executed and confirming
  * all the monitor or driver objects should be initialized or not
@@ -262,9 +264,10 @@ esmi_status_t esmi_init()
 {
 	esmi_status_t ret;
 
-	detect_cpus();
-	detect_sockets();
-	detect_threads_per_core();
+	ret = detect_packages();
+	if (ret != ESMI_SUCCESS) {
+		return ret;
+	}
 
 	ret = create_energy_monitor();
 	if (ret == ESMI_SUCCESS) {
@@ -290,22 +293,59 @@ void esmi_exit(void)
 	init_status = ESMI_NOT_INITIALIZED;
 }
 
-/* get number of cpus available */
-uint32_t esmi_get_number_of_cpus(void)
+/* get cpu family */
+esmi_status_t esmi_cpu_family_get(uint32_t *family)
 {
-	if (total_cores == 0) {
-		detect_cpus();
+	if (init_status == ESMI_NOT_INITIALIZED) {
+		return ESMI_NOT_INITIALIZED;
 	}
-	return total_cores;
+	*family = cpu_family;
+
+	return ESMI_SUCCESS;
+}
+
+/* get cpu model */
+esmi_status_t esmi_cpu_model_get(uint32_t *model)
+{
+	if (init_status == ESMI_NOT_INITIALIZED) {
+		return ESMI_NOT_INITIALIZED;
+	}
+	*model = cpu_model;
+
+	return ESMI_SUCCESS;
+}
+
+/* get number of threads per core */
+esmi_status_t esmi_threads_per_core_get(uint32_t *threads)
+{
+	if (init_status == ESMI_NOT_INITIALIZED) {
+		return ESMI_NOT_INITIALIZED;
+	}
+	*threads = threads_per_core;
+
+	return ESMI_SUCCESS;
+}
+
+/* get number of cpus available */
+esmi_status_t esmi_number_of_cpus_get(uint32_t *cpus)
+{
+	if (init_status == ESMI_NOT_INITIALIZED) {
+		return ESMI_NOT_INITIALIZED;
+	}
+	*cpus = total_cores;
+
+	return ESMI_SUCCESS;
 }
 
 /* get number of sockets available */
-uint32_t esmi_get_number_of_sockets(void)
+esmi_status_t esmi_number_of_sockets_get(uint32_t *sockets)
 {
-	if (total_sockets == 0) {
-		detect_sockets();
+	if (init_status == ESMI_NOT_INITIALIZED) {
+		return ESMI_NOT_INITIALIZED;
 	}
-	return total_sockets;
+	*sockets = total_sockets;
+
+	return ESMI_SUCCESS;
 }
 
 static esmi_status_t energy_get(uint32_t sensor_id, uint64_t *penergy)
@@ -430,7 +470,6 @@ esmi_status_t esmi_socket_power_cap_get(uint32_t sock_ind, uint32_t *pcap)
  */
 esmi_status_t esmi_socket_power_cap_max_get(uint32_t sock_ind, uint32_t *pmax)
 {
-
 	if (sock_ind >= total_sockets) {
 		return ESMI_INVALID_INPUT;
 	}

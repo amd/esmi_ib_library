@@ -44,6 +44,8 @@
 #include <stdint.h>
 #include <unistd.h>
 
+#include <e_smi/e_smi_utils.h>
+
 int readfile_u32(char *filepath, uint32_t *pval)
 {
 	FILE *fptr;

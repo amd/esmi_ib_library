@@ -44,21 +44,6 @@
 #define ENERGY_DEV_NAME	"amd_energy"	//!< Supported Energy driver name
 #define HSMP_DEV_NAME	"amd_hsmp"	//!< Supported HSMP driver name
 
-#define MAX_CPUS	1024
-#define MAX_SOCKETS	16
-
-#define FILEPATHSIZ	512 //!< Buffer to hold size of sysfs filepath
-#define DRVPATHSIZ	256 //!< size of driver location path
-#define FILESIZ		128
-/*
- * SYSFS_CPU_PATH is used to get the total number of CPUs in the system.
- */
-#define SYSFS_CPU_PATH "/sys/devices/system/cpu/present"
-/*
- * SYSFS_SOCKET_SATH is used to get the total number of sockets in the system.
- */
-#define SYSFS_SOCKET_PATH "/sys/devices/system/node/possible"
-
 /** \file e_smi.h
  *  Main header file for the E-SMI library.
  *  All required function, structure, enum, etc. definitions should be defined
@@ -69,16 +54,6 @@
  *  Description of the API, arguments and return values.
  *  The Error codes returned by the API.
  */
-
-/**
- * @brief Sysfs directory path for hwmon devices.
- */
-#define HWMON_PATH "/sys/class/hwmon"
-
-/**
- * @brief The core sysfs directory.
- */
-#define CPU_PATH "/sys/devices/system/cpu"
 
 /**
  * @brief Error codes retured by E-SMI functions
@@ -103,6 +78,7 @@ typedef enum {
 				//!< machine
 	ESMI_INTERRUPTED,	//!< An interrupt occurred during
 				//!< execution of function
+	ESMI_IO_ERROR,		//!< An input or output error
 	ESMI_UNEXPECTED_SIZE,	//!< An unexpected amount of data
 				//!< was read
 	ESMI_UNKNOWN_ERROR,	//!< An unknown error occurred
@@ -114,15 +90,15 @@ typedef enum {
 
 /****************************************************************************/
 /** @defgroup InitShut Initialization and Shutdown
- *  This function initializes the monitor paths to be used by the APIs.
+ *  This function validates the dependencies exists and initializes the library.
  *  @{
 */
 
 /**
- *  @brief Initialize monitor paths
+ *  @brief Initialize the library, validate the dependencies exists
  *
- *  @details Search the available monitors and fill up the paths
- *  for each monitor.
+ *  @details Search the available dependency entries and initialize
+ *  the library accordingly.
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
@@ -149,7 +125,7 @@ void esmi_exit(void);
  *
  *  @details Given a core index @p core_ind, and a @p penergy argument for
  *  energy profile of that particular cpu, this function will read the
- *  energy counter of the given core and update the @p peenergy in micro Joules.
+ *  energy counter of the given core and update the @p penergy in micro Joules.
  *
  *  Note: The energy status registers are accessed at core level. In a system
  *  with SMT enabled in BIOS, the sibling threads would report duplicate values.
@@ -216,8 +192,8 @@ esmi_status_t esmi_socket_power_avg_get(uint32_t socket_ind, uint32_t *ppower);
  *  @brief Get the current power cap value for a given socket.
  *
  *  @details This function will return the valid power cap @p pcap for a given
- *  socket @ socket_ind, this value will be used for the system to limit
- *  the power.
+ *  socket @p socket_ind, this value will be used by the system to limit
+ *  the power usage.
  *
  *  @param[in] socket_ind a socket index
  *
@@ -231,8 +207,7 @@ esmi_status_t esmi_socket_power_avg_get(uint32_t socket_ind, uint32_t *ppower);
 esmi_status_t esmi_socket_power_cap_get(uint32_t socket_ind, uint32_t *pcap);
 
 /**
- *  @brief Get the maximum value that can be assigned as a power cap for
- *  a given socket.
+ *  @brief Get the maximum power cap value for a given socket.
  *
  *  @details This function will return the maximum possible valid power cap
  *  @p pmax from a @p socket_ind.
@@ -261,8 +236,9 @@ esmi_status_t esmi_socket_power_cap_max_get(uint32_t socket_ind,
 /**
  *  @brief Set the power cap value for a given socket.
  *
- *  @details This function will set the power cap to the provided value @p cap.
- *
+ *  @details This function will set the power cap to the provided value @p pcap.
+ *  This cannot be more than the value returned by esmi_socket_power_cap_max_get().
+
  *  @param[in] socket_ind a socket index
  *
  *  @param[in] pcap a uint32_t that indicates the desired power cap, in
@@ -314,7 +290,7 @@ esmi_status_t esmi_core_boostlimit_get(uint32_t cpu_ind,
  *  @brief Set the boostlimit value for a given core
  *
  *  @details This function will set the boostlimit to the provided value @p
- *  boostlimit for a given cpu.
+ *  boostlimit for a given cpu @p cpu_ind.
  *
  *  @param[in] cpu_ind a cpu index is a given core to set the boostlimit
  *
@@ -331,12 +307,12 @@ esmi_status_t esmi_core_boostlimit_set(uint32_t cpu_ind, uint32_t boostlimit);
  *  @brief Set the boostlimit value for a given socket.
  *
  *  @details This function will set the boostlimit to the provided value @p
- *  boostlimit for a given socket.
+ *  boostlimit for a given socket @p socket_ind.
  *
- *  @param[in] socket_ind a socket index to set boostlimit
+ *  @param[in] socket_ind a socket index to set boostlimit.
  *
  *  @param[in] boostlimit a uint32_t that indicates the desired boostlimit
- *  value of a particular socket
+ *  value of a particular socket.
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
@@ -346,13 +322,13 @@ esmi_status_t esmi_socket_boostlimit_set(uint32_t socket_ind,
 					 uint32_t boostlimit);
 
 /**
- *  @brief Set the boostlimit value for the whole package (whole system).
+ *  @brief Set the boostlimit value for the package (whole system).
  *
  *  @details This function will set the boostlimit to the provided value @p
  *  boostlimit for the whole package.
  *
  *  @param[in] boostlimit a uint32_t that indicates the desired boostlimit
- *  value of the package
+ *  value of the package.
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
@@ -373,12 +349,12 @@ esmi_status_t esmi_package_boostlimit_set(uint32_t boostlimit);
  *  @brief Get the tctl value for a given socket
  *
  *  @details This function will return the socket's current tctl
- *  @p ptctl for a particular @p sock_ind
+ *  @p ptctl for a particular @p sock_ind.
  *
  *  @param[in] sock_ind a socket index provided.
  *
  *  @param[inout] ptctl pointer to a uint32_t that indicates the
- *  possible tctl value
+ *  possible tctl value.
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
@@ -424,23 +400,54 @@ esmi_status_t esmi_socket_c0_residency_get(uint32_t sock_ind,
 */
 
 /**
- *  @brief Get the number of cpus available
+ *  @brief Get the CPU family
  *
- *  @details Get the total number of cpus available in the system
+ *  @param[out] family cpu family number
  *
- *  @retval uint32_t is returned upon successful call.
- *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
  */
-uint32_t esmi_get_number_of_cpus(void);
+esmi_status_t esmi_cpu_family_get(uint32_t *family);
 
 /**
- *  @brief Get the number of sockets available.
+ *  @brief Get the CPU model
  *
- *  @details Get the total number of sockets available in the system
+ *  @param[out] model cpu model number
  *
- *  @retval uint32_t is returned upon successful call.
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
  */
-uint32_t esmi_get_number_of_sockets(void);
+esmi_status_t esmi_cpu_model_get(uint32_t *model);
+
+/**
+ *  @brief Get the number of threads per core in the system
+ *
+ *  @param[out] threads number of threads per core in the system
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ */
+esmi_status_t esmi_threads_per_core_get(uint32_t *threads);
+
+/**
+ *  @brief Get the number of cpus available in the system
+ *
+ *  @param[out] cpus number of cpus in the system
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ */
+esmi_status_t esmi_number_of_cpus_get(uint32_t *cpus);
+
+/**
+ *  @brief Get the total number of sockets available in the system
+ *
+ *  @param[out] sockets number of sockets in the system
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ */
+esmi_status_t esmi_number_of_sockets_get(uint32_t *sockets);
 
 /**
  * @brief Get the first online core on a given socket.

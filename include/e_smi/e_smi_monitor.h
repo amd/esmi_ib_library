@@ -51,6 +51,30 @@
 
 #include <stdint.h>
 
+#define FILEPATHSIZ	512 //!< Buffer to hold size of sysfs filepath
+#define DRVPATHSIZ	256 //!< size of driver location path
+#define FILESIZ		128 //!< size of filename
+
+/**
+ * @brief Path used to get the total number of CPUs in the system.
+ */
+#define CPU_COUNT_PATH "/sys/devices/system/cpu/present"
+
+/**
+ * @brief Path used to get the total number of sockets in the system.
+ */
+#define SOCKET_COUNT_PATH "/sys/devices/system/node/possible"
+
+/**
+ * @brief Sysfs directory path for hwmon devices.
+ */
+#define HWMON_PATH "/sys/class/hwmon"
+
+/**
+ * @brief The core sysfs directory.
+ */
+#define CPU_PATH "/sys/devices/system/cpu"
+
 /**
  * MONITOR TYPES
  * @brief This enum gives information to identify whether the monitor type is
