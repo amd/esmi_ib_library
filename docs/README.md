@@ -45,6 +45,11 @@ The Energy counters are exposed via the RAPL MSRs and the AMD Energy driver expo
 ## Monitoring and Managing Power metrics, Boostlimits
 The power metrics and Boostlimits features are managed by the SMU firmware and exposed via SMN PCI config space. AMD provided Linux HSMP driver exposes this information to the user-space via sys entries.
 
+#### Building the Package
+RPM & DEB package support is provided in this library.
+Following steps to be followed to create package (continued from the steps above):
+##### ```$ make package```
+
 # Usage Basics
 ## Device Indices
 Many of the functions in the library take a "core/socket index". The core/socket index is a number greater than or equal to 0, and less than the number of cores/sockets on the system.

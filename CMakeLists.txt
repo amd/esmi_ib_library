@@ -139,6 +139,8 @@ install(TARGETS ${E_SMI_TARGET}
           LIBRARY DESTINATION ${E_SMI}/lib COMPONENT ${E_SMI_COMPONENT})
 install(FILES ${SOURCE_DIR}/include/e_smi/e_smi.h
                                         DESTINATION e_smi/include/e_smi)
+install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/${SMI_TOOL}
+					DESTINATION ${E_SMI}/bin)
 
 # Generate Doxygen documentation
 find_package(Doxygen)
@@ -161,3 +163,34 @@ if (DOXYGEN_FOUND)
 else()
   message("Doxygen is not found. Will not generate documents.")
 endif(DOXYGEN_FOUND)
+
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/ESMI_Manual.pdf
+                         DESTINATION ${E_SMI}/doc/)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/docs/README.md
+                         DESTINATION ${E_SMI}/doc/)
+
+# General package specific variables
+set(CPACK_GENERATOR "DEB;RPM"  CACHE STRING "Default packaging generators.")
+set(CPACK_PACKAGE_NAME ${E_SMI_PACKAGE})
+set(CPACK_PACKAGE_VERSION ${PKG_VERSION_STR})
+set(CPACK_PROJECT_CONFIG_FILE ${CMAKE_SOURCE_DIR}/package.txt)
+
+# DEB package specific variables
+set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")
+set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
+    "${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/postinst;
+     ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/prerm")
+set(CPACK_DEBIAN_PACKAGE_NAME  ${E_SMI_PACKAGE})
+set(CPACK_DEBIAN_PACKAGE_VERSION ${PKG_VERSION_STR})
+
+# RPM package specific variables
+set(CPACK_RPM_PACKAGE_ARCHITECTURE "x86_64")
+set(CPACK_RPM_PACKAGE_AUTOREQ "no")
+set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE
+       "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_post")
+set(CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE
+       "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_postun")
+set(CPACK_RPM_PACKAGE_NAME  ${E_SMI_PACKAGE})
+set(CPACK_RPM_PACKAGE_VERSION ${PKG_VERSION_STR})
+
+include (CPack)
