@@ -34,8 +34,6 @@ The built library will appear in the `build` folder.
 #### Building the Documentation
 The documentation PDF file can be built with the following steps (continued from the steps above):
 ##### ```$ make doc```
-##### ```$ cd latex```
-##### ```$ make```
 The reference manual, `refman.pdf` will be in the `latex` directory and `refman.rtf` will be in the `rtf` directory upon a successful build.
 
 # Dependencies

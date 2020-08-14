@@ -145,10 +145,19 @@ find_package(Doxygen)
 if (DOXYGEN_FOUND)
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/docs/esmi_doxygen.cfg
 			${CMAKE_CURRENT_BINARY_DIR}/Doxyfile @ONLY)
-  add_custom_target(doc
-	${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
-	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-		COMMENT "Generating API documentation with Doxygen" VERBATIM)
+
+  add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/latex/refman.tex
+       COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
+       DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/docs/esmi_doxygen.cfg
+       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+  add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/latex/refman.pdf
+       COMMAND make  > /dev/null
+       COMMAND cp  ${CMAKE_CURRENT_BINARY_DIR}/latex/refman.pdf
+              ${CMAKE_CURRENT_SOURCE_DIR}/ESMI_Manual.pdf
+       DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/latex/refman.tex
+       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/latex)
+
+  add_custom_target(doc DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/latex/refman.pdf)
 else()
   message("Doxygen is not found. Will not generate documents.")
 endif(DOXYGEN_FOUND)
