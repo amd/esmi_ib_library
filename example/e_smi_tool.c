@@ -272,6 +272,8 @@ static void show_usage(char *exe_name)
 	printf("Usage: %s [Option<s>] SOURCES\n"
 	"Option<s>:\n"
 	"\t-A, (--showall)\t\t\t\t\t\tGet all esmi parameter Values\n"
+	"\t-l, (--showallenergy)\t\t\t\t\tGet energies for all cpus and "
+        "sockets\n"
 	"\t-e, (--showcoreenergy)\t  [CORENUM]\t\t\tGet energy for a given"
 	" CPU\n"
 	"\t-s, (--showsocketenergy)  [SOCKETNUM]\t\t\tGet energy for a given"
@@ -351,6 +353,42 @@ void show_smi_parameters(void)
 		core_input, pkg_input,
 		(double)avgpower/1000, (double)powercap/1000,
 		(double)powermax/1000, boostlimit);
+}
+
+void show_all_energy_counters(void)
+{
+	int i;
+	uint64_t *input;
+	uint32_t cpus;
+	uint32_t sockets;
+	uint32_t threads;
+	esmi_status_t status;
+
+	esmi_threads_per_core_get(&threads);
+	esmi_number_of_cpus_get(&cpus);
+	cpus = cpus/threads;
+	esmi_number_of_sockets_get(&sockets);
+
+	input = (uint64_t *) calloc(cpus + sockets, sizeof(uint64_t));
+	if (NULL == input) {
+		printf("Memory allocation failed all energy entries\n");
+	}
+
+	status = esmi_all_energies_get(input, cpus + sockets);
+	if (status != ESMI_SUCCESS) {
+		printf("Failed: to get all energies, Err[%d]: %s\n",
+			status, esmi_get_err_msg(status));
+		return;
+	}
+	for (i = 0; i < cpus + sockets; i++) {
+		if (i < cpus) {
+			printf("cpu  [%3d] : %12ld uJoules\n", i, input[i]);
+		} else {
+			printf("socket [%d] : %12ld uJoules\n", i - cpus, input[i]);
+
+		}
+	}
+	free(input);
 }
 
 void show_smi_all_parameters(void)
@@ -441,6 +479,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 	static struct option long_options[] = {
 		{"help",                no_argument,		0,	'h'},
 		{"showall",             no_argument,		0,	'A'},
+		{"showallenergy",       no_argument,		0,	'l'},
 		{"showcoreenergy",      required_argument,	0,	'e'},
 		{"showsocketenergy",	required_argument,	0,	's'},
 		{"showsocketpower",     required_argument,	0,	'p'},
@@ -455,7 +494,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 	};
 
 	int long_index = 0;
-	char *helperstring = "+hAe:s:p:L:C:a:b:c:t:r:";
+	char *helperstring = "+hAle:s:p:L:C:a:b:c:t:r:";
 
 	if (getuid() != 0) {
 		while ((opt = getopt_long(argc, argv, helperstring,
@@ -583,6 +622,9 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 
 		case 'A' :
 			show_smi_all_parameters();
+			break;
+		case 'l' :
+			show_all_energy_counters();
 			break;
 		case 'h' :
 			show_usage(argv[0]);
