@@ -172,6 +172,23 @@ int read_energy(monitor_types_t type,
 	return readfile_u64(file_path, pval);
 }
 
+int batch_read_energy(monitor_types_t type, uint64_t *pval, uint32_t entries)
+{
+	char file_path[FILEPATHSIZ];
+	int i, ret, status = 0;
+
+	memset(pval, 0, entries * sizeof(uint64_t));
+	for (i = 0; i < entries; i++) {
+		make_path(type, energymon_path, i + 1, file_path);
+		ret = readfile_u64(file_path, &pval[i]);
+		if (ret != 0 && ret != ENODEV) {
+			status = ret;
+		}
+	}
+
+	return status;
+}
+
 int hsmp_read32(monitor_types_t type,
 		uint32_t sensor_id, uint32_t *pval)
 {

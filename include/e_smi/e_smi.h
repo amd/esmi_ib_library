@@ -160,6 +160,23 @@ esmi_status_t esmi_core_energy_get(uint32_t core_ind, uint64_t *penergy);
  */
 esmi_status_t esmi_socket_energy_get(uint32_t socket_ind, uint64_t *penergy);
 
+/**
+ *  @brief Get energies of all cores and sockets in the system.
+ *
+ *  @details Given an argument for energy profile @p penergy, and @p entries
+ *  number of energy entries to read. This function will read all core and
+ *  socket energies in an array @p penergy in micro Joules.
+ *
+ *  @param[out] penergy Address of allocated entries to get all energies.
+ *
+ *  @param[in] entries number of energy entries to read.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_all_energies_get(uint64_t *penergy, uint32_t entries);
+
 /** @} */  // end of EnergyQuer
 
 /*****************************************************************************/

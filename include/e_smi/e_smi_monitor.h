@@ -96,6 +96,7 @@ typedef enum {
 char energymon_path[DRVPATHSIZ], hsmpmon_path[DRVPATHSIZ];
 
 int read_energy(monitor_types_t type, uint32_t sensor_id, uint64_t *val);
+int batch_read_energy(monitor_types_t type, uint64_t *pval, uint32_t entries);
 
 int hsmp_read32(monitor_types_t type, uint32_t sensor_id, uint32_t *val);
 int hsmp_write32(monitor_types_t type, uint32_t sensor_id, uint32_t val);

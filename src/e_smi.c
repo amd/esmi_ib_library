@@ -437,6 +437,27 @@ esmi_status_t esmi_socket_energy_get(uint32_t sock_ind, uint64_t *penergy)
 }
 
 /*
+ * Function to get the enenrgy of cpus and sockets.
+ */
+esmi_status_t esmi_all_energies_get(uint64_t *penergy, uint32_t entries)
+{
+	int ret;
+
+	if (init_status == ESMI_NOT_INITIALIZED) {
+		return ESMI_NOT_INITIALIZED;
+	} else if (energy_status == ESMI_NOT_INITIALIZED) {
+		return ESMI_NO_ENERGY_DRV;
+	}
+	if (NULL == penergy) {
+		return ESMI_ARG_PTR_NULL;
+	}
+
+	ret = batch_read_energy(ENERGY_TYPE, penergy, entries);
+
+	return errno_to_esmi_status(ret);
+}
+
+/*
  * Power Monitoring Functions
  *
  * Function to get the Average Power consumed of the Socket with provided
