@@ -57,7 +57,7 @@ int main()
 		return ret;
 	}
 
-	total_sockets = esmi_get_number_of_sockets();
+	esmi_number_of_sockets_get(&total_sockets);
 	for (i = 0; i < total_sockets; i++) {
 		power = 0;
 		ret = esmi_socket_power_avg_get(i, &power);

@@ -70,7 +70,7 @@ esmi_status_t epyc_get_coreenergy(uint32_t core_id)
 			core_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("hwmon/core_energy[%d]_input\t: %12ld uJoules\n",
+	printf("core[%d]/energy\t: %12ld uJoules\n",
 		core_id, core_input);
 	return ESMI_SUCCESS;
 }
@@ -86,7 +86,7 @@ esmi_status_t epyc_get_sockenergy(uint32_t sock_id)
 			sock_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("hwmon/socket_energy[%d]_input\t: %12ld uJoules\n",
+	printf("socket[%d]/energy\t: %12ld uJoules\n",
 		sock_id, pkg_input);
 	return ESMI_SUCCESS;
 }
@@ -311,10 +311,19 @@ void show_smi_parameters(void)
 	uint64_t core_input = 0, pkg_input = 0;
 	uint32_t boostlimit = 0, avgpower = 0;
 	uint32_t powercap = 0, powermax = 0;
+	uint32_t cpus, sockets, threads, family, model;
 
-	printf("_TOPOLOGY	| Count	| \n");
-	printf("#CPUS		| %5d | \n", esmi_get_number_of_cpus());
-	printf("#SOCKETS	| %5d | \n\n", esmi_get_number_of_sockets());
+	esmi_number_of_cpus_get(&cpus);
+	esmi_number_of_sockets_get(&sockets);
+	esmi_threads_per_core_get(&threads);
+	esmi_cpu_family_get(&family);
+	esmi_cpu_model_get(&model);
+
+	printf("CPU family %xh, model %xh\n", family, model);
+	printf("# NR_CPUS		| %8d | \n", cpus);
+	printf("# NR_SOCKETS		| %8d | \n", sockets);
+	printf("# THREADS PER CORE	| %8d | \n", threads);
+	printf("# SMT			| %sabled | \n", (threads > 1) ? "en": "dis");
 
 	/* Get the energy of the core for a given core index */
 	esmi_core_energy_get(id, &core_input);
@@ -330,14 +339,15 @@ void show_smi_parameters(void)
 	/* Get the boostlimit value for a given given core */
 	esmi_core_boostlimit_get(id, &boostlimit);
 
-	printf(RED "Power metrics for CORE[0]/SOCKET[0]:" RESET"\n");
-	printf("_SENSOR NAME		| 		Value in Units		|\n");
-	printf("_CORE_ENERGY 		| %24ld uJoules	|\n"
-		"_SOCKET_ENERGY		| %24ld uJoules	|\n"
-		"_SOCKET_AVG_POWER 	| %24.03f Watts	|\n"
-		"_SOCKET_POWERCAP 	| %24.03f Watts	|\n"
-		"_SOCKET_MAX_POWERCAP 	| %24.03f Watts	|\n"
-		"_CORE_BOOSTLIMIT 	| %24u MHz		|\n",
+	printf(RED "\n\nEnergy/Power/Boostlimit for CORE[0]/SOCKET[0]:" RESET"\n");
+	printf("# SENSOR NAME		| 	Value in Units		|\n");
+	printf("---------------------------------------------------------\n");
+	printf( "# CORE_ENERGY		| %16ld uJoules	|\n"
+		"# SOCKET_ENERGY		| %16ld uJoules	|\n"
+		"# SOCKET_AVG_POWER	| %16.03f Watts	|\n"
+		"# SOCKET_POWERCAP	| %16.03f Watts	|\n"
+		"# SOCKET_MAX_POWERCAP	| %16.03f Watts	|\n"
+		"# CORE_BOOSTLIMIT	| %16u MHz		|\n",
 		core_input, pkg_input,
 		(double)avgpower/1000, (double)powercap/1000,
 		(double)powermax/1000, boostlimit);
@@ -353,9 +363,9 @@ void show_smi_all_parameters(void)
 	uint32_t socket_count = 0;
 
 	/* get the number of cpus available */
-	cpu_count = esmi_get_number_of_cpus();
+	esmi_number_of_cpus_get(&cpu_count);
 	/* get the number of sockets available */
-	socket_count = esmi_get_number_of_sockets();
+	esmi_number_of_sockets_get(&socket_count);
 
 	printf("_TOPOLOGY	| Count	     | \n");
 	printf("#CPUS		| %10d | \n", cpu_count);
