@@ -10,31 +10,14 @@ Once new development has leveled off, the major version will become greater than
 
 # Building E-SMI
 
-#### Additional Required software for building
+## Additional Required software for building
 In order to build the E-SMI library, the following components are required. Note that the software versions listed are what is being used in development. Earlier versions are not guaranteed to work:
 * CMake (v3.5.0)
 
-#### Dowloading the source
-The source code for E-SMI library is available on [Github](https://github.com/amd/esmi_ib_library).
+In order to build the latest documentation, the following are required:
 
-#### Directory stucture of the source
-Once the E-SMI library source has been cloned to a local Linux machine, the directory structure of source is as below:
-* `$ docs/` Contains Doxygen configuration files and Library descriptions
-* `$ example/` Contains e-smi tool, based on the E-SMI library
-* `$ include/` Contains the header files used by the E-SMI library
-* `$ src/` Contains library E-SMI source
-
-Building the library is achieved by following the typical CMake build sequence, as follows.
-##### ```$ mkdir -p build```
-##### ```$ cd build```
-##### ```$ cmake <location of root of E-SMI library CMakeLists.txt>```
-##### ```$ make```
-The built library will appear in the `build` folder.
-
-#### Building the Documentation
-The documentation PDF file can be built with the following steps (continued from the steps above):
-##### ```$ make doc```
-The reference manual, `refman.pdf` will be in the `latex` directory and `refman.rtf` will be in the `rtf` directory upon a successful build.
+* DOxygen (1.8.13)
+* latex (pdfTeX 3.14159265-2.6-1.40.18)
 
 # Dependencies
 The E-SMI Library depends on the following device drivers from Linux to manage the system management features.
@@ -45,10 +28,35 @@ The Energy counters are exposed via the RAPL MSRs and the AMD Energy driver expo
 ## Monitoring and Managing Power metrics, Boostlimits
 The power metrics and Boostlimits features are managed by the SMU firmware and exposed via SMN PCI config space. AMD provided Linux HSMP driver exposes this information to the user-space via sys entries.
 
-#### Building the Package
+## Dowloading the source
+The source code for E-SMI library is available on [Github](https://github.com/amd/esmi_ib_library).
+
+## Directory stucture of the source
+Once the E-SMI library source has been cloned to a local Linux machine, the directory structure of source is as below:
+* `$ docs/` Contains Doxygen configuration files and Library descriptions
+* `$ example/` Contains e-smi tool, based on the E-SMI library
+* `$ include/` Contains the header files used by the E-SMI library
+* `$ src/` Contains library E-SMI source
+
+Building the library is achieved by following the typical CMake build sequence, as follows.
+#### ```$ mkdir -p build```
+#### ```$ cd build```
+#### ```$ cmake <location of root of E-SMI library CMakeLists.txt>```
+#### ```$ make```
+The built library will appear in the `build` folder.
+
+#### ```# Install library file and header; default location is /opt/esmi```
+#### ```$ sudo make install```
+
+## Building the Documentation
+The documentation PDF file can be built with the following steps (continued from the steps above):
+#### ```$ make doc```
+The reference manual, `refman.pdf` will be in the `latex` directory and `refman.rtf` will be in the `rtf` directory upon a successful build.
+
+# Building the Package
 RPM & DEB package support is provided in this library.
 Following steps to be followed to create package (continued from the steps above):
-##### ```$ make package```
+#### ```$ make package```
 
 # Usage Basics
 ## Device Indices
