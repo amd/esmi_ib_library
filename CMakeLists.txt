@@ -159,15 +159,40 @@ if (DOXYGEN_FOUND)
        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/latex/refman.tex
        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/latex)
 
-  add_custom_target(doc DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/latex/refman.pdf)
+  # To create directory "rel" to contain seprate latex, html, etc.
+  set(folder "rel")
+  add_custom_command(OUTPUT ${folder}
+	COMMAND mkdir ${folder}
+  )
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/docs/release_notes_doxygen.cfg
+                        ${CMAKE_CURRENT_BINARY_DIR}/rel/Doxyfile @ONLY)
+  add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/rel/latex/refman.tex
+        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/rel/Doxyfile
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/docs/release_notes_doxygen.cfg
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/rel)
+  add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/rel/latex/refman.pdf
+        COMMAND make  > /dev/null
+        COMMAND cp  ${CMAKE_CURRENT_BINARY_DIR}/rel/latex/refman.pdf
+                ${CMAKE_CURRENT_SOURCE_DIR}/ESMI_IB_Release_Notes.pdf
+        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/rel/latex/refman.tex
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/rel/latex)
+
+  add_custom_target(doc DEPENDS ${folder} ${CMAKE_CURRENT_BINARY_DIR}/latex/refman.pdf
+			${CMAKE_CURRENT_BINARY_DIR}/rel/latex/refman.pdf)
+
 else()
   message("Doxygen is not found. Will not generate documents.")
 endif(DOXYGEN_FOUND)
 
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/ESMI_Manual.pdf
-                         DESTINATION ${E_SMI}/doc/)
+			DESTINATION ${E_SMI}/doc/)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/docs/README.md
-                         DESTINATION ${E_SMI}/doc/)
+			DESTINATION ${E_SMI}/doc/)
+
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/ESMI_IB_Release_Notes.pdf
+			DESTINATION ${E_SMI}/doc/)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/docs/RELEASENOTES.md
+			DESTINATION ${E_SMI}/doc/)
 
 # General package specific variables
 set(CPACK_GENERATOR "DEB;RPM"  CACHE STRING "Default packaging generators.")
