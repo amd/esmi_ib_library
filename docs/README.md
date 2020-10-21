@@ -42,6 +42,10 @@ Building the library is achieved by following the typical CMake build sequence, 
 #### ```$ mkdir -p build```
 #### ```$ cd build```
 #### ```$ cmake <location of root of E-SMI library CMakeLists.txt>```
+Building the library as a Static(.a) along with shared libraries(.so) is achieved by following sequence.
+The static library is part of RPM and DEB package when compiled with cmake as below and built with 'make package'.
+The below step can be skipped if static lib support is not required
+#### ```$ cmake -DENABLE_STATIC_LIB=1 <location of root of E-SMI library CMakeLists.txt>```
 #### ```$ make```
 The built library will appear in the `build` folder.
 

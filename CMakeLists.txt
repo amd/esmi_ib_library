@@ -3,6 +3,14 @@
 #
 cmake_minimum_required(VERSION 3.5.0)
 
+#
+#   cmake command line options:
+#
+#   1) Set ENABLE_STATIC_LIB to either "1" or "0".
+#      If not set, the default value is "disbaled"
+#
+#      example #cmake -DENABLE_STATIC_LIB=1 ..
+
 ## Set default module path if not already set
 if(NOT DEFINED CMAKE_MODULE_PATH)
     set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
@@ -10,9 +18,13 @@ endif()
 ## Include common cmake modules
 include(utils)
 
+set(ENABLE_STATIC_LIB OFF CACHE STRING
+    "Whether to build as a Static Library. Set 1 to Enable, default is Disabled.")
+
 set(E_SMI "e_smi")
 set(E_SMI_COMPONENT "lib${E_SMI}")
 set(E_SMI_TARGET "${E_SMI}64")
+set(E_SMI_STATIC "${E_SMI_TARGET}_static")
 
 # The following default version values should be updated as appropriate for
 # ABI breaks (update MAJOR and MINOR), and ABI/API additions (update MINOR).
@@ -115,8 +127,14 @@ set(SMI_TOOL "e_smi_tool")
 add_executable(${SMI_EXAMPLE_EXE} "example/e_smi_example.c")
 add_executable(${SMI_TOOL} "example/e_smi_tool.c")
 
-target_link_libraries(${SMI_EXAMPLE_EXE} ${E_SMI_TARGET})
-target_link_libraries(${SMI_TOOL} ${E_SMI_TARGET})
+## If the tool to be linked with Static library
+if ("${ENABLE_STATIC_LIB}" STREQUAL 1)
+    target_link_libraries(${SMI_EXAMPLE_EXE} ${E_SMI_STATIC})
+    target_link_libraries(${SMI_TOOL} ${E_SMI_STATIC})
+else ()
+    target_link_libraries(${SMI_EXAMPLE_EXE} ${E_SMI_TARGET})
+    target_link_libraries(${SMI_TOOL} ${E_SMI_TARGET})
+endif ()
 
 add_library(${E_SMI_TARGET} SHARED ${SMI_SRC_LIST} ${SMI_INC_LIST})
 target_link_libraries(${E_SMI_TARGET} pthread rt m)
@@ -132,6 +150,14 @@ if ("${CMAKE_BUILD_TYPE}" STREQUAL Release)
     add_custom_command(
           TARGET ${E_SMI_TARGET}
           POST_BUILD COMMAND ${CMAKE_STRIP} lib${E_SMI_TARGET}.so)
+endif ()
+
+## If the library to be build as a Static
+if ("${ENABLE_STATIC_LIB}" STREQUAL 1)
+    add_library(${E_SMI_STATIC} STATIC ${SMI_SRC_LIST} ${SMI_INC_LIST})
+    target_link_libraries(${E_SMI_STATIC} pthread rt m)
+    install(TARGETS ${E_SMI_STATIC}
+          ARCHIVE DESTINATION ${E_SMI}/lib/static COMPONENT ${E_SMI_COMPONENT})
 endif ()
 
 ## Add the install directives for the runtime library.
