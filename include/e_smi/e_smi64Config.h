@@ -38,105 +38,15 @@
  * DEALINGS WITH THE SOFTWARE.
  *
  */
-#include <errno.h>
-#include <fcntl.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <unistd.h>
 
-#include <e_smi/e_smi_utils.h>
+#ifndef INCLUDE_E_SMI_E_SMI64CONFIG_H_
+#define INCLUDE_E_SMI_E_SMI64CONFIG_H_
 
-int readfile_u32(char *filepath, uint32_t *pval)
-{
-	FILE *fptr;
+// This file is generated on build.
 
-	if (!(filepath && pval)) {
-		return EFAULT;
-	}
-	fptr = fopen(filepath, "r");
-	if (fptr == NULL) {
-		return errno;
-	}
-	if (fscanf(fptr, "%u", pval) < 0) {
-		fclose(fptr);
-		return errno;
-	}
-	fclose(fptr);
-	return 0;
-}
+#define e_smi_VERSION_MAJOR 1
+#define e_smi_VERSION_MINOR 0
+#define e_smi_VERSION_PATCH 0
+#define e_smi_VERSION_BUILD "0"
 
-int writefile_s32(char *filepath, int32_t val)
-{
-	FILE *fptr;
-
-	if (NULL == filepath) {
-		return EFAULT;
-	}
-	fptr = fopen(filepath, "w");
-	if (fptr == NULL) {
-		return errno;
-	}
-	if (fprintf(fptr, "%d", val) < 0) {
-		fclose(fptr);
-		return errno;
-	}
-	fclose(fptr);
-	return 0;
-}
-
-int writefile_u32(char *filepath, uint32_t val)
-{
-	FILE *fptr;
-
-	if (NULL == filepath) {
-		return EFAULT;
-	}
-	fptr = fopen(filepath, "w");
-	if (fptr == NULL) {
-		return errno;
-	}
-	if (fprintf(fptr, "%u", val) < 0) {
-		fclose(fptr);
-		return errno;
-	}
-	fclose(fptr);
-	return 0;
-}
-
-int readfile_u64(char *filepath, uint64_t *pval)
-{
-	FILE *fptr;
-
-	if (!(filepath && pval)) {
-		return EFAULT;
-	}
-	fptr = fopen(filepath, "r");
-	if (fptr == NULL) {
-		return errno;
-	}
-	if (fscanf(fptr, "%lu", pval) < 0) {
-		fclose(fptr);
-		return errno;
-	}
-	fclose(fptr);
-	return 0;
-}
-
-int readfile_str(char *filepath, char *pval, uint32_t len)
-{
-	FILE *fptr;
-
-	if (!(filepath && pval)) {
-		return EFAULT;
-	}
-	fptr = fopen(filepath, "r");
-	if (fptr == NULL) {
-		return errno;
-	}
-	if (!fgets(pval, len, fptr)) {
-		fclose(fptr);
-		return errno;
-	}
-	fclose(fptr);
-	return 0;
-}
+#endif  // INCLUDE_E_SMI_E_SMI64CONFIG_H_

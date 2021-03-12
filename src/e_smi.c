@@ -53,17 +53,21 @@
 
 /*
  * total number of cores and sockets in the system
- * This number is not going to change for a power cycle.
+ * This information is going to be fixed for a boot cycle.
  */
-static uint32_t total_cores, total_sockets, threads_per_core;
-static uint32_t cpu_family, cpu_model;
+struct system_metrics {
+	uint32_t total_cores;		// total cores in a system.
+	uint32_t total_sockets;		// total sockets in a system.
+	uint32_t threads_per_core;	// threads per core in each cpu.
+	uint32_t cpu_family;		// system cpu family.
+	uint32_t cpu_model;		// system cpu model.
+	int32_t  hsmp_proto_ver;	// hsmp protocol version.
+	esmi_status_t init_status;	// esmi init status
+	esmi_status_t energy_status;	// energy driver status
+	esmi_status_t hsmp_status;	// hsmp driver status
+};
 
-/*
- * Mark them uninitalize to start with
- */
-static esmi_status_t init_status   = ESMI_NOT_INITIALIZED;
-static esmi_status_t energy_status = ESMI_NOT_INITIALIZED;
-static esmi_status_t hsmp_status   = ESMI_NOT_INITIALIZED;
+static const struct system_metrics *psm;
 
 /*
  * To Calculate maximum possible number of cores and sockets,
@@ -83,6 +87,8 @@ static int read_index(char *filepath)
 
 	if (fscanf(fp, "%s", buf) < 0) {
 		buf[0] = '\0';
+		fclose(fp);
+		return -1;
 	}
 
 	for (i = 0, j = 0; buf[i] != '\0'; i++) {
@@ -91,19 +97,31 @@ static int read_index(char *filepath)
                 }
         }
 
+	fclose(fp);
 	return atoi(&buf[j]);
 }
 
 /*
  * To get the first online core on a given socket
  */
-int esmi_get_online_core_on_socket(int socket_id)
+esmi_status_t esmi_first_online_core_on_socket(uint32_t sock_ind,
+					       uint32_t *pcore_ind)
 {
 	char filepath[FILEPATHSIZ];
 	FILE *fp;
 	int i, socket;
 
-	for (i = 0; i < total_cores; i++) {
+	if (NULL == psm) {
+		return ESMI_IO_ERROR;
+	}
+	if (sock_ind >= psm->total_sockets) {
+		return ESMI_INVALID_INPUT;
+	}
+        if (NULL == pcore_ind) {
+                return ESMI_ARG_PTR_NULL;
+        }
+
+	for (i = 0; i < psm->total_cores; i++) {
 		snprintf(filepath, FILEPATHSIZ,
 			 "%s/cpu%d/topology/physical_package_id",
 			 CPU_PATH, i);
@@ -114,14 +132,19 @@ int esmi_get_online_core_on_socket(int socket_id)
 		}
 
 		if (fscanf(fp, "%d", &socket) < 0) {
+			fclose(fp);
 			continue;
 		}
 
-		if (socket_id == socket) {
-			return i; //return first online core on given socket
+		if (sock_ind == socket) {
+			//return first online core on given socket
+			*pcore_ind = i;
+			fclose(fp);
+			return ESMI_SUCCESS;
 		}
+		fclose(fp);
 	}
-	return -1; //when no online core found on given socket
+	return ESMI_IO_ERROR; //when no online core found on given socket
 }
 
 /*
@@ -225,33 +248,38 @@ static esmi_status_t create_hsmp_monitor(void)
 	return ESMI_SUCCESS;
 }
 
-static esmi_status_t detect_packages()
+static esmi_status_t detect_packages(struct system_metrics *psysm)
 {
 	uint32_t eax, ebx, ecx,edx;
-	int ret;
+	int max_cores_socket, ret;
 
+	if (NULL == psysm) {
+		return ESMI_IO_ERROR;
+	}
 	if (!__get_cpuid(1, &eax, &ebx, &ecx, &edx)) {
 		return ESMI_IO_ERROR;
 	}
-	cpu_family = ((eax >> 8) & 0xf) + ((eax >> 20) & 0xff);
-	cpu_model = ((eax >> 16) & 0xf) * 0x10 + ((eax >> 4) & 0xf);
+	psysm->cpu_family = ((eax >> 8) & 0xf) + ((eax >> 20) & 0xff);
+	psysm->cpu_model = ((eax >> 16) & 0xf) * 0x10 + ((eax >> 4) & 0xf);
 
 	if (!__get_cpuid(0x08000001e, &eax, &ebx, &ecx, &edx)) {
 		return ESMI_IO_ERROR;
 	}
-	threads_per_core = ((ebx >> 8) & 0xff) + 1;
+	psysm->threads_per_core = ((ebx >> 8) & 0xff) + 1;
 
 	ret = read_index(CPU_COUNT_PATH);
 	if(ret < 0) {
 		return ESMI_IO_ERROR;
 	}
-	total_cores = ret + 1;
+	psysm->total_cores = ret + 1;
 
-	ret = read_index(SOCKET_COUNT_PATH);
-	if (ret < 0) {
+	if (!__get_cpuid(0x1, &eax, &ebx, &ecx, &edx))
 		return ESMI_IO_ERROR;
-	}
-	total_sockets = ret + 1;
+
+	max_cores_socket = ((ebx >> 16) & 0xff);
+
+	/* Number of sockets in the system */
+	psysm->total_sockets = psysm->total_cores / max_cores_socket;
 
 	return ESMI_SUCCESS;
 }
@@ -263,43 +291,61 @@ static esmi_status_t detect_packages()
 esmi_status_t esmi_init()
 {
 	esmi_status_t ret;
+	static struct system_metrics sm;
 
-	ret = detect_packages();
+	sm.init_status = ESMI_NOT_INITIALIZED;
+	sm.energy_status = ESMI_NOT_INITIALIZED;
+	sm.hsmp_status = ESMI_NOT_INITIALIZED;
+
+	ret = detect_packages(&sm);
 	if (ret != ESMI_SUCCESS) {
 		return ret;
 	}
 
 	ret = create_energy_monitor();
 	if (ret == ESMI_SUCCESS) {
-		energy_status = ESMI_INITIALIZED;
+		sm.energy_status = ESMI_INITIALIZED;
 	}
 
 	ret = create_hsmp_monitor();
 	if (ret == ESMI_SUCCESS) {
-		hsmp_status = ESMI_INITIALIZED;
+		if (!hsmp_read32(HSMP_PROTO_VER_TYPE, 0, &sm.hsmp_proto_ver)) {
+			sm.hsmp_status = ESMI_INITIALIZED;
+		}
 	}
 
-	if (energy_status & hsmp_status) {
-		init_status = ESMI_NO_DRV;
+	if (sm.energy_status & sm.hsmp_status) {
+		sm.init_status = ESMI_NO_DRV;
 	} else {
-		init_status = ESMI_INITIALIZED;
+		sm.init_status = ESMI_INITIALIZED;
 	}
+	psm = &sm;
 
-	return init_status;
+	return sm.init_status;
 }
 
 void esmi_exit(void)
 {
-	init_status = ESMI_NOT_INITIALIZED;
+	return;
 }
+
+#define CHECK_ESMI_GET_INPUT(parg) \
+	if (NULL == psm) {\
+		return ESMI_IO_ERROR;\
+	}\
+	if (psm->init_status == ESMI_NOT_INITIALIZED) {\
+		return ESMI_NOT_INITIALIZED;\
+	}\
+	if (NULL == parg) {\
+		return ESMI_ARG_PTR_NULL;\
+	}\
 
 /* get cpu family */
 esmi_status_t esmi_cpu_family_get(uint32_t *family)
 {
-	if (init_status == ESMI_NOT_INITIALIZED) {
-		return ESMI_NOT_INITIALIZED;
-	}
-	*family = cpu_family;
+	CHECK_ESMI_GET_INPUT(family);
+
+	*family = psm->cpu_family;
 
 	return ESMI_SUCCESS;
 }
@@ -307,10 +353,9 @@ esmi_status_t esmi_cpu_family_get(uint32_t *family)
 /* get cpu model */
 esmi_status_t esmi_cpu_model_get(uint32_t *model)
 {
-	if (init_status == ESMI_NOT_INITIALIZED) {
-		return ESMI_NOT_INITIALIZED;
-	}
-	*model = cpu_model;
+	CHECK_ESMI_GET_INPUT(model);
+
+	*model = psm->cpu_model;
 
 	return ESMI_SUCCESS;
 }
@@ -318,10 +363,9 @@ esmi_status_t esmi_cpu_model_get(uint32_t *model)
 /* get number of threads per core */
 esmi_status_t esmi_threads_per_core_get(uint32_t *threads)
 {
-	if (init_status == ESMI_NOT_INITIALIZED) {
-		return ESMI_NOT_INITIALIZED;
-	}
-	*threads = threads_per_core;
+	CHECK_ESMI_GET_INPUT(threads);
+
+	*threads = psm->threads_per_core;
 
 	return ESMI_SUCCESS;
 }
@@ -329,10 +373,9 @@ esmi_status_t esmi_threads_per_core_get(uint32_t *threads)
 /* get number of cpus available */
 esmi_status_t esmi_number_of_cpus_get(uint32_t *cpus)
 {
-	if (init_status == ESMI_NOT_INITIALIZED) {
-		return ESMI_NOT_INITIALIZED;
-	}
-	*cpus = total_cores;
+	CHECK_ESMI_GET_INPUT(cpus);
+
+	*cpus = psm->total_cores;
 
 	return ESMI_SUCCESS;
 }
@@ -340,70 +383,47 @@ esmi_status_t esmi_number_of_cpus_get(uint32_t *cpus)
 /* get number of sockets available */
 esmi_status_t esmi_number_of_sockets_get(uint32_t *sockets)
 {
-	if (init_status == ESMI_NOT_INITIALIZED) {
-		return ESMI_NOT_INITIALIZED;
-	}
-	*sockets = total_sockets;
+	CHECK_ESMI_GET_INPUT(sockets);
+	*sockets = psm->total_sockets;
 
 	return ESMI_SUCCESS;
 }
 
-static esmi_status_t energy_get(uint32_t sensor_id, uint64_t *penergy)
-{
-	int ret;
+#define CHECK_ENERGY_GET_INPUT(parg) \
+	if (NULL == psm) {\
+		return ESMI_IO_ERROR;\
+	}\
+	if (psm->init_status == ESMI_NOT_INITIALIZED) {\
+		return ESMI_NOT_INITIALIZED;\
+	} else if (psm->energy_status == ESMI_NOT_INITIALIZED) {\
+		return ESMI_NO_ENERGY_DRV;\
+	}\
+	if (NULL == parg) {\
+		return ESMI_ARG_PTR_NULL;\
+	}\
 
-	if (init_status == ESMI_NOT_INITIALIZED) {
-		return ESMI_NOT_INITIALIZED;
-	} else if (energy_status == ESMI_NOT_INITIALIZED) {
-		return ESMI_NO_ENERGY_DRV;
-	}
+#define CHECK_HSMP_GET_INPUT(parg) \
+	if (NULL == psm) {\
+		return ESMI_IO_ERROR;\
+	}\
+	if (psm->init_status == ESMI_NOT_INITIALIZED) {\
+		return ESMI_NOT_INITIALIZED;\
+	} else if (psm->hsmp_status == ESMI_NOT_INITIALIZED) {\
+		return ESMI_NO_HSMP_DRV;\
+	}\
+	if (NULL == parg) {\
+		return ESMI_ARG_PTR_NULL;\
+	}\
 
-	if (NULL == penergy) {
-		return ESMI_ARG_PTR_NULL;
-	}
-
-	/*
-	 * The hwmon enumeration of energy%d_input entries starts
-	 * from 1.
-	 */
-	ret = read_energy(ENERGY_TYPE, sensor_id + 1, penergy);
-
-	return errno_to_esmi_status(ret);
-}
-
-static esmi_status_t hsmp_read(monitor_types_t type,
-			       uint32_t sensor_id, uint32_t *pval)
-{
-	int ret;
-
-	if (init_status == ESMI_NOT_INITIALIZED) {
-                return ESMI_NOT_INITIALIZED;
-        } else if (hsmp_status == ESMI_NOT_INITIALIZED) {
-                return ESMI_NO_HSMP_DRV;
-        }
-
-        if (NULL == pval) {
-                return ESMI_ARG_PTR_NULL;
-        }
-
-	ret = hsmp_read32(type, sensor_id, pval);
-	return errno_to_esmi_status(ret);
-}
-
-static esmi_status_t hsmp_write(monitor_types_t type,
-				uint32_t sensor_id, uint32_t val)
-{
-	int ret;
-
-        if (init_status == ESMI_NOT_INITIALIZED) {
-                return ESMI_NOT_INITIALIZED;
-        } else if (hsmp_status == ESMI_NOT_INITIALIZED) {
-                return ESMI_NO_HSMP_DRV;
-        }
-
-	ret = hsmp_write32(type, sensor_id, val);
-	return errno_to_esmi_status(ret);
-}
+#define CHECK_HSMP_INPUT() \
+	if (NULL == psm) {\
+		return ESMI_IO_ERROR;\
+	}\
+	if (psm->init_status == ESMI_NOT_INITIALIZED) {\
+		return ESMI_NOT_INITIALIZED;\
+	} else if (psm->hsmp_status == ESMI_NOT_INITIALIZED) {\
+		return ESMI_NO_HSMP_DRV;\
+	}\
 
 /*
  * Energy Monitor functions
@@ -412,12 +432,21 @@ static esmi_status_t hsmp_write(monitor_types_t type,
  */
 esmi_status_t esmi_core_energy_get(uint32_t core_ind, uint64_t *penergy)
 {
-	if (core_ind >= total_cores) {
+	int ret;
+
+	CHECK_ENERGY_GET_INPUT(penergy);
+	if (core_ind >= psm->total_cores) {
 		return ESMI_INVALID_INPUT;
 	}
-	core_ind %= total_cores/threads_per_core;
+	core_ind %= psm->total_cores/psm->threads_per_core;
 
-	return energy_get(core_ind, penergy);
+	/*
+	 * The hwmon enumeration of energy%d_input entries starts
+	 * from 1.
+	 */
+	ret = read_energy(ENERGY_TYPE, core_ind + 1, penergy);
+
+	return errno_to_esmi_status(ret);
 }
 
 /*
@@ -425,35 +454,116 @@ esmi_status_t esmi_core_energy_get(uint32_t core_ind, uint64_t *penergy)
  */
 esmi_status_t esmi_socket_energy_get(uint32_t sock_ind, uint64_t *penergy)
 {
-	if (sock_ind >= total_sockets) {
+	int ret;
+
+	CHECK_ENERGY_GET_INPUT(penergy);
+	if (sock_ind >= psm->total_sockets) {
 		return ESMI_INVALID_INPUT;
 	}
 
 	/*
 	 * The hwmon enumeration of socket energy entries starts
-	 * from "total_cores/threads_per_core + sock_ind".
+	 * from "total_cores/threads_per_core + sock_ind + 1".
 	 */
-	return energy_get((total_cores/threads_per_core) + sock_ind, penergy);
+	ret = read_energy(ENERGY_TYPE,
+		(psm->total_cores/psm->threads_per_core) + sock_ind + 1,
+			  penergy);
+
+	return errno_to_esmi_status(ret);
 }
 
 /*
  * Function to get the enenrgy of cpus and sockets.
  */
-esmi_status_t esmi_all_energies_get(uint64_t *penergy, uint32_t entries)
+esmi_status_t esmi_all_energies_get(uint64_t *penergy)
+{
+	int ret;
+	uint32_t cpus;
+
+	CHECK_ENERGY_GET_INPUT(penergy);
+	cpus = psm->total_cores / psm->threads_per_core;
+
+	ret = batch_read_energy(ENERGY_TYPE, penergy, cpus);
+
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_smu_fw_version_get(struct smu_fw_version *smu_fw)
 {
 	int ret;
 
-	if (init_status == ESMI_NOT_INITIALIZED) {
-		return ESMI_NOT_INITIALIZED;
-	} else if (energy_status == ESMI_NOT_INITIALIZED) {
-		return ESMI_NO_ENERGY_DRV;
+	CHECK_HSMP_GET_INPUT(smu_fw);
+	ret = hsmp_read32(SMU_FW_VERSION_TYPE, 0, (uint32_t *)smu_fw);
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_prochot_status_get(uint32_t sock_ind, uint32_t *prochot)
+{
+	char hot[9];
+	int ret;
+
+	CHECK_HSMP_GET_INPUT(prochot);
+	if (sock_ind >= psm->total_sockets) {
+		return ESMI_INVALID_INPUT;
 	}
-	if (NULL == penergy) {
-		return ESMI_ARG_PTR_NULL;
+	ret = hsmp_readstr(PROCHOT_STATUS_TYPE, sock_ind, hot, 9);
+	if (!strncmp(hot, "inactive", 8))
+		*prochot = 0;
+	else
+		*prochot = 1;
+
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_df_pstate_set(uint32_t sock_ind, int32_t pstate)
+{
+	int ret;
+
+	CHECK_HSMP_INPUT();
+	if (NULL == psm) {
+		return ESMI_IO_ERROR;
+	}
+	if (sock_ind >= psm->total_sockets) {
+		return ESMI_INVALID_INPUT;
+	}
+	if (pstate < -1 || pstate > 3) {
+		return ESMI_INVALID_INPUT;
 	}
 
-	ret = batch_read_energy(ENERGY_TYPE, penergy, entries);
+	ret = hsmp_write_s32(DF_PSTATE_TYPE, sock_ind, pstate);
+	return errno_to_esmi_status(ret);
+}
 
+esmi_status_t esmi_fclk_mclk_get(uint32_t sock_ind,
+				      uint32_t *fclk, uint32_t *mclk)
+{
+	int ret;
+	uint64_t clk;
+
+	CHECK_HSMP_INPUT();
+        if (!(fclk && mclk)) {
+                return ESMI_ARG_PTR_NULL;
+        }
+	if (sock_ind >= psm->total_sockets) {
+		return ESMI_INVALID_INPUT;
+	}
+
+	ret = hsmp_read64(FCLK_MEMCLK_TYPE, sock_ind, &clk);
+	*fclk = clk & 0xFFFFFFFF;  // as per hsmp_driver fclk is [31:0]
+	*mclk = clk >> 32; // as per hsmp_driver mclk is [63:32]
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_cclk_limit_get(uint32_t sock_ind, uint32_t *cclk)
+{
+	int ret;
+
+	CHECK_HSMP_GET_INPUT(cclk);
+	if (sock_ind >= psm->total_sockets) {
+		return ESMI_INVALID_INPUT;
+	}
+
+	ret = hsmp_read32(CCLK_LIMIT_TYPE, sock_ind, cclk);
 	return errno_to_esmi_status(ret);
 }
 
@@ -463,13 +573,17 @@ esmi_status_t esmi_all_energies_get(uint64_t *penergy, uint32_t entries)
  * Function to get the Average Power consumed of the Socket with provided
  * socket index
  */
-esmi_status_t esmi_socket_power_avg_get(uint32_t sock_ind, uint32_t *ppower)
+esmi_status_t esmi_socket_power_get(uint32_t sock_ind, uint32_t *ppower)
 {
-	if (sock_ind >= total_sockets) {
+	int ret;
+
+	CHECK_HSMP_GET_INPUT(ppower);
+	if (sock_ind >= psm->total_sockets) {
 		return ESMI_INVALID_INPUT;
 	}
 
-        return hsmp_read(SOCKET_POWER_TYPE, sock_ind, ppower);
+	ret = hsmp_read32(SOCKET_POWER_TYPE, sock_ind, ppower);
+	return errno_to_esmi_status(ret);
 }
 
 /*
@@ -478,11 +592,15 @@ esmi_status_t esmi_socket_power_avg_get(uint32_t sock_ind, uint32_t *ppower)
  */
 esmi_status_t esmi_socket_power_cap_get(uint32_t sock_ind, uint32_t *pcap)
 {
-	if (sock_ind >= total_sockets) {
+	int ret;
+
+	CHECK_HSMP_GET_INPUT(pcap);
+	if (sock_ind >= psm->total_sockets) {
 		return ESMI_INVALID_INPUT;
 	}
 
-	return hsmp_read(SOCKET_POWER_LIMIT_TYPE, sock_ind, pcap);
+	ret = hsmp_read32(SOCKET_POWER_LIMIT_TYPE, sock_ind, pcap);
+	return errno_to_esmi_status(ret);
 }
 
 /*
@@ -491,11 +609,15 @@ esmi_status_t esmi_socket_power_cap_get(uint32_t sock_ind, uint32_t *pcap)
  */
 esmi_status_t esmi_socket_power_cap_max_get(uint32_t sock_ind, uint32_t *pmax)
 {
-	if (sock_ind >= total_sockets) {
+	int ret;
+
+	CHECK_HSMP_GET_INPUT(pmax);
+	if (sock_ind >= psm->total_sockets) {
 		return ESMI_INVALID_INPUT;
 	}
 
-	return hsmp_read(SOCKET_POWER_LIMIT_MAX_TYPE, sock_ind, pmax);
+	ret = hsmp_read32(SOCKET_POWER_LIMIT_MAX_TYPE, sock_ind, pmax);
+	return errno_to_esmi_status(ret);
 }
 
 /*
@@ -506,12 +628,16 @@ esmi_status_t esmi_socket_power_cap_max_get(uint32_t sock_ind, uint32_t *pmax)
  */
 esmi_status_t esmi_socket_power_cap_set(uint32_t sock_ind, uint32_t cap)
 {
+	int ret;
+
+	CHECK_HSMP_INPUT();
 	/* TODO check against minimum limit */
-	if (sock_ind >= total_sockets) {
+	if (sock_ind >= psm->total_sockets) {
 		return ESMI_INVALID_INPUT;
 	}
 
-	return hsmp_write(SOCKET_POWER_LIMIT_TYPE, sock_ind, cap);
+	ret = hsmp_write32(SOCKET_POWER_LIMIT_TYPE, sock_ind, cap);
+	return errno_to_esmi_status(ret);
 }
 
 /*
@@ -523,11 +649,15 @@ esmi_status_t esmi_socket_power_cap_set(uint32_t sock_ind, uint32_t cap)
 esmi_status_t esmi_core_boostlimit_get(uint32_t core_ind,
 				       uint32_t *pboostlimit)
 {
-	if (core_ind >= total_cores) {
+	int ret;
+
+	CHECK_HSMP_GET_INPUT(pboostlimit);
+	if (core_ind >= psm->total_cores) {
 		return ESMI_INVALID_INPUT;
 	}
 
-	return hsmp_read(CORE_BOOSTLIMIT_TYPE, core_ind, pboostlimit);
+	ret = hsmp_read32(CORE_BOOSTLIMIT_TYPE, core_ind, pboostlimit);
+	return errno_to_esmi_status(ret);
 }
 
 /*
@@ -539,12 +669,16 @@ esmi_status_t esmi_core_boostlimit_get(uint32_t core_ind,
 esmi_status_t esmi_core_boostlimit_set(uint32_t core_ind,
 				       uint32_t boostlimit)
 {
+	int ret;
+
+	CHECK_HSMP_INPUT();
 	/* TODO check boostlimit against a valid range */
-	if (core_ind >= total_cores) {
+	if (core_ind >= psm->total_cores) {
 		return ESMI_INVALID_INPUT;
 	}
 
-	return hsmp_write(CORE_BOOSTLIMIT_TYPE, core_ind, boostlimit);
+	ret = hsmp_write32(CORE_BOOSTLIMIT_TYPE, core_ind, boostlimit);
+	return errno_to_esmi_status(ret);
 }
 
 /*
@@ -554,12 +688,16 @@ esmi_status_t esmi_core_boostlimit_set(uint32_t core_ind,
 esmi_status_t esmi_socket_boostlimit_set(uint32_t sock_ind,
 					 uint32_t boostlimit)
 {
+	int ret;
+
+	CHECK_HSMP_INPUT();
 	/* TODO check boostlimit against a valid range */
-	if (sock_ind >= total_sockets) {
+	if (sock_ind >= psm->total_sockets) {
 		return ESMI_INVALID_INPUT;
 	}
 
-	return hsmp_write(SOCKET_BOOSTLIMIT_TYPE, sock_ind, boostlimit);
+	ret = hsmp_write32(SOCKET_BOOSTLIMIT_TYPE, sock_ind, boostlimit);
+	return errno_to_esmi_status(ret);
 }
 
 /*
@@ -568,23 +706,12 @@ esmi_status_t esmi_socket_boostlimit_set(uint32_t sock_ind,
  */
 esmi_status_t esmi_package_boostlimit_set(uint32_t boostlimit)
 {
+	int ret;
+
+	CHECK_HSMP_INPUT();
 	/* TODO check boostlimit against a valid range */
-	return hsmp_write(PKG_BOOSTLIMIT_TYPE, 0, boostlimit);
-}
-
-/*
- * Tctl Monitoring Function
- *
- * Function to get the tctl of the socket with provided
- * socket index
- */
-esmi_status_t esmi_socket_tctl_get(uint32_t sock_ind, uint32_t *ptctl)
-{
-	if (sock_ind >= total_sockets) {
-		return ESMI_INVALID_INPUT;
-	}
-
-	return ESMI_NOT_SUPPORTED;
+	ret = hsmp_write32(PKG_BOOSTLIMIT_TYPE, 0, boostlimit);
+	return errno_to_esmi_status(ret);
 }
 
 /*
@@ -596,9 +723,45 @@ esmi_status_t esmi_socket_tctl_get(uint32_t sock_ind, uint32_t *ptctl)
 esmi_status_t esmi_socket_c0_residency_get(uint32_t sock_ind,
 					   uint32_t *pc0_residency)
 {
-	if (sock_ind >= total_sockets) {
+	int ret;
+
+	CHECK_HSMP_GET_INPUT(pc0_residency);
+	if (sock_ind >= psm->total_sockets) {
 		return ESMI_INVALID_INPUT;
 	}
 
-	return ESMI_NOT_SUPPORTED;
+	ret = hsmp_read32(SOCKET_C0_RESIDENCY_TYPE, sock_ind, pc0_residency);
+
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_ddr_bw_get(struct ddr_bw_metrics *ddr_bw)
+{
+	int ret;
+	uint32_t bw;
+
+	CHECK_HSMP_GET_INPUT(ddr_bw);
+
+	if (psm->hsmp_proto_ver < 3) {
+		return ESMI_NO_HSMP_SUP;
+	}
+	ret = hsmp_read32(DDR_BW_TYPE, 0, &bw);
+	if (ret != ESMI_SUCCESS) {
+		return errno_to_esmi_status(ret);
+	}
+	ddr_bw->max_bw = bw >> 20;
+	ddr_bw->utilized_bw = (bw >> 8) & 0xFFF;
+	ddr_bw->utilized_pct = bw & 0xFF;
+
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_hsmp_proto_ver_get(uint32_t *proto_ver)
+{
+	int ret;
+
+	CHECK_HSMP_GET_INPUT(proto_ver);
+	ret = hsmp_read32(HSMP_PROTO_VER_TYPE, 0, proto_ver);
+
+	return errno_to_esmi_status(ret);
 }

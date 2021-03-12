@@ -61,11 +61,6 @@
 #define CPU_COUNT_PATH "/sys/devices/system/cpu/present"
 
 /**
- * @brief Path used to get the total number of sockets in the system.
- */
-#define SOCKET_COUNT_PATH "/sys/devices/system/node/possible"
-
-/**
  * @brief Sysfs directory path for hwmon devices.
  */
 #define HWMON_PATH "/sys/class/hwmon"
@@ -82,14 +77,20 @@
  */
 typedef enum {
 	ENERGY_TYPE,	        //!< Core and Socket Energy coordinate
-	PKG_BOOSTLIMIT_TYPE,	//!< Package Boostlimit coordinate
-	CORE_BOOSTLIMIT_TYPE,	//!< Core Boostlimit coordinate
-	SOCKET_BOOSTLIMIT_TYPE,	//!< Socket Boostlimit coordinate
+	SMU_FW_VERSION_TYPE,	//!< SMU firmware version coordinate
+	HSMP_PROTO_VER_TYPE,	//!< HSMP interface version coordinate
 	SOCKET_POWER_TYPE,	//!< Socket Power coordinate
 	SOCKET_POWER_LIMIT_TYPE,//!< Socket Power Limit coordinate
 	SOCKET_POWER_LIMIT_MAX_TYPE,//!< Socket PowerLimit Max coordinate
-	SOCKET_TCTL_TYPE,	//!< Socket tctl coordinate
+	PKG_BOOSTLIMIT_TYPE,	//!< Package Boostlimit coordinate
+	CORE_BOOSTLIMIT_TYPE,	//!< Core Boostlimit coordinate
+	SOCKET_BOOSTLIMIT_TYPE,	//!< Socket Boostlimit coordinate
+	PROCHOT_STATUS_TYPE,	//!< HSMP prochot status coordinate
+	DF_PSTATE_TYPE,		//!< HSMP DF P-state coordinate
+	FCLK_MEMCLK_TYPE,	//!< Current fclk, memclk coordinate
+	CCLK_LIMIT_TYPE,	//!< Core clock limit coordinate
 	SOCKET_C0_RESIDENCY_TYPE,//!< Socket c0 residency coordinate
+	DDR_BW_TYPE,		//!< DDR bandwidth coordinate
 	MONITOR_TYPE_MAX	//!< Max Monitor Type coordinate
 } monitor_types_t;
 
@@ -98,7 +99,10 @@ char energymon_path[DRVPATHSIZ], hsmpmon_path[DRVPATHSIZ];
 int read_energy(monitor_types_t type, uint32_t sensor_id, uint64_t *val);
 int batch_read_energy(monitor_types_t type, uint64_t *pval, uint32_t entries);
 
+int hsmp_read64(monitor_types_t type, uint32_t sensor_id, uint64_t *pval);
 int hsmp_read32(monitor_types_t type, uint32_t sensor_id, uint32_t *val);
+int hsmp_readstr(monitor_types_t type, uint32_t sensor_id, char *val, uint32_t len);
+int hsmp_write_s32(monitor_types_t type, uint32_t sensor_id, int32_t val);
 int hsmp_write32(monitor_types_t type, uint32_t sensor_id, uint32_t val);
 
 int find_energy(char *devname, char *hwmon_name);

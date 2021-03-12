@@ -56,6 +56,25 @@
  */
 
 /**
+ * @brief Deconstruct raw uint32_t into SMU firmware major and minor version numbers
+ */
+struct smu_fw_version {
+        uint8_t debug;		//!< SMU fw Debug version number
+        uint8_t minor;		//!< SMU fw Minor version number
+        uint8_t major;		//!< SMU fw Major version number
+        uint8_t unused;		//!< reserved fields
+};
+
+/**
+ * @brief DDR bandwidth metrics.
+ */
+struct ddr_bw_metrics {
+        uint32_t max_bw;	//!< DDR Maximum theoritical bandwidth in GB/s
+        uint32_t utilized_bw;	//!< DDR bandwidth utilization in GB/s
+        uint32_t utilized_pct;	//!< DDR bandwidth utilization in % of theoritical max
+};
+
+/**
  * @brief Error codes retured by E-SMI functions
  */
 typedef enum {
@@ -63,6 +82,7 @@ typedef enum {
 	ESMI_INITIALIZED = 0,	//!< ESMI initialized successfully
 	ESMI_NO_ENERGY_DRV,	//!< Energy driver not found.
 	ESMI_NO_HSMP_DRV,	//!< HSMP driver not found.
+	ESMI_NO_HSMP_SUP,	//!< HSMP feature not supported.
 	ESMI_NO_DRV,		//!< No Energy and HSMP driver present.
 	ESMI_FILE_NOT_FOUND,	//!< file or directory not found
 	ESMI_DEV_BUSY,          //!< Device or resource busy
@@ -124,7 +144,7 @@ void esmi_exit(void);
  *  @brief Get the core energy for a given core.
  *
  *  @details Given a core index @p core_ind, and a @p penergy argument for
- *  energy profile of that particular cpu, this function will read the
+ *  64bit energy counter of that particular cpu, this function will read the
  *  energy counter of the given core and update the @p penergy in micro Joules.
  *
  *  Note: The energy status registers are accessed at core level. In a system
@@ -133,7 +153,7 @@ void esmi_exit(void);
  *
  *  @param[in] core_ind is a core index
  *
- *  @param[inout] penergy The energy profile of a core
+ *  @param[inout] penergy Input buffer to return the core energy.
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
@@ -144,40 +164,148 @@ esmi_status_t esmi_core_energy_get(uint32_t core_ind, uint64_t *penergy);
 /**
  *  @brief Get the socket energy for a given socket.
  *
- *  @details Given a scoket index @p socket_ind, and a @p penergy argument
- *  for energy profile of a particular socket. This function identifies an
- *  online cpu of the specific socket and reads the socket energy counter.
+ *  @details Given a socket index @p socket_idx, and a @p penergy argument
+ *  for 64bit energy counter of a particular socket.
  *
  *  Updates the @p penergy with socket energy in micro Joules.
  *
- *  @param[in] socket_ind a socket index
+ *  @param[in] socket_idx a socket index
  *
- *  @param[inout] penergy The energy profile of a socket
+ *  @param[inout] penergy Input buffer to return the socket energy.
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
  *
  */
-esmi_status_t esmi_socket_energy_get(uint32_t socket_ind, uint64_t *penergy);
+esmi_status_t esmi_socket_energy_get(uint32_t socket_idx, uint64_t *penergy);
 
 /**
- *  @brief Get energies of all cores and sockets in the system.
+ *  @brief Get energies of all cores in the system.
  *
- *  @details Given an argument for energy profile @p penergy, and @p entries
- *  number of energy entries to read. This function will read all core and
- *  socket energies in an array @p penergy in micro Joules.
+ *  @details Given an argument for energy profile @p penergy, This function
+ *  will read all core energies in an array @p penergy in micro Joules.
  *
- *  @param[out] penergy Address of allocated entries to get all energies.
- *
- *  @param[in] entries number of energy entries to read.
+ *  @param[inout] penergy Input buffer to return the energies of all cores.
+ *  penergy should be allocated by user as below
+ *  (esmi_number_of_cpus_get()/esmi_threads_per_core_get()) * sizeof (uint64_t)
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
  *
  */
-esmi_status_t esmi_all_energies_get(uint64_t *penergy, uint32_t entries);
+esmi_status_t esmi_all_energies_get(uint64_t *penergy);
 
 /** @} */  // end of EnergyQuer
+
+/****************************************************************************/
+/** @defgroup SystemStatisticsQuer HSMP System Statistics
+ *  Below functions to get HSMP System Statistics.
+ *  @{
+*/
+
+/**
+ *  @brief Get the SMU Firmware Version
+ *
+ *  @details This function will return the SMU FW version at @p smu_fw
+ *
+ *  @param[inout] smu_fw Input buffer to return the smu firmware version.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_smu_fw_version_get(struct smu_fw_version *smu_fw);
+
+/**
+ *  @brief Get normalized status of the processor's PROCHOT status.
+ *  1 - PROCHOT active, 0 - PROCHOT inactive
+ *
+ *  @details Given a socket index @p socket_idx and this function will get
+ *  PROCHOT at @p prochot.
+ *
+ *  @param[in] socket_idx a socket index
+ *
+ *  @param[inout] prochot Input buffer to return the PROCHOT status.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_prochot_status_get(uint32_t socket_idx, uint32_t *prochot);
+
+/**
+ *  @brief Set data fabric P-state and disable automatic P-state selection
+ *  (analogous to the UEFI setup option APBDIS=1).
+ *
+ *  Acceptable values for the P-state are 0(highest) - 3 (lowest). DF P-state
+ *  passing -1 will enable automatic P-state selection based on data fabric
+ *  utilization (analogous to APBDIS=0).
+ *
+ *  @details This function will set the desired P-state at @p pstate.
+
+ *  @param[in] socket_idx a socket index
+ *
+ *  @param[in] pstate a int32_t that indicates the desired P-state to set.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_df_pstate_set(uint32_t socket_idx, int32_t pstate);
+
+/**
+ *  @brief Get the Data Fabric clock and Memory clock in MHz, for a given
+ *  socket index.
+ *
+ *  @details Given a socket index @p socket_idx and a pointer to a uint32_t
+ *  @p fclk and @p mclk, this function will get the data fabric clock and
+ *  memory clock.
+ *
+ *  @param[in] socket_idx a socket index
+ *
+ *  @param[inout] fclk Input buffer to return the data fabric clock.
+ *
+ *  @param[inout] mclk Input buffer to return the memory clock.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_fclk_mclk_get(uint32_t socket_idx,
+				 uint32_t *fclk, uint32_t *mclk);
+
+/**
+ *  @brief Get the core clock (MHz) allowed by the most restrictive
+ *  infrastructure limit at the time of the message.
+ *
+ *  @details Given a socket index @p socket_idx and a pointer to a uint32_t
+ *  @p cclk, this function will get the core clock throttle limit.
+ *
+ *  @param[in] socket_idx a socket index
+ *
+ *  @param[inout] cclk Input buffer to return the core clock throttle limit.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+
+esmi_status_t esmi_cclk_limit_get(uint32_t socket_idx, uint32_t *cclk);
+
+/**
+ *  @brief Get the HSMP interface (protocol) version.
+ *
+ *  @details This function will get the HSMP interface version at @p proto_ver
+ *
+ *  @param[inout] proto_ver Input buffer to return the hsmp protocol version.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_hsmp_proto_ver_get(uint32_t *proto_ver);
+
+/** @} */  // end of SystemStatisticsQuer
 
 /*****************************************************************************/
 /** @defgroup PowerQuer Power Monitor
@@ -187,58 +315,57 @@ esmi_status_t esmi_all_energies_get(uint64_t *penergy, uint32_t entries);
 */
 
 /**
- *  @brief Get the average power consumption of the socket with provided
- *  socket index.
+ *  @brief Get the instantaneous power consumption of the provided socket.
  *
- *  @details Given a socket index @p socket_ind and a pointer to a uint32_t
- *  @p ppower, this function will get the current average power consumption
+ *  @details Given a socket index @p socket_idx and a pointer to a uint32_t
+ *  @p ppower, this function will get the current power consumption
  *  (in milliwatts) to the uint32_t pointed to by @p ppower.
  *
- *  @param[in] socket_ind a socket index
+ *  @param[in] socket_idx a socket index
  *
- *  @param[inout] ppower a pointer to uint32_t to which the average power
- *  consumption will get
+ *  @param[inout] ppower Input buffer to return power consumption
+ *  in the socket.
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
  *
  */
-esmi_status_t esmi_socket_power_avg_get(uint32_t socket_ind, uint32_t *ppower);
+esmi_status_t esmi_socket_power_get(uint32_t socket_idx, uint32_t *ppower);
 
 /**
  *  @brief Get the current power cap value for a given socket.
  *
  *  @details This function will return the valid power cap @p pcap for a given
- *  socket @p socket_ind, this value will be used by the system to limit
+ *  socket @p socket_idx, this value will be used by the system to limit
  *  the power usage.
  *
- *  @param[in] socket_ind a socket index
+ *  @param[in] socket_idx a socket index
  *
- *  @param[inout] pcap a pointer to a uint32_t that indicates the valid
- *  possible power cap, in milliwatts
+ *  @param[inout] pcap Input buffer to return power limit on the socket,
+ *  in milliwatts.
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
  *
  */
-esmi_status_t esmi_socket_power_cap_get(uint32_t socket_ind, uint32_t *pcap);
+esmi_status_t esmi_socket_power_cap_get(uint32_t socket_idx, uint32_t *pcap);
 
 /**
  *  @brief Get the maximum power cap value for a given socket.
  *
  *  @details This function will return the maximum possible valid power cap
- *  @p pmax from a @p socket_ind.
+ *  @p pmax from a @p socket_idx.
  *
- *  @param[in] socket_ind a socket index
+ *  @param[in] socket_idx a socket index
  *
- *  @param[inout] pmax a pointer to a uint32_t that indicates the maximum
- *  possible power cap, in milliwatts
+ *  @param[inout] pmax Input buffer to return maximum power limit on socket,
+ *  in milliwatts.
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
  *
  */
-esmi_status_t esmi_socket_power_cap_max_get(uint32_t socket_ind,
+esmi_status_t esmi_socket_power_cap_max_get(uint32_t socket_idx,
 					    uint32_t *pmax);
 
 /** @} */  // end of PowerQuer
@@ -255,8 +382,13 @@ esmi_status_t esmi_socket_power_cap_max_get(uint32_t socket_ind,
  *
  *  @details This function will set the power cap to the provided value @p pcap.
  *  This cannot be more than the value returned by esmi_socket_power_cap_max_get().
-
- *  @param[in] socket_ind a socket index
+ *
+ *  Note: The power limit specified will be clipped to the maximum cTDP range for
+ *  the processor. There is a limit on the minimum power that the processor can
+ *  operate at, no further power socket reduction occurs if the limit is set
+ *  below that minimum.
+ *
+ *  @param[in] socket_idx a socket index
  *
  *  @param[in] pcap a uint32_t that indicates the desired power cap, in
  *  milliwatts
@@ -265,7 +397,7 @@ esmi_status_t esmi_socket_power_cap_max_get(uint32_t socket_ind,
  *  @retval None-zero is returned upon failure.
  *
  */
-esmi_status_t esmi_socket_power_cap_set(uint32_t socket_ind, uint32_t pcap);
+esmi_status_t esmi_socket_power_cap_set(uint32_t socket_idx, uint32_t pcap);
 
 /** @} */  // end of PowerCont
 
@@ -284,8 +416,7 @@ esmi_status_t esmi_socket_power_cap_set(uint32_t socket_ind, uint32_t pcap);
  *
  *  @param[in] cpu_ind a cpu index
  *
- *  @param[inout] pboostlimit pointer to a uint32_t that indicates the
- *  possible boost limit value
+ *  @param[inout] pboostlimit Input buffer to return the boostlimit.
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
@@ -293,6 +424,23 @@ esmi_status_t esmi_socket_power_cap_set(uint32_t socket_ind, uint32_t pcap);
  */
 esmi_status_t esmi_core_boostlimit_get(uint32_t cpu_ind,
 				       uint32_t *pboostlimit);
+
+/**
+ *  @brief Get the c0_residency value for a given socket
+ *
+ *  @details This function will return the socket's current c0_residency
+ *  @p pc0_residency for a particular @p socket_idx
+ *
+ *  @param[in] socket_idx a socket index provided.
+ *
+ *  @param[inout] pc0_residency Input buffer to return the c0_residency.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_socket_c0_residency_get(uint32_t socket_idx,
+					   uint32_t *pc0_residency);
 
 /** @} */  // end of PerfQuer
 
@@ -324,9 +472,9 @@ esmi_status_t esmi_core_boostlimit_set(uint32_t cpu_ind, uint32_t boostlimit);
  *  @brief Set the boostlimit value for a given socket.
  *
  *  @details This function will set the boostlimit to the provided value @p
- *  boostlimit for a given socket @p socket_ind.
+ *  boostlimit for a given socket @p socket_idx.
  *
- *  @param[in] socket_ind a socket index to set boostlimit.
+ *  @param[in] socket_idx a socket index to set boostlimit.
  *
  *  @param[in] boostlimit a uint32_t that indicates the desired boostlimit
  *  value of a particular socket.
@@ -335,7 +483,7 @@ esmi_status_t esmi_core_boostlimit_set(uint32_t cpu_ind, uint32_t boostlimit);
  *  @retval None-zero is returned upon failure.
  *
  */
-esmi_status_t esmi_socket_boostlimit_set(uint32_t socket_ind,
+esmi_status_t esmi_socket_boostlimit_set(uint32_t socket_idx,
 					 uint32_t boostlimit);
 
 /**
@@ -357,56 +505,28 @@ esmi_status_t esmi_package_boostlimit_set(uint32_t boostlimit);
 
 /*****************************************************************************/
 
-/** @defgroup TctlQuer Tctl Monitor
- *  This function provides the current tctl value for a given socket.
+/** @defgroup ddrQuer ddr_bandwidth Monitor
+ *  This function provides the DDR Bandwidth for a system
  *  @{
  */
 
 /**
- *  @brief Get the tctl value for a given socket
+ *  @brief Get the Theoretical maximum DDR Bandwidth in GB/s,
+ *  Current utilized DDR Bandwidth in GB/s and Current utilized
+ *  DDR Bandwidth as a percentage of theoretical maximum in a system.
  *
- *  @details This function will return the socket's current tctl
- *  @p ptctl for a particular @p sock_ind.
+ *  @details This function will return the DDR Bandwidth metrics @p ddr_bw
  *
- *  @param[in] sock_ind a socket index provided.
- *
- *  @param[inout] ptctl pointer to a uint32_t that indicates the
- *  possible tctl value.
+ *  @param[inout] ddr_bw Input buffer to return the DDR bandwidth metrics,
+ *  contains max_bw, utilized_bw and utilized_pct.
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
  *
  */
-esmi_status_t esmi_socket_tctl_get(uint32_t sock_ind, uint32_t *ptctl);
+esmi_status_t esmi_ddr_bw_get(struct ddr_bw_metrics *ddr_bw);
 
-/** @} */  // end of TctlQuer
-
-/*****************************************************************************/
-
-/** @defgroup c0_ResidencyQuer c0_residency Monitor
- *  This function provides the current c0_residency value for a given socket.
- *  @{
- */
-
-/**
- *  @brief Get the c0_residency value for a given socket
- *
- *  @details This function will return the socket's current c0_residency
- *  @p pc0_residency for a particular @p sock_ind
- *
- *  @param[in] sock_ind a socket index provided.
- *
- *  @param[inout] pc0_residency pointer to a uint32_t that indicates the
- *  possible c0_residency value
- *
- *  @retval ::ESMI_SUCCESS is returned upon successful call.
- *  @retval None-zero is returned upon failure.
- *
- */
-esmi_status_t esmi_socket_c0_residency_get(uint32_t sock_ind,
-					   uint32_t *pc0_residency);
-
-/** @} */  // end of c0_ResidencyQuer
+/** @} */  // end of ddrQuer
 
 /*****************************************************************************/
 /** @defgroup AuxilQuer Auxiliary functions
@@ -419,7 +539,7 @@ esmi_status_t esmi_socket_c0_residency_get(uint32_t sock_ind,
 /**
  *  @brief Get the CPU family
  *
- *  @param[out] family cpu family number
+ *  @param[inout] family Input buffer to return the cpu family.
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
@@ -429,7 +549,7 @@ esmi_status_t esmi_cpu_family_get(uint32_t *family);
 /**
  *  @brief Get the CPU model
  *
- *  @param[out] model cpu model number
+ *  @param[inout] model Input buffer to reurn the cpu model.
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
@@ -439,7 +559,7 @@ esmi_status_t esmi_cpu_model_get(uint32_t *model);
 /**
  *  @brief Get the number of threads per core in the system
  *
- *  @param[out] threads number of threads per core in the system
+ *  @param[inout] threads input buffer to return number of SMT threads.
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
@@ -449,7 +569,8 @@ esmi_status_t esmi_threads_per_core_get(uint32_t *threads);
 /**
  *  @brief Get the number of cpus available in the system
  *
- *  @param[out] cpus number of cpus in the system
+ *  @param[inout] cpus input buffer to return number of cpus,
+ *  reported by nproc (including threads in case of SMT enable).
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
@@ -459,7 +580,7 @@ esmi_status_t esmi_number_of_cpus_get(uint32_t *cpus);
 /**
  *  @brief Get the total number of sockets available in the system
  *
- *  @param[out] sockets number of sockets in the system
+ *  @param[inout] sockets input buffer to return number of sockets.
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
@@ -467,16 +588,18 @@ esmi_status_t esmi_number_of_cpus_get(uint32_t *cpus);
 esmi_status_t esmi_number_of_sockets_get(uint32_t *sockets);
 
 /**
- * @brief Get the first online core on a given socket.
+ *  @brief Get the first online core on a given socket.
  *
- *  @details Get the online core belongs to particular socket with provided
- *  socket index
+ *  @param[in] socket_idx a socket index provided.
  *
- *  @param[in] socket_id is a socket index
+ *  @param[inout] pcore_ind input buffer to return the index of first online
+ *  core in the socket.
  *
- *  @retval int value returned upon successful call.
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
  */
-int esmi_get_online_core_on_socket(int socket_id);
+esmi_status_t esmi_first_online_core_on_socket(uint32_t socket_idx,
+					       uint32_t *pcore_ind);
 
 /**
  * @brief Get the error string message for esmi errors.
