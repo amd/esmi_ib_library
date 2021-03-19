@@ -1,32 +1,14 @@
 
 # EPYC™ System Management Interface (E-SMI) In-band Library
 
-The EPYC™ System Management Interface In-band Library, or E-SMI library, is part of the EPYC™ System Management Inband software stack. It is a C library for Linux that provides a user space interface to monitor and control the CPU's Power, Energy and Performance.
+The EPYC™ System Management Interface In-band Library, or E-SMI library, is part of the EPYC™ System Management Inband software stack. It is a C library for Linux that provides a user space interface to monitor and control the CPU's power, energy, performance and other system management features.
 
-# Important note about Versioning and Backward Compatibility
+## Important note about Versioning and Backward Compatibility
 The E-SMI library is currently under development, and therefore subject to change at the API level. The intention is to keep the API as stable as possible while in development, but in some cases we may need to break backwards compatibility in order to achieve future stability and usability. Following Semantic Versioning rules, while the E-SMI library is in a high state of change, the major version will remain 0, and achieving backward compatibility may not be possible.
 
 Once new development has leveled off, the major version will become greater than 0, and backward compatibility will be enforced between major versions.
 
 # Building E-SMI
-
-## Additional Required software for building
-In order to build the E-SMI library, the following components are required. Note that the software versions listed are what is being used in development. Earlier versions are not guaranteed to work:
-* CMake (v3.5.0)
-
-In order to build the latest documentation, the following are required:
-
-* DOxygen (1.8.13)
-* latex (pdfTeX 3.14159265-2.6-1.40.18)
-
-# Dependencies
-The E-SMI Library depends on the following device drivers from Linux to manage the system management features.
-
-## Monitoring Energy counters
-The Energy counters are exposed via the RAPL MSRs and the AMD Energy driver exposes the per core and per socket information via the HWMON sys entries. The AMD Energy driver is upstreamed and available as part of Linux v5.8, this driver may be insmoded as a module.
-
-## Monitoring and Managing Power metrics, Boostlimits
-The power metrics and Boostlimits features are managed by the SMU firmware and exposed via SMN PCI config space. AMD provided Linux HSMP driver exposes this information to the user-space via sys entries.
 
 ## Dowloading the source
 The source code for E-SMI library is available on [Github](https://github.com/amd/esmi_ib_library).
@@ -38,16 +20,20 @@ Once the E-SMI library source has been cloned to a local Linux machine, the dire
 * `$ include/` Contains the header files used by the E-SMI library
 * `$ src/` Contains library E-SMI source
 
+## Building the library and tool
 Building the library is achieved by following the typical CMake build sequence, as follows.
 #### ```$ mkdir -p build```
 #### ```$ cd build```
 #### ```$ cmake <location of root of E-SMI library CMakeLists.txt>```
+
+## Building the library for static linking
 Building the library as a Static(.a) along with shared libraries(.so) is achieved by following sequence.
 The static library is part of RPM and DEB package when compiled with cmake as below and built with 'make package'.
-The below step can be skipped if static lib support is not required
+The next step can be skipped if static lib support is not required
 #### ```$ cmake -DENABLE_STATIC_LIB=1 <location of root of E-SMI library CMakeLists.txt>```
+
 #### ```$ make```
-The built library will appear in the `build` folder.
+The built library `libe_smi64.so.X.Y` will appear in the `build` folder.
 
 #### ```# Install library file and header; default location is /opt/esmi```
 #### ```$ sudo make install```
@@ -55,18 +41,46 @@ The built library will appear in the `build` folder.
 ## Building the Documentation
 The documentation PDF file can be built with the following steps (continued from the steps above):
 #### ```$ make doc```
-The reference manual, `refman.pdf` will be in the `latex` directory and `refman.rtf` will be in the `rtf` directory upon a successful build.
+Upon a successful build, the `ESMI_Manual.pdf` and `ESMI_IB_Release_Notes.pdf` will be copied to the top directory of the source.
 
-# Building the Package
-RPM & DEB package support is provided in this library.
-Following steps to be followed to create package (continued from the steps above):
+## Building the package
+The RPM and DEB packages can be created with the following steps (continued from the steps above):
 #### ```$ make package```
+
+# Kernel dependencies
+The E-SMI Library depends on the following device drivers from Linux to manage the system management features.
+
+## Monitoring energy counters
+The Energy counters reported by the RAPL MSRs, the AMD Energy driver exposes the per core and per socket counters via the HWMON sys entries. The AMD Energy driver is upstreamed and is available as part of Linux v5.8+. The kernel config symbol SENSORS_AMD_ENERGY needs to be selected, can be built and inserted as a module.
+
+## Monitoring and managing power metrics, boostlimits and other system management features
+The power metrics, boostlimits and other features are managed by the SMU firmware and exposed via PCI config space. AMD provides Linux kernel module exposing this information to the user-space via sys entries.
+
+* amd_hsmp module will be made available at https://github.com/amd/amd_hsmp.git
+
+* PCIe interface needs to be enabled in the BIOS. On the reference BIOS, the CBS option may be found in the following path
+#####  ```Advanced > AMD CBS > NBIO Common Options > SMU Common Options > HSMP Support```
+#####  ```	BIOS Default:     “Auto” (Disabled)```
+
+  If the option is disabled, the related E-SMI APIs will return -ETIMEDOUT.
+
+## Supported hardware
+AMD Zen3 based CPU Family `19h` Models `0h-Fh` and `30h-3Fh`.
+
+## Additional required software for building
+In order to build the E-SMI library, the following components are required. Note that the software versions listed are what is being used in development. Earlier versions are not guaranteed to work:
+* CMake (v3.5.0)
+
+In order to build the latest documentation, the following are required:
+
+* DOxygen (1.8.13)
+* latex (pdfTeX 3.14159265-2.6-1.40.18)
 
 # Usage Basics
 ## Device Indices
 Many of the functions in the library take a "core/socket index". The core/socket index is a number greater than or equal to 0, and less than the number of cores/sockets on the system.
 
-# Hello E-SMI
+### Hello E-SMI
 The only required E-SMI call for any program that wants to use E-SMI is the `esmi_init()` call. This call initializes some internal data structures that will be used by subsequent E-SMI calls.
 
 When E-SMI is no longer being used, `esmi_exit()` should be called. This provides a way to do any releasing of resources that E-SMI may have held. In many cases, this may have no effect, but may be necessary in future versions of the library.
@@ -96,7 +110,7 @@ int main()
 	total_sockets = esmi_get_number_of_sockets();
 	for (i = 0; i < total_sockets; i++) {
 		power = 0;
-		ret = esmi_socket_power_avg_get(i, &power);
+		ret = esmi_socket_power_get(i, &power);
 		if (ret != ESMI_SUCCESS) {
 			printf("Failed to get socket[%d] avg_power, "
 				"Err[%d]:%s\n", i, ret, esmi_get_err_msg(ret));
@@ -116,26 +130,33 @@ This tool provides options to Monitor and Control System Management functionalit
 
 Below is a sample usage to dump the functionality, with default core/socket/package as 0.
 ```
-	e_smi_library/build> ./e_smi_tool
+	e_smi_library/build> sudo ./e_smi_tool
 
-	===============EPYC System Management Interface===============
+	=============== EPYC System Management Interface ===============
 
-	_TOPOLOGY       | Count |
-	#CPUS           |   256 |
-	#SOCKETS        |     2 |
+	--------------------------------------
+	| CPU Family            | 0x19 (25 ) |
+	| CPU Model             | 0x0  (0  ) |
+	| NR_CPUS               | 128        |
+	| NR_SOCKETS            | 2          |
+	| THREADS PER CORE      | 1 (SMT OFF)|
+	--------------------------------------
 
-	Considered Default 'CORE/SOCKET/PKG ID's are 0
-	_SENSOR NAME            |       Value Units         |
-	_CORE_ENERGY            |      3156295 uJoules      |
-	_SOCKET_ENERGY          |  38700978759 uJoules      |
-	_SOCKET_AVG_POWER       |       56.220 Watts        |
-	_SOCKET_POWERCAP        |      200.000 Watts        |
-	_SOCKET_MAX_POWERCAP    |      240.000 Watts        |
-	_CORE_BOOSTLIMIT        |         3200 MHz          |
+	----------------------------------------------------------------
+	| Sensor Name            | Socket 0         | Socket 1         |
+	----------------------------------------------------------------
+	| Energy (K Joules)      | 206.088          | 212.171          |
+	| Power (Watts)          | 42.224           | 42.634           |
+	| PowerLimit (Watts)     | 200.000          | 120.000          |
+	| PowerLimitMax (Watts)  | 225.000          | 225.000          |
+	| C0 Residency (%)       | 0                | 0                |
+	----------------------------------------------------------------
+	| Core[0] Energy (Joules)| 6.123            | 5.520            |
+	| Core[0] boostlimit(MHz)| 2500             | 2000             |
+	----------------------------------------------------------------
 
-	======================End of EPYC SMI Log=====================
 
-	Try './e_smi_tool --help' for more information.
+	Try `./e_smi_tool --help' for more information.
 ```
 
 For detailed and up to date usage information, we recommend consulting the help:
@@ -143,49 +164,77 @@ For detailed and up to date usage information, we recommend consulting the help:
 For convenience purposes, following is the output from the -h flag:
 ```
 	e_smi_library/build> ./e_smi_tool --help
-	Usage: ./e_smi_tool [Option<s>] SOURCES
-	Option<s>:
-		-A, (--showall)						Get all esmi parameter Values
-		-e, (--showcoreenergy)    [CORENUM]			Get energy for a given CPU
-		-s, (--showsocketenergy)  [SOCKETNUM]			Get energy for a given socket
-		-p, (--showsocketpower)   [SOCKETNUM]			Get power params for a given socket
-		-L, (--showcoreboostlimit)[CORENUM]			Get Boostlimit for a given CPU
-		-C, (--setpowercap)       [SOCKETNUM] [POWERVALUE]      Set power Cap for a given socket
-		-a, (--setcoreboostlimit) [CORENUM] [BOOSTVALUE]	Set boost limit for a given core
-		-b, (--setsocketboostlimit)[SOCKETNUM] [BOOSTVALUE]     Set Boost limit for a given Socket
-		-c, (--setpkgboostlimit)  [PKG_BOOSTLIMIT]		Set Boost limit for a given package
-		-h, (--help)						Show this help message
+
+	=============== EPYC System Management Interface ===============
+
+	Usage: ./e_smi_tool [Option]... <INPUT>...
+	Output Option<s>:
+	  -h, --help                            Show this help message
+	  -A, --showall                         Get all esmi parameter Values
+
+	Get Option<s>:
+	  -e, --showcoreenergy CORE             Get energy for a given CPU (Joules)
+	  -s, --showsockenergy                  Get energy for all sockets (KJoules)
+	  -p, --showsockpower                   Get power metrics for all sockets (mWatts)
+	  -L, --showcorebl CORE                 Get Boostlimit for a given CPU (MHz)
+	  -r, --showsockc0res SOCKET            Get c0_residency for a given socket (%)
+	  -d, --showddrbw                       Show DDR bandwidth details (GBps)
+	  --showsmufwver                        Show SMU FW Version
+	  --showhsmpprotover                    Show HSMP Protocol Version
+	  --showprochotstatus                   Show HSMP PROCHOT status (in/active)
+	  --showclocks                          Show (CPU, Mem & Fabric) clock frequencies (MHz)
+
+	Set Option<s>:
+	  -C, --setpowerlimit SOCKET POWER      Set power limit for a given socket (mWatts)
+	  -a, --setcorebl CORE BOOSTLIMIT       Set boost limit for a given core (MHz)
+	  --setsockbl SOCKET BOOSTLIMIT         Set Boost limit for a given Socket (MHz)
+	  --setpkgbl BOOSTLIMIT                 Set Boost limit for a given package (MHz)
+	  --setdfpstate SOCKET PSTATE           Set Data Fabric Pstate for a given socket
+						(-1 for auto, 1, 2 and 3 for DF P-states)
+
+	====================== End of EPYC SMI Log =====================
 ```
 
 Below is a sample usage to get the individual library functionality API's.
-We can pass arguments either any of the ways "./e_smi_tool -e 0" or "./e_smi_tool --showcoreenergy=0"
+We can pass arguments in short or long options ex: "./e_smi_tool -e 0" or "./e_smi_tool --showcoreenergy 0"
 ```
 1.	e_smi_library/build> ./e_smi_tool -e 0
-	===============EPYC System Management Interface===============
 
-	hwmon/core_energy[0]_input:     505525 uJoules
+	=============== EPYC System Management Interface ===============
 
-	======================End of EPYC SMI Log=====================
+	core[0]/energy  :            25.733 Joules
 
-2.	e_smi_library/build> ./e_smi_tool --showcoreenergy=0
-	===============EPYC System Management Interface===============
+	====================== End of EPYC SMI Log =====================
 
-	hwmon/core_energy[0]_input:     41505525 uJoules
+2.	e_smi_library/build> ./e_smi_tool --showcoreenergy 0
 
-	======================End of EPYC SMI Log=====================
+	=============== EPYC System Management Interface ===============
 
-3.      e_smi_library/build> ./e_smi_tool -e 12 --showsocketpower=1 --setpowercap 1 230000 -p 1
+	core[0]/energy  :            25.733 Joules
 
-	===============EPYC System Management Interface===============
+	====================== End of EPYC SMI Log =====================
 
-	hwmon/core_energy[12]_input:      651357 uJoules
-	socket[1]/avg_power     :         54.218 Watts
-	socket[1]/power_cap     :         220.000 Watts
-	socket[1]/power_cap_max :         240.000 Watts
-	Set socket[1]/power_cap :         230.000 Watts successfully
-	socket[1]/avg_power     :         55.178 Watts
-	socket[1]/power_cap     :         230.000 Watts
-	socket[1]/power_cap_max :         240.000 Watts
+3.      e_smi_library/build> ./e_smi_tool -e 12 --showsocketpower --setpowerlimit 1 220000 -p
+	=============== EPYC System Management Interface ===============
 
-	======================End of EPYC SMI Log=====================
+	core[12]/energy :            19.334 Joules
+
+	----------------------------------------------------------------
+	| Sensor Name            | Socket 0         | Socket 1         |
+	----------------------------------------------------------------
+	| Power (Watts)          | 39.053           | 39.633           |
+	| PowerLimit (Watts)     | 200.000          | 210.000          |
+	| PowerLimitMax (Watts)  | 225.000          | 225.000          |
+	----------------------------------------------------------------
+	Set socket[1]/power_limit :         220.000 Watts successfully
+
+	----------------------------------------------------------------
+	| Sensor Name            | Socket 0         | Socket 1         |
+	----------------------------------------------------------------
+	| Power (Watts)          | 39.767           | 40.340           |
+	| PowerLimit (Watts)     | 200.000          | 220.000          |
+	| PowerLimitMax (Watts)  | 225.000          | 225.000          |
+	----------------------------------------------------------------
+
+	====================== End of EPYC SMI Log =====================
 ```
