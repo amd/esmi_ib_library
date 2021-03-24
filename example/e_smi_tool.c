@@ -50,14 +50,63 @@
 #include <e_smi/e_smi.h>
 
 #define RED "\x1b[31m"
+#define MAG "\x1b[35m"
 #define RESET "\x1b[0m"
 
 #define ARGS_MAX 64
+#define SHOWLINESZ 256
 
-void show_smi_parameters(void);
-void show_smi_all_parameters(void);
+/* To handle multiple errors while reporting summary */
+#define ESMI_MULTI_ERROR	1234
+
+uint32_t err_bits;
+
+esmi_status_t show_smi_parameters(void);
+esmi_status_t show_smi_all_parameters(void);
 void show_smi_message(void);
 void show_smi_end_message(void);
+
+void print_socket_footer(uint32_t sockets)
+{
+	int i;
+
+	printf("\n--------------------------");
+	for (i = 0; i < sockets; i++) {
+		printf("-------------------");
+	}
+}
+
+void print_socket_header(uint32_t sockets)
+{
+	int i;
+
+	print_socket_footer(sockets);
+	printf("\n| Sensor Name\t\t |");
+	for (i = 0; i < sockets; i++) {
+		printf(" Socket %d         |", i);
+	}
+	print_socket_footer(sockets);
+}
+
+void err_bits_reset(void)
+{
+	err_bits = 0;
+}
+
+void err_bits_print(void)
+{
+	int i;
+
+	printf("\n");
+	for (i = 1; i < 32; i++) {
+		if (i == ESMI_MULTI_ERROR) {
+			continue;
+		}
+		if (err_bits & (1 << i)) {
+			printf(RED "Err[%d]: %s\n" RESET, i, esmi_get_err_msg(i));
+		}
+	}
+}
 
 esmi_status_t epyc_get_coreenergy(uint32_t core_id)
 {
@@ -66,65 +115,291 @@ esmi_status_t epyc_get_coreenergy(uint32_t core_id)
 
 	ret = esmi_core_energy_get(core_id, &core_input);
 	if (ret != ESMI_SUCCESS) {
-		printf("Failed: to get core[%d] energy, Err[%d]: %s\n",
+		printf("Failed to get core[%d] energy, Err[%d]: %s\n",
 			core_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("core[%d]/energy\t: %12ld uJoules\n",
-		core_id, core_input);
+	printf("core[%d]/energy\t: %17.3lf Joules\n",
+		core_id, (double)core_input/1000000);
+
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t epyc_get_sockenergy(uint32_t sock_id)
+esmi_status_t epyc_get_sockenergy(void)
 {
 	esmi_status_t ret;
+	uint32_t i, sockets;
 	uint64_t pkg_input = 0;
 
-	ret = esmi_socket_energy_get(sock_id, &pkg_input);
+	ret = esmi_number_of_sockets_get(&sockets);
 	if (ret != ESMI_SUCCESS) {
-		printf("Failed: to get socket[%d] energy, Err[%d]: %s\n",
-			sock_id, ret, esmi_get_err_msg(ret));
+		printf("Failed to get number of sockets, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("socket[%d]/energy\t: %12ld uJoules\n",
-		sock_id, pkg_input);
+
+	err_bits_reset();
+	print_socket_header(sockets);
+	printf("\n| Energy (K Joules)\t |");
+	for (i = 0; i < sockets; i++) {
+		ret = esmi_socket_energy_get(i, &pkg_input);
+		if (!ret) {
+			printf(" %-17.3lf|", (double)pkg_input/1000000000);
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+		}
+	}
+	print_socket_footer(sockets);
+	printf("\n");
+	err_bits_print();
+	if (err_bits > 1) {
+		return ESMI_MULTI_ERROR;
+	}
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t epyc_get_sockpower(uint32_t sock_id)
+esmi_status_t epyc_get_ddr_bw(void)
 {
 	esmi_status_t ret;
-	uint32_t power = 0;
+	uint32_t i, sockets;
+	struct ddr_bw_metrics ddr;
+	char bw_str[SHOWLINESZ] = {};
+	char pct_str[SHOWLINESZ] = {};
+	uint32_t bw_len;
+	uint32_t pct_len;
 
-	/* Get the Average power consumption for a given
-	 * socket index */
-	ret = esmi_socket_power_avg_get(sock_id, &power);
+	ret = esmi_number_of_sockets_get(&sockets);
 	if (ret != ESMI_SUCCESS) {
-		printf("Failed: to get socket[%d] avgpower, Err[%d]: %s\n",
-			sock_id, ret, esmi_get_err_msg(ret));
+		printf("Failed to get number of sockets, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("socket[%d]/avg_power\t:%16.03f Watts \n",
-			sock_id, (double)power/1000);
-	/* Get the current power cap value for a given socket */
-	ret = esmi_socket_power_cap_get(sock_id, &power);
+	for (i = 0; i < sockets; i++) {
+		ret = esmi_ddr_bw_get(&ddr);
+		if (ret == ESMI_NO_HSMP_SUP) {
+			printf("Get DDR Bandwidth info: Not supported.\n");
+			return ret;
+		}
+		if (i == 0) {
+			err_bits_reset();
+			print_socket_header(sockets);
+			printf("\n| DDR Max BW (GB/s)\t |");
+			snprintf(bw_str, SHOWLINESZ, "\n| DDR Utilized BW (GB/s) |");
+			snprintf(pct_str, SHOWLINESZ, "\n| DDR Utilized Percent(%%)|");
+		}
+		bw_len = strlen(bw_str);
+		pct_len = strlen(pct_str);
+		if(!ret) {
+			printf(" %-17d|", ddr.max_bw);
+			snprintf(bw_str + bw_len, SHOWLINESZ - bw_len, " %-17d|", ddr.utilized_bw);
+			snprintf(pct_str + pct_len, SHOWLINESZ - pct_len, " %-17d|", ddr.utilized_pct);
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+			snprintf(bw_str + bw_len, SHOWLINESZ - bw_len, " NA (Err: %-2d)     |", ret);
+			snprintf(pct_str + pct_len, SHOWLINESZ - pct_len, " NA (Err: %-2d)     |", ret);
+		}
+	}
+	printf("%s", bw_str);
+	printf("%s", pct_str);
+
+	print_socket_footer(sockets);
+	err_bits_print();
+	if (err_bits > 1) {
+		return ESMI_MULTI_ERROR;
+	}
+	return ESMI_SUCCESS;
+}
+
+esmi_status_t epyc_get_smu_fw_version(void)
+{
+	struct smu_fw_version smu_fw;
+	esmi_status_t ret;
+	uint32_t fclk, mclk;
+
+	ret = esmi_smu_fw_version_get(&smu_fw);
 	if (ret != ESMI_SUCCESS) {
-		printf("Failed: to get socket[%d] powercap, Err[%d]: %s\n",
-			sock_id, ret, esmi_get_err_msg(ret));
+		printf("Failed to get SMU Firmware Version, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("socket[%d]/power_cap\t:%16.03f Watts\n",
-		sock_id, (double)power/1000);
-	/* Get the max value that can be assigned as a power
-	 * cap for a given socket */
-	ret = esmi_socket_power_cap_max_get(sock_id, &power);
+	printf("SMU FW Version: %u.%u.%u\n",
+		smu_fw.major, smu_fw.minor, smu_fw.debug);
+
+	return ESMI_SUCCESS;
+}
+
+esmi_status_t epyc_get_hsmp_proto_version(void)
+{
+	uint32_t hsmp_proto_ver;
+	esmi_status_t ret;
+
+	ret = esmi_hsmp_proto_ver_get(&hsmp_proto_ver);
 	if (ret != ESMI_SUCCESS) {
-		printf("Failed: to get socket[%d] maxpower, Err[%d]: %s\n",
-			sock_id, ret, esmi_get_err_msg(ret));
+		printf("Failed to get hsmp protocol version, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("socket[%d]/power_cap_max\t:%16.03f Watts\n",
-		sock_id, (double)power/1000);
+	printf("HSMP Protocol Version: %u\n", hsmp_proto_ver);
+
+	return ESMI_SUCCESS;
+}
+
+esmi_status_t epyc_get_prochot_status(void)
+{
+	esmi_status_t ret;
+	uint32_t i, sockets;
+	uint32_t prochot;
+
+	ret = esmi_number_of_sockets_get(&sockets);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get number of sockets, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	err_bits_reset();
+	print_socket_header(sockets);
+
+	printf("\n| ProchotStatus:\t |");
+	for (i = 0; i < sockets; i++) {
+		ret = esmi_prochot_status_get(i, &prochot);
+		if (!ret) {
+			printf(" %-17s|", prochot? "active" : "inactive");
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+		}
+	}
+	print_socket_footer(sockets);
+	printf("\n");
+	err_bits_print();
+	if (err_bits > 1) {
+		return ESMI_MULTI_ERROR;
+	}
+	return ESMI_SUCCESS;
+}
+
+#define MCLKSZ 256
+esmi_status_t epyc_get_clock_freq(void)
+{
+	esmi_status_t ret;
+	uint32_t i, sockets;
+	uint32_t fclk, mclk, cclk;
+	char str[MCLKSZ] = {};
+	uint32_t len;
+
+	ret = esmi_number_of_sockets_get(&sockets);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get number of sockets, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	err_bits_reset();
+	print_socket_header(sockets);
+	printf("\n| fclk (Mhz)\t\t |");
+	snprintf(str, MCLKSZ, "\n| mclk (Mhz)\t\t |");
+	for (i = 0; i < sockets; i++) {
+		len = strlen(str);
+		ret = esmi_fclk_mclk_get(i, &fclk, &mclk);
+		if (!ret) {
+			printf(" %-17d|", fclk);
+			snprintf(str + len, MCLKSZ - len, " %-17d|", mclk);
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+			snprintf(str + len, MCLKSZ - len, " NA (Err: %-2d)     |", ret);
+		}
+	}
+	printf("%s", str);
+
+	printf("\n| cclk (Mhz)\t\t |");
+	for (i = 0; i < sockets; i++) {
+		ret = esmi_cclk_limit_get(i, &cclk);
+		if (!ret) {
+			printf(" %-17d|", cclk);
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+		}
+	}
+	print_socket_footer(sockets);
+	printf("\n");
+	err_bits_print();
+	if (err_bits > 1) {
+		return ESMI_MULTI_ERROR;
+	}
+	return ESMI_SUCCESS;
+}
+
+esmi_status_t epyc_set_df_pstate(uint32_t sock_id, int32_t pstate)
+{
+	esmi_status_t ret;
+
+	ret = esmi_df_pstate_set(sock_id, pstate);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed: to set socket[%d] DF Pstate\n", sock_id);
+		printf(RED "Err[%d]: %s\n" RESET, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	printf("Set socket[%d]/P-state to %d successfully\n",
+		sock_id, pstate);
+
+	return ESMI_SUCCESS;
+}
+
+esmi_status_t epyc_get_socketpower(void)
+{
+	esmi_status_t ret;
+	uint32_t i, sockets;
+	uint32_t power = 0, powerlimit = 0, powermax = 0;
+
+	ret = esmi_number_of_sockets_get(&sockets);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get number of sockets, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	err_bits_reset();
+	print_socket_header(sockets);
+	printf("\n| Power (Watts)\t\t |");
+	for (i = 0; i < sockets; i++) {
+		ret = esmi_socket_power_get(i, &power);
+		if (!ret) {
+			printf(" %-17.3f|", (double)power/1000);
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+		}
+	}
+
+	printf("\n| PowerLimit (Watts)\t |");
+	for (i = 0; i < sockets; i++) {
+		ret = esmi_socket_power_cap_get(i, &powerlimit);
+		if (!ret) {
+			printf(" %-17.3f|", (double)powerlimit/1000);
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+		}
+	}
+
+	printf("\n| PowerLimitMax (Watts)\t |");
+	for (i = 0; i < sockets; i++) {
+		ret = esmi_socket_power_cap_max_get(i, &powermax);
+		if (!ret) {
+			printf(" %-17.3f|", (double)powermax/1000);
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+		}
+	}
+	print_socket_footer(sockets);
+	printf("\n");
+	err_bits_print();
+	if (err_bits > 1) {
+		return ESMI_MULTI_ERROR;
+	}
 	return ESMI_SUCCESS;
 }
 
@@ -140,29 +415,31 @@ esmi_status_t epyc_get_coreperf(uint32_t core_id)
 		return ret;
 	}
 	printf("core[%d]/boostlimit\t: %u MHz\n", core_id, boostlimit);
+
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t epyc_setpowercap(uint32_t sock_id, uint32_t power)
+esmi_status_t epyc_setpowerlimit(uint32_t sock_id, uint32_t power)
 {
 	esmi_status_t ret;
 	uint32_t max_power = 0;
 
 	ret = esmi_socket_power_cap_max_get(sock_id, &max_power);
 	if ((ret == ESMI_SUCCESS) && (power > max_power)) {
-		printf("Input power is more than max limit,"
-			" So It set's to default max %.3f Watts\n",
+		printf("Input power is more than max power limit,"
+			" limiting to %.3f Watts\n",
 			(double)max_power/1000);
 		power = max_power;
 	}
 	ret = esmi_socket_power_cap_set(sock_id, power);
 	if (ret != ESMI_SUCCESS) {
-		printf("Failed: to set socket[%d] powercap, Err[%d]: %s\n",
-			sock_id, ret, esmi_get_err_msg(ret));
+		printf("Failed: to set socket[%d] powerlimit\n", sock_id);
+		printf(RED "Err[%d]: %s\n" RESET, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("Set socket[%d]/power_cap : %15.03f Watts successfully\n",
+	printf("Set socket[%d]/power_limit : %15.03f Watts successfully\n",
 		sock_id, (double)power/1000);
+
 	return ESMI_SUCCESS;
 }
 
@@ -186,22 +463,27 @@ esmi_status_t epyc_setcoreperf(uint32_t core_id, uint32_t boostlimit)
 		}
 	}
 	printf("Core[%d]/boostlimit set successfully\n", core_id);
+
 	return ESMI_SUCCESS;
 }
 
 esmi_status_t epyc_setsocketperf(uint32_t sock_id, uint32_t boostlimit)
 {
 	esmi_status_t ret;
-	uint32_t blimit = 0;
+	uint32_t blimit = 0, online_core;
 
 	ret = esmi_socket_boostlimit_set(sock_id, boostlimit);
 	if (ret != ESMI_SUCCESS) {
-		printf("Failed: to set socket[%d] boostlimit, Err[%d]: %s\n",
-			sock_id, ret, esmi_get_err_msg(ret));
+		printf("Failed: to set socket[%d] boostlimit\n", sock_id);
+		printf(RED "Err[%d]: %s\n" RESET, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	ret = esmi_core_boostlimit_get(esmi_get_online_core_on_socket(sock_id),
-				      &blimit);
+	ret = esmi_first_online_core_on_socket(sock_id, &online_core);
+	if (ret != ESMI_SUCCESS) {
+		printf("Set Successful, but not verified\n");
+		return ret;
+	}
+	ret = esmi_core_boostlimit_get(online_core, &blimit);
 	if (ret == ESMI_SUCCESS) {
 		if (blimit < boostlimit) {
 			printf("Set to max boost limit: %u MHz\n", blimit);
@@ -210,6 +492,7 @@ esmi_status_t epyc_setsocketperf(uint32_t sock_id, uint32_t boostlimit)
 		}
 	}
 	printf("Socket[%d]/boostlimit set successfully\n", sock_id);
+
 	return ESMI_SUCCESS;
 }
 
@@ -234,21 +517,7 @@ esmi_status_t epyc_setpkgperf(uint32_t boostlimit)
 		}
 	}
 	printf("Package/boostlimit set successfully\n");
-	return ESMI_SUCCESS;
-}
 
-esmi_status_t epyc_get_socktctl(uint32_t sock_id)
-{
-	esmi_status_t ret;
-	uint32_t tctl = 0;
-
-	ret = esmi_socket_tctl_get(sock_id, &tctl);
-	if (ret != ESMI_SUCCESS) {
-		printf("Failed: to get socket[%d] tctl, Err[%d]: %s\n",
-			sock_id, ret, esmi_get_err_msg(ret));
-		return ret;
-	}
-	printf("socket[%d]/tctl	: %d °C\n", sock_id, tctl);
 	return ESMI_SUCCESS;
 }
 
@@ -263,38 +532,46 @@ esmi_status_t epyc_get_sockc0_residency(uint32_t sock_id)
 			sock_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("socket[%d]/c0_residency	: %u MHz\n", sock_id, residency);
+	printf("socket[%d]/c0_residency	: %u %%\n", sock_id, residency);
+
 	return ESMI_SUCCESS;
 }
 
 static void show_usage(char *exe_name)
 {
-	printf("Usage: %s [Option<s>] SOURCES\n"
-	"Option<s>:\n"
-	"\t-A, (--showall)\t\t\t\t\t\tGet all esmi parameter Values\n"
-	"\t-l, (--showallenergy)\t\t\t\t\tGet energies for all cpus and "
-        "sockets\n"
-	"\t-e, (--showcoreenergy)\t  [CORENUM]\t\t\tGet energy for a given"
-	" CPU\n"
-	"\t-s, (--showsocketenergy)  [SOCKETNUM]\t\t\tGet energy for a given"
-	" socket\n"
-	"\t-p, (--showsocketpower)\t  [SOCKETNUM]\t\t\tGet power params for a"
-	" given socket\n"
-	"\t-L, (--showcoreboostlimit)[CORENUM]\t\t\tGet Boostlimit for a"
-	" given CPU\n"
-	"\t-C, (--setpowercap)\t  [SOCKETNUM] [POWERVALUE]\tSet power Cap"
-	" for a given socket\n"
-	"\t-a, (--setcoreboostlimit) [CORENUM] [BOOSTVALUE]\tSet boost limit"
-	" for a given core\n"
-	"\t-b, (--setsocketboostlimit)[SOCKETNUM] [BOOSTVALUE]\tSet Boost"
-	" limit for a given Socket\n"
-	"\t-c, (--setpkgboostlimit)  [PKG_BOOSTLIMIT]\t\tSet Boost limit"
-	" for a given package\n"
-	"\t-t, (--showsockettctl)\t  [SOCKETNUM]\t\t\tGet tctl for a given"
-        " socket\n"
-	"\t-r, (--showsocketc0residency) [SOCKETNUM]\t\tGet c0_residency for a"
-	" given socket\n"
-	"\t-h, (--help)\t\t\t\t\t\tShow this help message\n", exe_name);
+	printf("Usage: %s [Option]... <INPUT>...\n"
+	"Output Option<s>:\n"
+	"  -h, --help\t\t\t\tShow this help message\n"
+	"  -A, --showall\t\t\t\tGet all esmi parameter Values\n"
+	"\n"
+	"Get Option<s>:\n"
+	"  -e, --showcoreenergy CORE\t\tGet energy for a given"
+	" CPU (Joules)\n"
+	"  -s, --showsockenergy\t\t\tGet energy for all sockets (KJoules)\n"
+	"  -p, --showsockpower\t\t\tGet power metrics for all sockets (Watts)\n"
+	"  -L, --showcorebl CORE\t\t\tGet Boostlimit for a"
+	" given CPU (MHz)\n"
+	"  -r, --showsockc0res SOCKET\t\tGet c0_residency for a"
+	" given socket (%%)\n"
+	"  -d, --showddrbw\t\t\tShow DDR bandwidth details (Gbps)\n"
+	"  --showsmufwver\t\t\tShow SMU FW Version\n"
+	"  --showhsmpprotover\t\t\tShow HSMP Protocol Version\n"
+	"  --showprochotstatus\t\t\tShow HSMP PROCHOT status (in/active)\n"
+	"  --showclocks\t\t\t\tShow (CPU, Mem & Fabric) clock frequencies (MHz)\n"
+	"\n"
+	"Set Option<s>:\n"
+	"  -C, --setpowerlimit SOCKET POWER\tSet power limit"
+	" for a given socket (mWatts)\n"
+	"  -a, --setcorebl CORE BOOSTLIMIT\tSet boost limit"
+	" for a given core (MHz)\n"
+	"  --setsockbl SOCKET BOOSTLIMIT\t\tSet Boost"
+	" limit for a given Socket (MHz)\n"
+	"  --setpkgbl BOOSTLIMIT\t\t\tSet Boost limit"
+	" for a given package (MHz)\n"
+	"  --setdfpstate SOCKET PSTATE\t\tSet Data Fabric"
+	" Pstate for a given socket\n"
+	"\t\t\t\t\t(-1 for auto, 1, 2 and 3 for DF P-states)"
+	, exe_name);
 }
 
 void show_smi_message(void)
@@ -307,143 +584,346 @@ void show_smi_end_message(void)
 	printf("\n====================== End of EPYC SMI Log =====================\n");
 }
 
-void show_smi_parameters(void)
+esmi_status_t show_cpu_metrics(void)
 {
-	int id = 0;
-	uint64_t core_input = 0, pkg_input = 0;
-	uint32_t boostlimit = 0, avgpower = 0;
-	uint32_t powercap = 0, powermax = 0;
-	uint32_t cpus, sockets, threads, family, model;
+	esmi_status_t ret;
+	uint32_t i, core_id, sockets;
+	uint64_t core_input = 0;
+	uint32_t boostlimit = 0;
 
-	esmi_number_of_cpus_get(&cpus);
-	esmi_number_of_sockets_get(&sockets);
-	esmi_threads_per_core_get(&threads);
-	esmi_cpu_family_get(&family);
-	esmi_cpu_model_get(&model);
+	ret = esmi_number_of_sockets_get(&sockets);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get number of sockets, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	printf("\n| Core[0] Energy (Joules)|");
+	for (i = 0; i < sockets; i++) {
+		ret = esmi_first_online_core_on_socket(i, &core_id);
+		if (ret) {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+		}
+		ret = esmi_core_energy_get(core_id, &core_input);
+		if (!ret) {
+			printf(" %-17.3lf|", (double)core_input/1000000);
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+		}
+	}
 
-	printf("CPU family %xh, model %xh\n", family, model);
-	printf("# NR_CPUS		| %8d | \n", cpus);
-	printf("# NR_SOCKETS		| %8d | \n", sockets);
-	printf("# THREADS PER CORE	| %8d | \n", threads);
-	printf("# SMT			| %sabled | \n", (threads > 1) ? "en": "dis");
-
-	/* Get the energy of the core for a given core index */
-	esmi_core_energy_get(id, &core_input);
-	/* Get the energy of the socket for a given socket index */
-	esmi_socket_energy_get(id, &pkg_input);
-	/* Get the Average power consumption for a given socket index */
-	esmi_socket_power_avg_get(id, &avgpower);
-	/* Get the current power cap value for a given socket */
-	esmi_socket_power_cap_get(id, &powercap);
-	/* Get the max value that can be assigned as a power cap
-	 * for a given socket */
-	esmi_socket_power_cap_max_get(id, &powermax);
-	/* Get the boostlimit value for a given given core */
-	esmi_core_boostlimit_get(id, &boostlimit);
-
-	printf(RED "\n\nEnergy/Power/Boostlimit for CORE[0]/SOCKET[0]:" RESET"\n");
-	printf("# SENSOR NAME		| 	Value in Units		|\n");
-	printf("---------------------------------------------------------\n");
-	printf( "# CORE_ENERGY		| %16ld uJoules	|\n"
-		"# SOCKET_ENERGY		| %16ld uJoules	|\n"
-		"# SOCKET_AVG_POWER	| %16.03f Watts	|\n"
-		"# SOCKET_POWERCAP	| %16.03f Watts	|\n"
-		"# SOCKET_MAX_POWERCAP	| %16.03f Watts	|\n"
-		"# CORE_BOOSTLIMIT	| %16u MHz		|\n",
-		core_input, pkg_input,
-		(double)avgpower/1000, (double)powercap/1000,
-		(double)powermax/1000, boostlimit);
+	printf("\n| Core[0] boostlimit(MHz)|");
+	for (i = 0; i < sockets; i++) {
+		ret = esmi_first_online_core_on_socket(i, &core_id);
+		if (ret) {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+		}
+		ret = esmi_core_boostlimit_get(core_id, &boostlimit);
+		if (!ret) {
+			printf(" %-17u|", boostlimit);
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+		}
+	}
+	print_socket_footer(sockets);
+	if (err_bits > 1) {
+		return ESMI_MULTI_ERROR;
+	}
+	return ESMI_SUCCESS;
 }
 
-void show_all_energy_counters(void)
+esmi_status_t show_socket_metrics(void)
+{
+	esmi_status_t ret;
+	uint32_t i, sockets;
+	uint64_t pkg_input = 0;
+	uint32_t power = 0, powerlimit = 0, powermax = 0;
+	struct ddr_bw_metrics ddr;
+	char bw_str[SHOWLINESZ] = {};
+	char pct_str[SHOWLINESZ] = {};
+	uint32_t bw_len;
+	uint32_t pct_len;
+	uint32_t c0resi;
+
+	ret = esmi_number_of_sockets_get(&sockets);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get number of sockets, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+
+	print_socket_header(sockets);
+	printf("\n| Energy (K Joules)\t |");
+	for (i = 0; i < sockets; i++) {
+		ret = esmi_socket_energy_get(i, &pkg_input);
+		if (!ret) {
+			printf(" %-17.3lf|", (double)pkg_input/1000000000);
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+		}
+	}
+
+	printf("\n| Power (Watts)\t\t |");
+	for (i = 0; i < sockets; i++) {
+		ret = esmi_socket_power_get(i, &power);
+		if (!ret) {
+			printf(" %-17.3f|", (double)power/1000);
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+		}
+	}
+
+	printf("\n| PowerLimit (Watts)\t |");
+	for (i = 0; i < sockets; i++) {
+		ret = esmi_socket_power_cap_get(i, &powerlimit);
+		if (!ret) {
+			printf(" %-17.3f|", (double)powerlimit/1000);
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+		}
+	}
+
+	printf("\n| PowerLimitMax (Watts)\t |");
+	for (i = 0; i < sockets; i++) {
+		ret = esmi_socket_power_cap_max_get(i, &powermax);
+		if(!ret) {
+			printf(" %-17.3f|", (double)powermax/1000);
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+		}
+	}
+
+	printf("\n| C0 Residency (%%)\t |");
+	for (i = 0; i < sockets; i++) {
+		ret = esmi_socket_c0_residency_get(i, &c0resi);
+		if(!ret) {
+			printf(" %-17u|", c0resi);
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+		}
+	}
+
+	for (i = 0; i < sockets; i++) {
+		ret = esmi_ddr_bw_get(&ddr);
+		if (ret == ESMI_NO_HSMP_SUP) {
+			break;
+		}
+		if (i == 0) {
+			printf("\n| DDR Max BW (GB/s)\t |");
+			snprintf(bw_str, SHOWLINESZ, "\n| DDR Utilized BW (GB/s) |");
+			snprintf(pct_str, SHOWLINESZ, "\n| DDR Utilized Percent(%%)|");
+		}
+		bw_len = strlen(bw_str);
+		pct_len = strlen(pct_str);
+		if(!ret) {
+			printf(" %-17d|", ddr.max_bw);
+			snprintf(bw_str + bw_len, SHOWLINESZ - bw_len, " %-17d|", ddr.utilized_bw);
+			snprintf(pct_str + pct_len, SHOWLINESZ - pct_len, " %-17d|", ddr.utilized_pct);
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+			snprintf(bw_str + bw_len, SHOWLINESZ - bw_len, " NA (Err: %-2d)     |", ret);
+			snprintf(pct_str + pct_len, SHOWLINESZ - pct_len, " NA (Err: %-2d)     |", ret);
+		}
+	}
+	printf("%s", bw_str);
+	printf("%s", pct_str);
+
+	print_socket_footer(sockets);
+	if (err_bits > 1) {
+		return ESMI_MULTI_ERROR;
+	}
+	return ESMI_SUCCESS;
+}
+
+esmi_status_t show_cpu_details(void)
+{
+	esmi_status_t ret;
+	uint32_t cpus, sockets, threads, family, model;
+
+	ret = esmi_number_of_cpus_get(&cpus);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get number of cpus, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	ret = esmi_number_of_sockets_get(&sockets);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get number of sockets, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	ret = esmi_threads_per_core_get(&threads);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get threads per core, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	ret = esmi_cpu_family_get(&family);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get cpu family, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	ret = esmi_cpu_model_get(&model);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get cpu model, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+
+	printf("--------------------------------------\n");
+	printf("| CPU Family		| 0x%-2x (%-3d) |\n", family, family);
+	printf("| CPU Model		| 0x%-2x (%-3d) |\n", model, model);
+	printf("| NR_CPUS		| %-8d   |\n", cpus);
+	printf("| NR_SOCKETS		| %-8d   |\n", sockets);
+	if (threads > 1) {
+		printf("| THREADS PER CORE	| %d (SMT ON) |\n", threads);
+	} else {
+		printf("| THREADS PER CORE	| %d (SMT OFF)|\n", threads);
+	}
+	printf("--------------------------------------\n");
+
+	return ESMI_SUCCESS;
+}
+
+esmi_status_t show_smi_parameters(void)
+{
+	esmi_status_t ret;
+
+	err_bits_reset();
+	ret = show_cpu_details();
+	err_bits |= 1 << ret;
+
+	ret = show_socket_metrics();
+	err_bits |= 1 << ret;
+
+	ret = show_cpu_metrics();
+	err_bits |= 1 << ret;
+
+	printf("\n");
+	err_bits_print();
+	if (err_bits > 1) {
+		return ESMI_MULTI_ERROR;
+	}
+
+	return ESMI_SUCCESS;
+}
+
+esmi_status_t show_cpu_energy_all(void)
 {
 	int i;
 	uint64_t *input;
-	uint32_t cpus;
-	uint32_t sockets;
-	uint32_t threads;
-	esmi_status_t status;
+	uint32_t cpus, threads;
+	esmi_status_t ret;
 
-	esmi_threads_per_core_get(&threads);
-	esmi_number_of_cpus_get(&cpus);
+	ret = esmi_threads_per_core_get(&threads);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get threads per core, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	ret = esmi_number_of_cpus_get(&cpus);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get number of cpus, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
 	cpus = cpus/threads;
-	esmi_number_of_sockets_get(&sockets);
 
-	input = (uint64_t *) calloc(cpus + sockets, sizeof(uint64_t));
+	input = (uint64_t *) calloc(cpus, sizeof(uint64_t));
 	if (NULL == input) {
 		printf("Memory allocation failed all energy entries\n");
+		return ret;
 	}
 
-	status = esmi_all_energies_get(input, cpus + sockets);
-	if (status != ESMI_SUCCESS) {
-		printf("Failed: to get all energies, Err[%d]: %s\n",
-			status, esmi_get_err_msg(status));
-		return;
+	ret = esmi_all_energies_get(input);
+	if (ret != ESMI_SUCCESS) {
+		printf("\nFailed: to get CPU energies, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		free(input);
+		return ret;
 	}
-	for (i = 0; i < cpus + sockets; i++) {
-		if (i < cpus) {
-			printf("cpu  [%3d] : %12ld uJoules\n", i, input[i]);
-		} else {
-			printf("socket [%d] : %12ld uJoules\n", i - cpus, input[i]);
-
+	printf("\nCPU energies in Joules:");
+	for (i = 0; i < cpus; i++) {
+		if(!(i % 8)) {
+			printf("\ncpu [%3d] :", i);
 		}
+		printf(" %12.3lf", (double)input[i]/1000000);
 	}
 	free(input);
+
+	return ESMI_SUCCESS;
 }
 
-void show_smi_all_parameters(void)
+esmi_status_t show_cpu_boostlimit_all(void)
 {
-	unsigned int i;
-	uint64_t core_input, pkg_input;
-	uint32_t avgpower, powercap, powermax;
-	uint32_t boostlimit, tctl, residency;
-	uint32_t cpu_count = 0;
-	uint32_t socket_count = 0;
+	int i;
+	uint32_t boostlimit;
+	uint32_t cpus, threads;
+	esmi_status_t ret;
 
-	/* get the number of cpus available */
-	esmi_number_of_cpus_get(&cpu_count);
-	/* get the number of sockets available */
-	esmi_number_of_sockets_get(&socket_count);
+	ret = esmi_threads_per_core_get(&threads);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get threads per core, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	ret = esmi_number_of_cpus_get(&cpus);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get number of cpus, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	cpus = cpus/threads;
 
-	printf("_TOPOLOGY	| Count	     | \n");
-	printf("#CPUS		| %10d | \n", cpu_count);
-	printf("#SOCKETS	| %10d | \n\n", socket_count);
-
-	printf("Core |       Energy Units   | Boost Limit  |\n");
-	/* Get the energy of all the cores */
-	for (i = 0; i < cpu_count; i++) {
-		core_input = 0;
+	printf("\n\nCPU boostlimit in MHz:");
+	for (i = 0; i < cpus; i++) {
 		boostlimit = 0;
-		esmi_core_energy_get(i, &core_input);
-		esmi_core_boostlimit_get(i, &boostlimit);
-		printf("%3d  | %12ld uJoules | %u MHz     |\n",
-			i, core_input, boostlimit);
+		ret = esmi_core_boostlimit_get(i, &boostlimit);
+		if(!(i % 16)) {
+			printf("\ncpu [%3d] :", i);
+		}
+		if (!ret) {
+			printf(" %5u", boostlimit);
+		} else {
+			printf(" NA   ");
+		}
 	}
-	printf("\nSocket |  _ENERGY               | _AVG_POWER   |"
-			 " _POWERCAP     | _MAX_POWER_CAP |\n");
-	for(i = 0; i < socket_count; i++) {
-		/* Get the energy of all the sockets */
-		pkg_input = 0;
-		avgpower = 0;
-		powercap = 0;
-		powermax = 0;
-		esmi_socket_energy_get(i, &pkg_input);
-		/* Get the Average power consumption for all sockets */
-		esmi_socket_power_avg_get(i, &avgpower);
-		/* Get the current power cap value for all sockets */
-		esmi_socket_power_cap_get(i, &powercap);
-		/* Get the max value that can be assigned as a power cap
-		 * for all sockets */
-		esmi_socket_power_cap_max_get(i, &powermax);
-		/* Get the tctl for all sockets */
-		esmi_socket_tctl_get(i, &tctl);
-		/* Get the  c0_residency for all sockets */
-		esmi_socket_c0_residency_get(i, &residency);
-		printf("%3d    | %12ld uJoules   | %6.03f Watts | %7.03f"
-			" Watts | %7.03f Watts	|\n",
-			i, pkg_input, (double)avgpower/1000,
-			(double)powercap/1000, (double)powermax/1000);
+
+	return ESMI_SUCCESS;
+}
+
+esmi_status_t show_smi_all_parameters(void)
+{
+	esmi_status_t ret;
+
+	err_bits_reset();
+
+	ret = show_socket_metrics();
+	err_bits |= 1 << ret;
+
+	ret = show_cpu_energy_all();
+	err_bits |= 1 << ret;
+
+	ret = show_cpu_boostlimit_all();
+	err_bits |= 1 << ret;
+
+	printf("\n");
+	err_bits_print();
+	if (err_bits > 1) {
+		return ESMI_MULTI_ERROR;
 	}
+
+	return ESMI_SUCCESS;
 }
 
 /*
@@ -453,11 +933,14 @@ static int is_string_number(char *str)
 {
 	int i;
 	for (i = 0; str[i] != '\0'; i++) {
+		if (i == 0 && str[i] == '-' && str[i + 1] != '\0') {
+			continue;
+		}
 		if ((str[i] < '0') || (str[i] > '9')) {
 			return 1;
 		}
 	}
-	return ESMI_SUCCESS;
+	return 0;
 }
 
 /**
@@ -472,6 +955,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 	int opt = 0; /* option character */
 	uint32_t core_id = 0, sock_id = 0;
 	uint32_t power = 0, boostlimit = 0;
+	int32_t pstate;
 	static char *args[ARGS_MAX];
 	char sudostr[] = "sudo";
 
@@ -479,22 +963,26 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 	static struct option long_options[] = {
 		{"help",                no_argument,		0,	'h'},
 		{"showall",             no_argument,		0,	'A'},
-		{"showallenergy",       no_argument,		0,	'l'},
 		{"showcoreenergy",      required_argument,	0,	'e'},
-		{"showsocketenergy",	required_argument,	0,	's'},
-		{"showsocketpower",     required_argument,	0,	'p'},
-		{"showcoreboostlimit",	required_argument,	0,	'L'},
-		{"setpowercap",         required_argument,	0,	'C'},
-		{"setcoreboostlimit",	required_argument,	0,	'a'},
-		{"setsocketboostlimit",	required_argument,	0,	'b'},
-		{"setpkgboostlimit",	required_argument,	0,	'c'},
-		{"showsockettctl",      required_argument,	0,	't'},
-		{"showsocketc0residency", required_argument,	0,	'r'},
+		{"showsockenergy",	no_argument,		0,	's'},
+		{"showsockpower",	no_argument,		0,	'p'},
+		{"showsmufwver",	no_argument,		0,	'f'},
+		{"showcorebl",		required_argument,	0,	'L'},
+		{"setpowerlimit",	required_argument,	0,	'C'},
+		{"setcorebl",		required_argument,	0,	'a'},
+		{"setsockbl",		required_argument,	0,	'b'},
+		{"setpkgbl",		required_argument,	0,	'c'},
+		{"showsockc0resi",	required_argument,	0,	'r'},
+		{"showddrbw",		no_argument,		0,	'd'},
+		{"showhsmpprotover",	no_argument,		0,	'v'},
+		{"showprochotstatus",	no_argument,		0,	'x'},
+		{"setdfpstate",		required_argument,	0,	'y'},
+		{"showclocks",		no_argument,		0,	'z'},
 		{0,			0,			0,	0},
 	};
 
 	int long_index = 0;
-	char *helperstring = "+hAle:s:p:L:C:a:b:c:t:r:";
+	char *helperstring = "+hAsfpvxzde:y:L:C:a:b:c:t:r:";
 
 	if (getuid() != 0) {
 		while ((opt = getopt_long(argc, argv, helperstring,
@@ -502,9 +990,13 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 			switch (opt) {
 				/* Below options requires sudo permissions to run */
 				case 'C':
+				case 'A':
 				case 'a':
 				case 'b':
 				case 'c':
+				case 'e':
+				case 's':
+				case 'y':
 					args[0] = sudostr;
 					args[1] = argv[0];
 					for (i = 0; i < argc; i++) {
@@ -521,114 +1013,138 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 	if(ret != ESMI_SUCCESS) {
 		printf(RED "\tESMI Not initialized, drivers not found.\n"
 		       "\tErr[%d]: %s\n" RESET, ret, esmi_get_err_msg(ret));
-		return ret;
+		return ESMI_MULTI_ERROR;
 	}
 	if (argc <= 1) {
-		show_smi_parameters();
-		printf(RED "\nTry `%s --help' for more information." RESET
+		ret = show_smi_parameters();
+		printf(MAG"\nTry `%s --help' for more information." RESET
 			"\n\n", argv[0]);
 	}
 	optind = 0;
 	while ((opt = getopt_long(argc, argv, helperstring,
 			long_options, &long_index)) != -1) {
 	if (opt == 'e' ||
-	    opt == 's' ||
-	    opt == 'p' ||
 	    opt == 'L' ||
 	    opt == 'C' ||
 	    opt == 'a' ||
 	    opt == 'b' ||
 	    opt == 'c' ||
 	    opt == 't' ||
+	    opt == 'y' ||
 	    opt == 'r') {
 		if (is_string_number(optarg)) {
 			printf("Option '-%c' require a valid numeric value"
 					" as an argument\n\n", opt);
 			show_usage(argv[0]);
-			return ESMI_SUCCESS;
+			return ESMI_MULTI_ERROR;
 		}
 	}
 	if (opt == 'C' ||
+	    opt == 'y' ||
 	    opt == 'a' ||
 	    opt == 'b') {
 		// make sure optind is valid  ... or another option
-		if (optind >= argc || *argv[optind] == '-') {
-			printf("\nOption '-%c' require TWO arguments"
-			 " <index>  <set_value>\n\n", optopt);
+		if (optind >= argc) {
+			printf(MAG "\nOption '-%c' require TWO arguments"
+			 " <index>  <set_value>\n\n" RESET, optopt);
 			show_usage(argv[0]);
-			return ESMI_SUCCESS;
+			return ESMI_MULTI_ERROR;
+		}
+		if (*argv[optind] == '-') {
+			if (*(argv[optind] + 1) < 48 && *(argv[optind] + 1) > 57) {
+				printf(MAG "\nOption '-%c' require TWO arguments"
+				 " <index>  <set_value>\n\n" RESET, optopt);
+				show_usage(argv[0]);
+				return ESMI_MULTI_ERROR;
+			}
 		}
 		if(is_string_number(argv[optind])) {
-			printf("Option '-%c' require 2nd argument as valid"
-					" numeric value\n\n", opt);
+			printf(MAG "Option '-%c' require 2nd argument as valid"
+					" numeric value\n\n" RESET, opt);
 			show_usage(argv[0]);
-			return ESMI_SUCCESS;
+			return ESMI_MULTI_ERROR;
 		}
 	}
 	switch (opt) {
 		case 'e' :
 			/* Get the energy for a given core index */
 			core_id = atoi(optarg);
-			epyc_get_coreenergy(core_id);
+			ret = epyc_get_coreenergy(core_id);
 			break;
 		case 's' :
-			/* Get the energy for a given socket index */
-			sock_id = atoi(optarg);
-			epyc_get_sockenergy(sock_id);
+			/* Get the energy metrics for all sockets */
+			ret = epyc_get_sockenergy();
 			break;
 		case 'p' :
-			/* Get the Power values for a given socket */
+			/* Get the Power metrics for all sockets */
+			ret = epyc_get_socketpower();
+			break;
+		case 'd' :
+			/* Get DDR bandwidth details */
+			ret = epyc_get_ddr_bw();
+			break;
+		case 'f' :
+			/* Get SMU Firmware version */
+			ret = epyc_get_smu_fw_version();
+			break;
+		case 'v' :
+			/* Get HSMP protocol version */
+			ret = epyc_get_hsmp_proto_version();
+			break;
+		case 'x' :
+			/* Get HSMP PROCHOT status */
+			ret = epyc_get_prochot_status();
+			break;
+		case 'y' :
 			sock_id = atoi(optarg);
-			epyc_get_sockpower(sock_id);
+			pstate = atoi(argv[optind++]);
+			/* Set DF Pstate */
+			ret = epyc_set_df_pstate(sock_id, pstate);
+			break;
+		case 'z' :
+			/* Get Clock Frequencies */
+			ret = epyc_get_clock_freq();
 			break;
 		case 'L' :
 			/* Get the Boostlimit for a given core index */
 			core_id = atoi(optarg);
-			epyc_get_coreperf(core_id);
+			ret = epyc_get_coreperf(core_id);
 			break;
 		case 'C':
-			/* Set the power cap value for a given socket */
+			/* Set the power limit value for a given socket */
 			sock_id = atoi(optarg);
 			power = atoi(argv[optind++]);
-			epyc_setpowercap(sock_id, power);
+			ret = epyc_setpowerlimit(sock_id, power);
 			break;
 		case 'a' :
 			/* Set the boostlimit value for a given core */
 			core_id = atoi(optarg);
 			boostlimit = atoi(argv[optind++]);
-			epyc_setcoreperf(core_id, boostlimit);
+			ret = epyc_setcoreperf(core_id, boostlimit);
 			break;
 		case 'b' :
 			/* Set the boostlimit value for a given socket */
 			sock_id = atoi(optarg);
 			boostlimit = atoi(argv[optind++]);
-			epyc_setsocketperf(sock_id, boostlimit);
+			ret = epyc_setsocketperf(sock_id, boostlimit);
 			break;
 		case 'c' :
 			/* Set the boostlimit value for a given package */
 			boostlimit = atoi(optarg);
-			epyc_setpkgperf(boostlimit);
-			break;
-		case 't' :
-			/* Get the Thermal control for a given socket */
-			sock_id = atoi(optarg);
-			epyc_get_socktctl(sock_id);
+			ret = epyc_setpkgperf(boostlimit);
 			break;
 		case 'r' :
 			/* Get the Power values for a given socket */
 			sock_id = atoi(optarg);
-			epyc_get_sockc0_residency(sock_id);
+			ret = epyc_get_sockc0_residency(sock_id);
 			break;
 
 		case 'A' :
-			show_smi_all_parameters();
-			break;
-		case 'l' :
-			show_all_energy_counters();
+			ret = show_smi_all_parameters();
 			break;
 		case 'h' :
 			show_usage(argv[0]);
-			return ESMI_SUCCESS;
+			return ESMI_MULTI_ERROR;
 		case ':' :
 			/* missing option argument */
 			printf(RED "%s: option '-%c' requires an argument."
@@ -636,38 +1152,38 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 			break;
 		case '?':
 			if (isprint(optopt)) {
-				printf(RED "Try `%s --help' for more"
+				printf(MAG "Try `%s --help' for more"
 				" information." RESET "\n", argv[0]);
 			} else {
 				printf("Unknown option character"
 				" `\\x%x'.\n", optopt);
 			}
-			return ESMI_SUCCESS;
+			return ESMI_MULTI_ERROR;
 		default:
-			printf(RED "Try `%s --help' for more information."
+			printf(MAG "Try `%s --help' for more information."
 						RESET "\n\n", argv[0]);
-			return ESMI_SUCCESS;
+			return ESMI_MULTI_ERROR;
 		} // end of Switch
 	}
-	for (i = optind; i < argc; i++) {
+	if (optind < argc) {
 		printf(RED"\nExtra Non-option argument<s> passed : %s"
-			RESET "\n", argv[i]);
-		printf(RED "Try `%s --help' for more information."
+			RESET "\n", argv[optind]);
+		printf(MAG "Try `%s --help' for more information."
 					RESET "\n\n", argv[0]);
-		return ESMI_SUCCESS;
 	}
 
-	return ESMI_SUCCESS;
+	return ret;
 }
 
 int main(int argc, char **argv)
 {
+	esmi_status_t ret;
 	/* Parse command arguments */
-	parsesmi_args(argc, argv);
+	ret = parsesmi_args(argc, argv);
 
 	show_smi_end_message();
 	/* Program termination */
 	esmi_exit();
 
-	return ESMI_SUCCESS;
+	return ret;
 }

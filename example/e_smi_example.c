@@ -41,7 +41,6 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <e_smi/e_smi.h>
-#include <e_smi/e_smi_monitor.h>
 
 int main()
 {
@@ -57,10 +56,15 @@ int main()
 		return ret;
 	}
 
-	esmi_number_of_sockets_get(&total_sockets);
+	ret = esmi_number_of_sockets_get(&total_sockets);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get number of sockets, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
 	for (i = 0; i < total_sockets; i++) {
 		power = 0;
-		ret = esmi_socket_power_avg_get(i, &power);
+		ret = esmi_socket_power_get(i, &power);
 		if (ret != ESMI_SUCCESS) {
 			printf("Failed to get socket[%d] avg_power, "
 				"Err[%d]:%s\n", i, ret, esmi_get_err_msg(ret));
