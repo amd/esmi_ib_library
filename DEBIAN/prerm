@@ -3,7 +3,7 @@
 set -e
 
 rm_ldconfig() {
-    rm -f /etc/ld.so.conf.d/x86_64-libemsi_ib_lib.conf && ldconfig
+    rm -f /etc/ld.so.conf.d/x86_64-libesmi_ib_lib.conf && ldconfig
 }
 
 case "$1" in
@@ -16,4 +16,3 @@ case "$1" in
        exit 0
    ;;
 esac
-
