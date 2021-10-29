@@ -71,6 +71,11 @@
 #define CPU_PATH "/sys/devices/system/cpu"
 
 /**
+ * @brief HSMP sysfs directory.
+ */
+#define HSMP_PATH "/sys/devices/platform"
+
+/**
  * MONITOR TYPES
  * @brief This enum gives information to identify whether the monitor type is
  * from Energy/HWMON or HSMP.

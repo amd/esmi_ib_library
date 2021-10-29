@@ -238,12 +238,12 @@ static esmi_status_t create_energy_monitor(void)
  */
 static esmi_status_t create_hsmp_monitor(void)
 {
-	if (find_hsmp(CPU_PATH) != 0) {
+	if (find_hsmp(HSMP_PATH) != 0) {
 		return ESMI_NO_HSMP_DRV;
 	}
 
 	snprintf(hsmpmon_path, sizeof(hsmpmon_path),
-		 "%s/"HSMP_DEV_NAME, CPU_PATH);
+		 "%s/"HSMP_DEV_NAME, HSMP_PATH);
 
 	return ESMI_SUCCESS;
 }
