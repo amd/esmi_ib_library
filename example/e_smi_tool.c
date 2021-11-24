@@ -212,6 +212,43 @@ esmi_status_t epyc_get_ddr_bw(void)
 	return ESMI_SUCCESS;
 }
 
+esmi_status_t epyc_get_temperature(void)
+{
+	esmi_status_t ret;
+	uint32_t i, sockets;
+	uint32_t tmon = 0;
+
+	ret = esmi_number_of_sockets_get(&sockets);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get number of sockets, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+
+	err_bits_reset();
+	print_socket_header(sockets);
+	printf("\n| Temperature\t\t |");
+	for (i = 0; i < sockets; i++) {
+		ret = esmi_socket_temperature_get(i, &tmon);
+		if (ret == ESMI_NO_HSMP_SUP) {
+			printf("Temperature Monitor: Not supported.\n");
+			return ret;
+		}
+		if (!ret) {
+			printf(" %-15.3f°C|", (double)tmon/1000);
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+		}
+	}
+	print_socket_footer(sockets);
+	err_bits_print();
+	if (err_bits > 1) {
+		return ESMI_MULTI_ERROR;
+	}
+	return ESMI_SUCCESS;
+}
+
 esmi_status_t epyc_get_smu_fw_version(void)
 {
 	struct smu_fw_version smu_fw;
@@ -554,6 +591,7 @@ static void show_usage(char *exe_name)
 	"  -r, --showsockc0res SOCKET\t\tGet c0_residency for a"
 	" given socket (%%)\n"
 	"  -d, --showddrbw\t\t\tShow DDR bandwidth details (Gbps)\n"
+	"  -t, --showsockettemp\t\t\tShow Temperature monitor of socket (C)\n"
 	"  --showsmufwver\t\t\tShow SMU FW Version\n"
 	"  --showhsmpprotover\t\t\tShow HSMP Protocol Version\n"
 	"  --showprochotstatus\t\t\tShow HSMP PROCHOT status (in/active)\n"
@@ -647,6 +685,7 @@ esmi_status_t show_socket_metrics(void)
 	uint32_t bw_len;
 	uint32_t pct_len;
 	uint32_t c0resi;
+	uint32_t tmon = 0;
 
 	ret = esmi_number_of_sockets_get(&sockets);
 	if (ret != ESMI_SUCCESS) {
@@ -736,6 +775,21 @@ esmi_status_t show_socket_metrics(void)
 	}
 	printf("%s", bw_str);
 	printf("%s", pct_str);
+
+	printf("\n| Temperature (°C)\t |");
+	for (i = 0; i < sockets; i++) {
+		ret = esmi_socket_temperature_get(i, &tmon);
+		if (ret == ESMI_NO_HSMP_SUP) {
+			break;
+		}
+		if (!ret) {
+			printf(" %-17.3f|", (double)tmon/1000);
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+		}
+	}
+
 
 	print_socket_footer(sockets);
 	if (err_bits > 1) {
@@ -974,6 +1028,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 		{"setpkgbl",		required_argument,	0,	'c'},
 		{"showsockc0resi",	required_argument,	0,	'r'},
 		{"showddrbw",		no_argument,		0,	'd'},
+		{"showsockettemp",	no_argument,		0,      't'},
 		{"showhsmpprotover",	no_argument,		0,	'v'},
 		{"showprochotstatus",	no_argument,		0,	'x'},
 		{"setdfpstate",		required_argument,	0,	'y'},
@@ -982,7 +1037,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 	};
 
 	int long_index = 0;
-	char *helperstring = "+hAsfpvxzde:y:L:C:a:b:c:t:r:";
+	char *helperstring = "+hAsfpvxzdte:y:L:C:a:b:c:r:";
 
 	if (getuid() != 0) {
 		while ((opt = getopt_long(argc, argv, helperstring,
@@ -1029,7 +1084,6 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 	    opt == 'a' ||
 	    opt == 'b' ||
 	    opt == 'c' ||
-	    opt == 't' ||
 	    opt == 'y' ||
 	    opt == 'r') {
 		if (is_string_number(optarg)) {
@@ -1137,6 +1191,10 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 			/* Get the Power values for a given socket */
 			sock_id = atoi(optarg);
 			ret = epyc_get_sockc0_residency(sock_id);
+			break;
+		case 't' :
+			/* Get socket Temperature*/
+			ret = epyc_get_temperature();
 			break;
 
 		case 'A' :
