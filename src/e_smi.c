@@ -756,6 +756,36 @@ esmi_status_t esmi_ddr_bw_get(struct ddr_bw_metrics *ddr_bw)
 	return errno_to_esmi_status(ret);
 }
 
+esmi_status_t esmi_socket_temperature_get(uint32_t sock_ind, uint32_t *ptmon)
+{
+	esmi_status_t ret;
+
+	if (psm->hsmp_proto_ver != 4)
+		return ESMI_NO_HSMP_SUP;
+
+	CHECK_HSMP_GET_INPUT(ptmon);
+
+	if (psm->is_char_dev) {
+		struct hsmp_message msg = { 0 };
+		uint32_t int_part, fract_part;
+
+		msg.msg_id = SOCKET_TEMP_MONITOR_TYPE;
+		msg.response_sz = 1;
+		msg.sock_ind = sock_ind;
+		ret = hsmp_xfer(&msg, O_RDONLY);
+		if (!ret) {
+			/* convert temperature to milli degree celsius */
+			int_part = ((msg.response[0] >> 8) & 0xFF) * 1000;
+			fract_part = ((msg.response[0] >> 5) & 0x7) * 125;
+			*ptmon = int_part + fract_part;
+		}
+	} else {
+		ret = hsmp_read32(SOCKET_TEMP_MONITOR_TYPE, sock_ind, ptmon);
+	}
+
+	return errno_to_esmi_status(ret);
+}
+
 esmi_status_t esmi_hsmp_proto_ver_get(uint32_t *proto_ver)
 {
 	int ret;

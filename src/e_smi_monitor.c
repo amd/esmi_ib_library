@@ -65,6 +65,7 @@ static char fclk_memclk_file[] = "socket#/fabric_clocks_raw";
 static char cclk_limit_file[] = "socket#/cclk_limit";
 static char socket_c0_residency_file[] = "socket#/c0_residency";
 static char ddr_bw_file[] = "ddr_bandwidth_raw";
+static char socket_temp_mon_file[] = "socket#/temperature";
 
 static char *filenames[MONITOR_TYPE_MAX] = {energy_file,
 					    smu_fw_version_file,
@@ -81,6 +82,7 @@ static char *filenames[MONITOR_TYPE_MAX] = {energy_file,
 					    cclk_limit_file,
 					    socket_c0_residency_file,
 					    ddr_bw_file,
+					    socket_temp_mon_file,
 };
 
 int find_energy(char *devname, char *hwmon_name)

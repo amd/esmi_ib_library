@@ -91,6 +91,7 @@ typedef enum {
 	CCLK_LIMIT_TYPE,	//!< Core clock limit coordinate
 	SOCKET_C0_RESIDENCY_TYPE,//!< Socket c0 residency coordinate
 	DDR_BW_TYPE,		//!< DDR bandwidth coordinate
+	SOCKET_TEMP_MONITOR_TYPE, //!< Socket temperature monitor coordinate
 	MONITOR_TYPE_MAX	//!< Max Monitor Type coordinate
 } monitor_types_t;
 

@@ -529,6 +529,31 @@ esmi_status_t esmi_ddr_bw_get(struct ddr_bw_metrics *ddr_bw);
 /** @} */  // end of ddrQuer
 
 /*****************************************************************************/
+/** @defgroup TempQuer Temperature Query
+ *  This function provides the current tempearature value in degree C.
+ *  @{
+ */
+
+/**
+ *  @brief Get temperature monitor for a given socket
+ *
+ *  @details This function will return the socket's current temperature
+ *  @p ptmon for a particular @p sock_ind.
+ *
+ *  @param[in] sock_ind a socket index provided.
+ *
+ *  @param[inout] ptmon pointer to a uint32_t that indicates the
+ *  possible tmon value.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_socket_temperature_get(uint32_t sock_ind, uint32_t *ptmon);
+
+/** @} */  // end of TempQuer
+
+/*****************************************************************************/
 /** @defgroup AuxilQuer Auxiliary functions
  *  Below functions provide interfaces to get the total number of cores and
  *  sockets available and also to get the first online core on a given socket
