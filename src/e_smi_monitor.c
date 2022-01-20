@@ -249,7 +249,7 @@ int read_energy(monitor_types_t type,
 	}
 	make_path(type, energymon_path, sensor_id, file_path);
 
-	return readfile_u64(file_path, pval);
+	return readsys_u64(file_path, pval);
 }
 
 int batch_read_energy(monitor_types_t type, uint64_t *pval, uint32_t entries)
@@ -263,7 +263,7 @@ int batch_read_energy(monitor_types_t type, uint64_t *pval, uint32_t entries)
 	memset(pval, 0, entries * sizeof(uint64_t));
 	for (i = 0; i < entries; i++) {
 		make_path(type, energymon_path, i + 1, file_path);
-		ret = readfile_u64(file_path, &pval[i]);
+		ret = readsys_u64(file_path, &pval[i]);
 		if (ret != 0 && ret != ENODEV) {
 			status = ret;
 		}
@@ -281,7 +281,7 @@ int hsmp_read64(monitor_types_t type, uint32_t sensor_id, uint64_t *pval)
 	}
 	make_path(type, hsmpmon_path, sensor_id, file_path);
 
-	return readfile_u64(file_path, pval);
+	return readsys_u64(file_path, pval);
 }
 
 int hsmp_read32(monitor_types_t type, uint32_t sensor_id, uint32_t *pval)
@@ -293,7 +293,7 @@ int hsmp_read32(monitor_types_t type, uint32_t sensor_id, uint32_t *pval)
 	}
 	make_path(type, hsmpmon_path, sensor_id, file_path);
 
-	return readfile_u32(file_path, pval);
+	return readsys_u32(file_path, pval);
 }
 
 int hsmp_readstr(monitor_types_t type, uint32_t sensor_id, char *pval, uint32_t len)
@@ -305,7 +305,7 @@ int hsmp_readstr(monitor_types_t type, uint32_t sensor_id, char *pval, uint32_t 
 	}
 	make_path(type, hsmpmon_path, sensor_id, file_path);
 
-	return readfile_str(file_path, pval, len);
+	return readsys_str(file_path, pval, len);
 }
 
 int hsmp_write_s32(monitor_types_t type, uint32_t sensor_id, int32_t val)
@@ -314,7 +314,7 @@ int hsmp_write_s32(monitor_types_t type, uint32_t sensor_id, int32_t val)
 
 	make_path(type, hsmpmon_path, sensor_id, file_path);
 
-	return writefile_s32(file_path, val);
+	return writesys_s32(file_path, val);
 }
 
 int hsmp_write32(monitor_types_t type, uint32_t sensor_id, uint32_t val)
@@ -323,5 +323,5 @@ int hsmp_write32(monitor_types_t type, uint32_t sensor_id, uint32_t val)
 
 	make_path(type, hsmpmon_path, sensor_id, file_path);
 
-	return writefile_u32(file_path, val);
+	return writesys_u32(file_path, val);
 }

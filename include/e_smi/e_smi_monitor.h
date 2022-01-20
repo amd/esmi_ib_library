@@ -68,7 +68,7 @@
 /**
  * @brief The core sysfs directory.
  */
-#define CPU_PATH "/sys/devices/system/cpu"
+#define CPU_SYS_PATH "/sys/devices/system/cpu"
 
 /**
  * MONITOR TYPES

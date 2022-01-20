@@ -124,7 +124,7 @@ esmi_status_t esmi_first_online_core_on_socket(uint32_t sock_ind,
 	for (i = 0; i < psm->total_cores; i++) {
 		snprintf(filepath, FILEPATHSIZ,
 			 "%s/cpu%d/topology/physical_package_id",
-			 CPU_PATH, i);
+			 CPU_SYS_PATH, i);
 
 		fp = fopen(filepath, "r");
 		if (fp == NULL) {
@@ -238,12 +238,12 @@ static esmi_status_t create_energy_monitor(void)
  */
 static esmi_status_t create_hsmp_monitor(void)
 {
-	if (find_hsmp(CPU_PATH) != 0) {
+	if (find_hsmp(CPU_SYS_PATH) != 0) {
 		return ESMI_NO_HSMP_DRV;
 	}
 
 	snprintf(hsmpmon_path, sizeof(hsmpmon_path),
-		 "%s/"HSMP_DEV_NAME, CPU_PATH);
+		 "%s/"HSMP_DEV_NAME, CPU_SYS_PATH);
 
 	return ESMI_SUCCESS;
 }
@@ -497,76 +497,6 @@ esmi_status_t esmi_smu_fw_version_get(struct smu_fw_version *smu_fw)
 	return errno_to_esmi_status(ret);
 }
 
-esmi_status_t esmi_prochot_status_get(uint32_t sock_ind, uint32_t *prochot)
-{
-	char hot[9];
-	int ret;
-
-	CHECK_HSMP_GET_INPUT(prochot);
-	if (sock_ind >= psm->total_sockets) {
-		return ESMI_INVALID_INPUT;
-	}
-	ret = hsmp_readstr(PROCHOT_STATUS_TYPE, sock_ind, hot, 9);
-	if (!strncmp(hot, "inactive", 8))
-		*prochot = 0;
-	else
-		*prochot = 1;
-
-	return errno_to_esmi_status(ret);
-}
-
-esmi_status_t esmi_df_pstate_set(uint32_t sock_ind, int32_t pstate)
-{
-	int ret;
-
-	CHECK_HSMP_INPUT();
-	if (NULL == psm) {
-		return ESMI_IO_ERROR;
-	}
-	if (sock_ind >= psm->total_sockets) {
-		return ESMI_INVALID_INPUT;
-	}
-	if (pstate < -1 || pstate > 3) {
-		return ESMI_INVALID_INPUT;
-	}
-
-	ret = hsmp_write_s32(DF_PSTATE_TYPE, sock_ind, pstate);
-	return errno_to_esmi_status(ret);
-}
-
-esmi_status_t esmi_fclk_mclk_get(uint32_t sock_ind,
-				      uint32_t *fclk, uint32_t *mclk)
-{
-	int ret;
-	uint64_t clk;
-
-	CHECK_HSMP_INPUT();
-        if (!(fclk && mclk)) {
-                return ESMI_ARG_PTR_NULL;
-        }
-	if (sock_ind >= psm->total_sockets) {
-		return ESMI_INVALID_INPUT;
-	}
-
-	ret = hsmp_read64(FCLK_MEMCLK_TYPE, sock_ind, &clk);
-	*fclk = clk & 0xFFFFFFFF;  // as per hsmp_driver fclk is [31:0]
-	*mclk = clk >> 32; // as per hsmp_driver mclk is [63:32]
-	return errno_to_esmi_status(ret);
-}
-
-esmi_status_t esmi_cclk_limit_get(uint32_t sock_ind, uint32_t *cclk)
-{
-	int ret;
-
-	CHECK_HSMP_GET_INPUT(cclk);
-	if (sock_ind >= psm->total_sockets) {
-		return ESMI_INVALID_INPUT;
-	}
-
-	ret = hsmp_read32(CCLK_LIMIT_TYPE, sock_ind, cclk);
-	return errno_to_esmi_status(ret);
-}
-
 /*
  * Power Monitoring Functions
  *
@@ -713,6 +643,77 @@ esmi_status_t esmi_package_boostlimit_set(uint32_t boostlimit)
 	ret = hsmp_write32(PKG_BOOSTLIMIT_TYPE, 0, boostlimit);
 	return errno_to_esmi_status(ret);
 }
+
+esmi_status_t esmi_prochot_status_get(uint32_t sock_ind, uint32_t *prochot)
+{
+	char hot[9];
+	int ret;
+
+	CHECK_HSMP_GET_INPUT(prochot);
+	if (sock_ind >= psm->total_sockets) {
+		return ESMI_INVALID_INPUT;
+	}
+	ret = hsmp_readstr(PROCHOT_STATUS_TYPE, sock_ind, hot, 9);
+	if (!strncmp(hot, "inactive", 8))
+		*prochot = 0;
+	else
+		*prochot = 1;
+
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_df_pstate_set(uint32_t sock_ind, int32_t pstate)
+{
+	int ret;
+
+	CHECK_HSMP_INPUT();
+	if (NULL == psm) {
+		return ESMI_IO_ERROR;
+	}
+	if (sock_ind >= psm->total_sockets) {
+		return ESMI_INVALID_INPUT;
+	}
+	if (pstate < -1 || pstate > 3) {
+		return ESMI_INVALID_INPUT;
+	}
+
+	ret = hsmp_write_s32(DF_PSTATE_TYPE, sock_ind, pstate);
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_fclk_mclk_get(uint32_t sock_ind,
+				      uint32_t *fclk, uint32_t *mclk)
+{
+	int ret;
+	uint64_t clk;
+
+	CHECK_HSMP_INPUT();
+        if (!(fclk && mclk)) {
+                return ESMI_ARG_PTR_NULL;
+        }
+	if (sock_ind >= psm->total_sockets) {
+		return ESMI_INVALID_INPUT;
+	}
+
+	ret = hsmp_read64(FCLK_MEMCLK_TYPE, sock_ind, &clk);
+	*fclk = clk & 0xFFFFFFFF;  // as per hsmp_driver fclk is [31:0]
+	*mclk = clk >> 32; // as per hsmp_driver mclk is [63:32]
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_cclk_limit_get(uint32_t sock_ind, uint32_t *cclk)
+{
+	int ret;
+
+	CHECK_HSMP_GET_INPUT(cclk);
+	if (sock_ind >= psm->total_sockets) {
+		return ESMI_INVALID_INPUT;
+	}
+
+	ret = hsmp_read32(CCLK_LIMIT_TYPE, sock_ind, cclk);
+	return errno_to_esmi_status(ret);
+}
+
 
 /*
  * c0_Residency Monitoring Function

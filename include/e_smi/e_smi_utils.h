@@ -50,10 +50,10 @@
  *  The sysfs path can be accessed by reading and writing using below APIs.
  */
 
-int readfile_u32(char *filepath, uint32_t *pval);
-int writefile_s32(char *filepath, int32_t val);
-int writefile_u32(char *filepath, uint32_t val);
-int readfile_u64(char *filepath, uint64_t *pval);
-int readfile_str(char *filepath, char *pval, uint32_t val);
+int readsys_u32(char *filepath, uint32_t *pval);
+int writesys_s32(char *filepath, int32_t val);
+int writesys_u32(char *filepath, uint32_t val);
+int readsys_u64(char *filepath, uint64_t *pval);
+int readsys_str(char *filepath, char *pval, uint32_t val);
 
 #endif  // INCLUDE_E_SMI_E_SMI_UTILS_H_

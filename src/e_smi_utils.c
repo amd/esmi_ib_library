@@ -46,7 +46,7 @@
 
 #include <e_smi/e_smi_utils.h>
 
-int readfile_u32(char *filepath, uint32_t *pval)
+int readsys_u32(char *filepath, uint32_t *pval)
 {
 	FILE *fptr;
 
@@ -65,7 +65,7 @@ int readfile_u32(char *filepath, uint32_t *pval)
 	return 0;
 }
 
-int writefile_s32(char *filepath, int32_t val)
+int writesys_s32(char *filepath, int32_t val)
 {
 	FILE *fptr;
 
@@ -84,7 +84,7 @@ int writefile_s32(char *filepath, int32_t val)
 	return 0;
 }
 
-int writefile_u32(char *filepath, uint32_t val)
+int writesys_u32(char *filepath, uint32_t val)
 {
 	FILE *fptr;
 
@@ -103,7 +103,7 @@ int writefile_u32(char *filepath, uint32_t val)
 	return 0;
 }
 
-int readfile_u64(char *filepath, uint64_t *pval)
+int readsys_u64(char *filepath, uint64_t *pval)
 {
 	FILE *fptr;
 
@@ -122,7 +122,7 @@ int readfile_u64(char *filepath, uint64_t *pval)
 	return 0;
 }
 
-int readfile_str(char *filepath, char *pval, uint32_t len)
+int readsys_str(char *filepath, char *pval, uint32_t len)
 {
 	FILE *fptr;
 
