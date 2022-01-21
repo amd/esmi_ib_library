@@ -50,6 +50,7 @@
  */
 
 #include <stdint.h>
+#include <asm/amd_hsmp.h>
 
 #define FILEPATHSIZ	512 //!< Buffer to hold size of sysfs filepath
 #define DRVPATHSIZ	256 //!< size of driver location path
@@ -76,23 +77,29 @@
  * from Energy/HWMON or HSMP.
  */
 typedef enum {
-	ENERGY_TYPE,	        //!< Core and Socket Energy coordinate
-	SMU_FW_VERSION_TYPE,	//!< SMU firmware version coordinate
-	HSMP_PROTO_VER_TYPE,	//!< HSMP interface version coordinate
-	SOCKET_POWER_TYPE,	//!< Socket Power coordinate
-	SOCKET_POWER_LIMIT_TYPE,//!< Socket Power Limit coordinate
-	SOCKET_POWER_LIMIT_MAX_TYPE,//!< Socket PowerLimit Max coordinate
-	PKG_BOOSTLIMIT_TYPE,	//!< Package Boostlimit coordinate
-	CORE_BOOSTLIMIT_TYPE,	//!< Core Boostlimit coordinate
-	SOCKET_BOOSTLIMIT_TYPE,	//!< Socket Boostlimit coordinate
-	PROCHOT_STATUS_TYPE,	//!< HSMP prochot status coordinate
-	DF_PSTATE_TYPE,		//!< HSMP DF P-state coordinate
-	FCLK_MEMCLK_TYPE,	//!< Current fclk, memclk coordinate
-	CCLK_LIMIT_TYPE,	//!< Core clock limit coordinate
-	SOCKET_C0_RESIDENCY_TYPE,//!< Socket c0 residency coordinate
-	DDR_BW_TYPE,		//!< DDR bandwidth coordinate
-	SOCKET_TEMP_MONITOR_TYPE, //!< Socket temperature monitor coordinate
-	MONITOR_TYPE_MAX	//!< Max Monitor Type coordinate
+	ENERGY_TYPE,			//!< Core and Socket Energy coordinate
+	HSMP_TEST_TYPE,
+	SMU_FW_VERSION_TYPE,		//!< SMU firmware version coordinate
+	HSMP_PROTO_VER_TYPE,		//!< HSMP interface version coordinate
+	SOCKET_POWER_TYPE,		//!< Socket Power coordinate
+	W_SOCKET_POWER_LIMIT_TYPE,	//!< Write socket Power Limit coordinate
+	R_SOCKET_POWER_LIMIT_TYPE,	//!< Read socket Power Limit coordinate
+	SOCKET_POWER_LIMIT_MAX_TYPE,	//!< Socket PowerLimit Max coordinate
+	W_CORE_BOOSTLIMIT_TYPE,		//!< Write core Boostlimit coordinate
+	SOCKET_BOOSTLIMIT_TYPE,		//!< Socket Boostlimit coordinate
+	R_CORE_BOOSTLIMIT_TYPE,		//!< Read core Boostlimit coordinate
+	PROCHOT_STATUS_TYPE,		//!< HSMP prochot status coordinate
+	PKG_BOOSTLIMIT_TYPE,		//!< Package Boostlimit coordinate
+	DIS_DF_PSTATE_TYPE,		//!< HSMP disable DF P-state coordinate
+	EN_DF_PSTATE_TYPE,		//!< HSMP enable DF P-state coordinate
+	FCLK_MEMCLK_TYPE,		//!< Current fclk, memclk coordinate
+	CCLK_LIMIT_TYPE,		//!< Core clock limit coordinate
+	SOCKET_C0_RESIDENCY_TYPE,	//!< Socket c0 residency coordinate
+	LCLKDPM_LEVEL,			//!< Socket nbio pstate coordinate
+	HSMP_RES,			//!< Reserved for future use
+	DDR_BW_TYPE,			//!< DDR bandwidth coordinate
+	SOCKET_TEMP_MONITOR_TYPE,	//!< Socket temperature monitor coordinate
+	MONITOR_TYPE_MAX		//!< Max Monitor Type coordinate
 } monitor_types_t;
 
 char energymon_path[DRVPATHSIZ], hsmpmon_path[DRVPATHSIZ];
@@ -108,5 +115,6 @@ int hsmp_write32(monitor_types_t type, uint32_t sensor_id, uint32_t val);
 
 int find_energy(char *devname, char *hwmon_name);
 int find_hsmp(const char *path);
+int hsmp_xfer(struct hsmp_message *msg, int mode);
 
 #endif  // INCLUDE_E_SMI_E_SMI_MONITOR_H_

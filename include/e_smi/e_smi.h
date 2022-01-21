@@ -44,6 +44,8 @@
 #define ENERGY_DEV_NAME	"amd_energy"	//!< Supported Energy driver name
 #define HSMP_DEV_NAME	"amd_hsmp"	//!< Supported HSMP driver name
 
+#define HSMP_CHAR_DEVFILE_NAME	"/dev/hsmp" //!< HSMP device path
+
 /** \file e_smi.h
  *  Main header file for the E-SMI library.
  *  All required function, structure, enum, etc. definitions should be defined

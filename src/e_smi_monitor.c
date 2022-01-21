@@ -44,6 +44,9 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
 
 #include <e_smi/e_smi.h>
 #include <e_smi/e_smi_monitor.h>
@@ -68,19 +71,25 @@ static char ddr_bw_file[] = "ddr_bandwidth_raw";
 static char socket_temp_mon_file[] = "socket#/temperature";
 
 static char *filenames[MONITOR_TYPE_MAX] = {energy_file,
+					    "",
 					    smu_fw_version_file,
 					    hsmp_proto_ver_file,
 					    socket_power_file,
 					    socket_power_limit_file,
+					    socket_power_limit_file,
 					    socket_power_limit_max_file,
-					    pkg_boostlimit_file,
 					    core_boostlimit_file,
 					    socket_boostlimit_file,
+					    core_boostlimit_file,
 					    prochot_status_file,
+					    pkg_boostlimit_file,
+					    df_pstate_file,
 					    df_pstate_file,
 					    fclk_memclk_file,
 					    cclk_limit_file,
 					    socket_c0_residency_file,
+					    "",
+					    "",
 					    ddr_bw_file,
 					    socket_temp_mon_file,
 };
@@ -231,7 +240,7 @@ static void replace_ch_to_num(char *buf, int buf_size, char ch, unsigned int num
  * errors. Always, used with known values.
  */
 static void make_path(monitor_types_t type, char *driver_path,
-	              uint32_t sensor_id, char *file_path)
+		      uint32_t sensor_id, char *file_path)
 {
 	snprintf(file_path, FILEPATHSIZ, "%s/%s", driver_path,
 		 filenames[type]);
@@ -324,4 +333,21 @@ int hsmp_write32(monitor_types_t type, uint32_t sensor_id, uint32_t val)
 	make_path(type, hsmpmon_path, sensor_id, file_path);
 
 	return writesys_u32(file_path, val);
+}
+
+int hsmp_xfer(struct hsmp_message *msg, int mode)
+{
+	int fd, ret;
+
+	fd = open(HSMP_CHAR_DEVFILE_NAME, mode);
+	if (fd < 0)
+		return errno;
+
+	ret = ioctl(fd, HSMP_IOCTL_CMD, msg);
+	if (ret)
+		ret = errno;
+
+	close(fd);
+
+	return ret;
 }
