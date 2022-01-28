@@ -69,9 +69,27 @@ struct system_metrics {
 	esmi_status_t energy_status;	// energy driver status
 	esmi_status_t hsmp_status;	// hsmp driver status
 	bool is_char_dev;		// is hsmp driver a character driver or sysfs based
+	struct cpu_mapping *map;
 };
 
 static const struct system_metrics *psm;
+
+struct cpu_mapping {
+	int proc_id;
+	int apic_id;
+	int sock_id;
+};
+
+#define CPU_INFO_LINE_SIZE 	1024
+#define APICID_BIT		1
+#define PHYSICALID_BIT		2
+#define CPU_INFO_PATH		"/proc/cpuinfo"
+
+static char *delim1 = ":";
+static char *delim2 = "\n";
+static const char *proc_str = "processor";
+static const char *apic_str = "apicid";
+static const char *node_str = "physical id";
 
 /*
  * To Calculate maximum possible number of cores and sockets,
@@ -256,6 +274,60 @@ static esmi_status_t create_hsmp_monitor(struct system_metrics *sm)
 	return ESMI_NO_HSMP_DRV;
 }
 
+static esmi_status_t create_cpu_mappings(struct system_metrics *sm)
+{
+	int flag = (APICID_BIT | PHYSICALID_BIT);
+	size_t size = CPU_INFO_LINE_SIZE;
+	int i = -1;
+	char *tok;
+	char *str;
+	FILE *fp;
+
+	str = malloc(CPU_INFO_LINE_SIZE);
+	if (!str)
+		return ESMI_NO_MEMORY;
+
+	sm->map = malloc(sm->total_cores * sizeof(struct cpu_mapping));
+	if (!sm->map)
+		return ESMI_NO_MEMORY;
+
+	fp = fopen(CPU_INFO_PATH, "r");
+	if (!fp)
+		return ESMI_FILE_ERROR;
+
+	while (getline(&str, &size, fp) != -1) {
+		if (tok = strtok(str, delim1)) {
+			if (flag != (APICID_BIT | PHYSICALID_BIT)) {
+				if(!strncmp(tok, node_str, strlen(node_str))) {
+					tok  = strtok(NULL, delim2);
+					sm->map[i].sock_id = atoi(tok);
+					flag |= PHYSICALID_BIT;
+					continue;
+				}
+				if(!strncmp(tok, apic_str, strlen(apic_str))) {
+					tok  = strtok(NULL, delim2);
+					sm->map[i].apic_id = atoi(tok);
+					flag |= APICID_BIT;
+				}
+
+			} else {
+				if(!strncmp(tok, proc_str, strlen(proc_str))) {
+					i++;
+					tok  = strtok(NULL, delim2);
+					sm->map[i].proc_id = atoi(tok);
+					flag = 0;
+				}
+			}
+		}
+	}
+
+	free(str);
+
+	fclose(fp);
+
+	return ESMI_SUCCESS;
+}
+
 static esmi_status_t detect_packages(struct system_metrics *psysm)
 {
 	uint32_t eax, ebx, ecx,edx;
@@ -318,6 +390,10 @@ esmi_status_t esmi_init()
 	ret = create_hsmp_monitor(&sm);
 	if (ret == ESMI_SUCCESS) {
 		if (sm.is_char_dev) {
+			ret = create_cpu_mappings(&sm);
+			if (ret != ESMI_SUCCESS)
+				return ret;
+
 			struct hsmp_message msg = { 0 };
 			msg.msg_id = HSMP_PROTO_VER_TYPE;
 			msg.response_sz = 1;
@@ -344,6 +420,7 @@ esmi_status_t esmi_init()
 
 void esmi_exit(void)
 {
+	free(psm->map);
 	return;
 }
 
@@ -670,7 +747,8 @@ esmi_status_t esmi_core_boostlimit_get(uint32_t core_ind,
 		msg.msg_id = R_CORE_BOOSTLIMIT_TYPE;
 		msg.num_args = 1;
 		msg.response_sz = 1;
-		msg.args[0] = core_ind;
+		msg.sock_ind = psm->map[core_ind].sock_id;
+		msg.args[0] = psm->map[core_ind].apic_id;
 		ret = hsmp_xfer(&msg, O_RDONLY);
 		if (!ret)
 			*pboostlimit = msg.response[0];
@@ -703,7 +781,8 @@ esmi_status_t esmi_core_boostlimit_set(uint32_t core_ind,
 		struct hsmp_message msg = { 0 };
 		msg.msg_id = W_CORE_BOOSTLIMIT_TYPE;
 		msg.num_args = 1;
-		msg.args[0] = (core_ind << 16) | boostlimit;
+		msg.sock_ind = psm->map[core_ind].sock_id;
+		msg.args[0] = (psm->map[core_ind].apic_id << 16) | boostlimit;
 		ret = hsmp_xfer(&msg, O_WRONLY);
 	} else {
 		ret = hsmp_write32(W_CORE_BOOSTLIMIT_TYPE, core_ind, boostlimit);
