@@ -119,7 +119,7 @@ esmi_status_t epyc_get_coreenergy(uint32_t core_id)
 			core_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("core[%d]/energy\t: %17.3lf Joules\n",
+	printf("core[%d] energy\t: %17.3lf Joules\n",
 		core_id, (double)core_input/1000000);
 
 	return ESMI_SUCCESS;
@@ -231,7 +231,7 @@ esmi_status_t epyc_get_temperature(void)
 	for (i = 0; i < sockets; i++) {
 		ret = esmi_socket_temperature_get(i, &tmon);
 		if (ret == ESMI_NO_HSMP_SUP) {
-			printf("Temperature Monitor: Not supported.\n");
+			printf("Temperature Monitor Not supported.\n");
 			return ret;
 		}
 		if (!ret) {
@@ -369,18 +369,82 @@ esmi_status_t epyc_get_clock_freq(void)
 	return ESMI_SUCCESS;
 }
 
+esmi_status_t epyc_apb_enable(uint32_t sock_id)
+{
+	bool prochot_asserted;
+	esmi_status_t ret;
+
+	ret = esmi_apb_enable(sock_id, &prochot_asserted);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed: to enable DF performance boost algo on "
+			"socket[%d], Err[%d]: %s\n", sock_id, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+
+	if (prochot_asserted)
+		printf("PROCHOT_L is asserted, lowest DF-Pstate is enforced.\n");
+	else
+		printf("Enabled performance boost algorithm on socket[%d] successfully\n",
+			sock_id);
+
+	return ESMI_SUCCESS;
+}
+
 esmi_status_t epyc_set_df_pstate(uint32_t sock_id, int32_t pstate)
 {
 	esmi_status_t ret;
+	bool prochot_asserted;
 
-	ret = esmi_df_pstate_set(sock_id, pstate);
+	ret = esmi_apb_disable(sock_id, pstate, &prochot_asserted);
 	if (ret != ESMI_SUCCESS) {
 		printf("Failed: to set socket[%d] DF Pstate\n", sock_id);
 		printf(RED "Err[%d]: %s\n" RESET, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("Set socket[%d]/P-state to %d successfully\n",
-		sock_id, pstate);
+
+	if (prochot_asserted)
+		printf("PROCHOT_L is asserted, lowest DF-Pstate is enforced.\n");
+	else
+		printf("Socket[%d] P-state set to %d successfully\n",
+			sock_id, pstate);
+
+	return ESMI_SUCCESS;
+}
+
+/* 0, 1, 2 values correspond to 2, 8, 16 xgmi lanes respectively */
+static uint8_t xgmi_links[] = {2, 8, 16};
+
+esmi_status_t epyc_set_xgmi_width(uint8_t min, uint8_t max)
+{
+	esmi_status_t ret;
+
+	ret = esmi_xgmi_width_set(min, max);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed: to set xGMI link width, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	printf("xGMI link width set to %u-%u range successfully\n",
+		xgmi_links[min], xgmi_links[max]);
+
+	return ESMI_SUCCESS;
+}
+
+/* PCIe link frequency(LCLK) in MHz for different dpm level values */
+static uint32_t lclk_freq[] = {300, 400, 593, 770};
+
+esmi_status_t epyc_set_lclk_dpm_level(uint8_t sock_id, uint8_t nbio_id, uint8_t min, uint8_t max)
+{
+	esmi_status_t ret;
+
+	ret = esmi_socket_lclk_dpm_level_set(sock_id, nbio_id, min, max);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed: to set lclk dpm level for socket[%d], nbiod[%d], Err[%d]: %s\n",
+			sock_id, nbio_id, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	printf("Socket[%d] nbio[%d] LCLK frequency set to %u-%u MHz range successfully\n",
+		sock_id, nbio_id, lclk_freq[min], lclk_freq[max]);
 
 	return ESMI_SUCCESS;
 }
@@ -451,7 +515,7 @@ esmi_status_t epyc_get_coreperf(uint32_t core_id)
 			core_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("core[%d]/boostlimit\t: %u MHz\n", core_id, boostlimit);
+	printf("core[%d] boostlimit\t: %u MHz\n", core_id, boostlimit);
 
 	return ESMI_SUCCESS;
 }
@@ -474,7 +538,7 @@ esmi_status_t epyc_setpowerlimit(uint32_t sock_id, uint32_t power)
 		printf(RED "Err[%d]: %s\n" RESET, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("Set socket[%d]/power_limit : %15.03f Watts successfully\n",
+	printf("Socket[%d] power_limit set to %15.03f Watts successfully\n",
 		sock_id, (double)power/1000);
 
 	return ESMI_SUCCESS;
@@ -499,7 +563,7 @@ esmi_status_t epyc_setcoreperf(uint32_t core_id, uint32_t boostlimit)
 			printf("Set to min boost limit: %u MHz\n", blimit);
 		}
 	}
-	printf("Core[%d]/boostlimit set successfully\n", core_id);
+	printf("Core[%d] boostlimit set to %u MHz successfully\n", core_id, boostlimit);
 
 	return ESMI_SUCCESS;
 }
@@ -528,7 +592,7 @@ esmi_status_t epyc_setsocketperf(uint32_t sock_id, uint32_t boostlimit)
 			printf("Set to min boost limit: %u MHz\n", blimit);
 		}
 	}
-	printf("Socket[%d]/boostlimit set successfully\n", sock_id);
+	printf("Socket[%d] boostlimit set to %u MHz successfully\n", sock_id, blimit);
 
 	return ESMI_SUCCESS;
 }
@@ -553,7 +617,7 @@ esmi_status_t epyc_setpkgperf(uint32_t boostlimit)
 			printf("Set to min boost limit: %u MHz\n", blimit);
 		}
 	}
-	printf("Package/boostlimit set successfully\n");
+	printf("Package boostlimit set to %u MHz successfully\n", blimit);
 
 	return ESMI_SUCCESS;
 }
@@ -569,46 +633,51 @@ esmi_status_t epyc_get_sockc0_residency(uint32_t sock_id)
 			sock_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("socket[%d]/c0_residency	: %u %%\n", sock_id, residency);
+	printf("socket[%d] c0_residency	: %u %%\n", sock_id, residency);
 
 	return ESMI_SUCCESS;
 }
 
 static void show_usage(char *exe_name)
 {
-	printf("Usage: %s [Option]... <INPUT>...\n"
+	printf("Usage: %s [Option]... <INPUT>...\n\n"
 	"Output Option<s>:\n"
-	"  -h, --help\t\t\t\tShow this help message\n"
-	"  -A, --showall\t\t\t\tGet all esmi parameter Values\n"
+	"  -h, --help\t\t\t\t\t\tShow this help message\n"
+	"  -A, --showall\t\t\t\t\t\tGet all esmi parameter Values\n"
 	"\n"
 	"Get Option<s>:\n"
-	"  -e, --showcoreenergy CORE\t\tGet energy for a given"
+	"  -e, --showcoreenergy [CORE]\t\t\t\tGet energy for a given"
 	" CPU (Joules)\n"
-	"  -s, --showsockenergy\t\t\tGet energy for all sockets (KJoules)\n"
-	"  -p, --showsockpower\t\t\tGet power metrics for all sockets (Watts)\n"
-	"  -L, --showcorebl CORE\t\t\tGet Boostlimit for a"
+	"  -s, --showsockenergy\t\t\t\t\tGet energy for all sockets (KJoules)\n"
+	"  -p, --showsockpower\t\t\t\t\tGet power metrics for all sockets (mWatts)\n"
+	"  -L, --showcorebl [CORE]\t\t\t\tGet Boostlimit for a"
 	" given CPU (MHz)\n"
-	"  -r, --showsockc0res SOCKET\t\tGet c0_residency for a"
+	"  -r, --showsockc0res [SOCKET]\t\t\t\tGet c0_residency for a"
 	" given socket (%%)\n"
-	"  -d, --showddrbw\t\t\tShow DDR bandwidth details (Gbps)\n"
-	"  -t, --showsockettemp\t\t\tShow Temperature monitor of socket (C)\n"
-	"  --showsmufwver\t\t\tShow SMU FW Version\n"
-	"  --showhsmpprotover\t\t\tShow HSMP Protocol Version\n"
-	"  --showprochotstatus\t\t\tShow HSMP PROCHOT status (in/active)\n"
-	"  --showclocks\t\t\t\tShow (CPU, Mem & Fabric) clock frequencies (MHz)\n"
+	"  -d, --showddrbw\t\t\t\t\tShow DDR bandwidth details (Gbps)\n"
+	"  -t, --showsockettemp\t\t\t\t\tShow Temperature monitor of socket (°C)\n"
+	"  --showsmufwver\t\t\t\t\tShow SMU FW Version\n"
+	"  --showhsmpprotover\t\t\t\t\tShow HSMP Protocol Version\n"
+	"  --showprochotstatus\t\t\t\t\tShow HSMP PROCHOT status (in/active)\n"
+	"  --showclocks\t\t\t\t\t\tShow (CPU, Mem & Fabric) clock frequencies (MHz)\n"
 	"\n"
 	"Set Option<s>:\n"
-	"  -C, --setpowerlimit SOCKET POWER\tSet power limit"
+	"  -C, --setpowerlimit [SOCKET] [POWER]\t\t\tSet power limit"
 	" for a given socket (mWatts)\n"
-	"  -a, --setcorebl CORE BOOSTLIMIT\tSet boost limit"
+	"  -a, --setcorebl [CORE] [BOOSTLIMIT]\t\t\tSet boost limit"
 	" for a given core (MHz)\n"
-	"  --setsockbl SOCKET BOOSTLIMIT\t\tSet Boost"
+	"  --setsockbl [SOCKET] [BOOSTLIMIT]\t\t\tSet Boost"
 	" limit for a given Socket (MHz)\n"
-	"  --setpkgbl BOOSTLIMIT\t\t\tSet Boost limit"
-	" for a given package (MHz)\n"
-	"  --setdfpstate SOCKET PSTATE\t\tSet Data Fabric"
-	" Pstate for a given socket\n"
-	"\t\t\t\t\t(-1 for auto, 1, 2 and 3 for DF P-states)"
+	"  --setpkgbl [BOOSTLIMIT]\t\t\t\tSet Boost limit"
+	" for all sockets in a package (MHz)\n"
+	"  --apbdisable [SOCKET] [PSTATE]\t\t\tSet Data Fabric"
+	" Pstate for a given socket, PSTATE = 0 to 3\n"
+	"  --apbenable [SOCKET]\t\t\t\t\tEnable the Data Fabric performance"
+	" boost algorithm for a given socket\n"
+	"  --setxgmiwidth [MIN] [MAX]\t\t\t\tSet xgmi link width"
+	" in a multi socket system, MIN = MAX = 0 to 2\n"
+	"  --setlclkdpmlevel [SOCKET] [NBIOID] [MIN] [MAX]\tSet lclk dpm level"
+	" for a given nbio, given socket, MIN = MAX = NBIOID = 0 to 3\n"
 	, exe_name);
 }
 
@@ -1012,6 +1081,8 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 	int32_t pstate;
 	static char *args[ARGS_MAX];
 	char sudostr[] = "sudo";
+	uint8_t min, max;
+	uint8_t nbio_id;
 
 	//Specifying the expected options
 	static struct option long_options[] = {
@@ -1031,13 +1102,16 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 		{"showsockettemp",	no_argument,		0,      't'},
 		{"showhsmpprotover",	no_argument,		0,	'v'},
 		{"showprochotstatus",	no_argument,		0,	'x'},
-		{"setdfpstate",		required_argument,	0,	'y'},
+		{"apbenable",		required_argument,	0,	'y'},
+		{"apbdisable",		required_argument,	0,	'u'},
 		{"showclocks",		no_argument,		0,	'z'},
+		{"setxgmiwidth",	required_argument,	0,	'w'},
+		{"setlclkdpmlevel",	required_argument,	0,	'l'},
 		{0,			0,			0,	0},
 	};
 
 	int long_index = 0;
-	char *helperstring = "+hAsfpvxzdte:y:L:C:a:b:c:r:";
+	char *helperstring = "+hAsfpvxzdte:y:u:L:C:a:b:c:r:w:l:";
 
 	if (getuid() != 0) {
 		while ((opt = getopt_long(argc, argv, helperstring,
@@ -1052,6 +1126,9 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 				case 'e':
 				case 's':
 				case 'y':
+				case 'u':
+				case 'w':
+				case 'l':
 					args[0] = sudostr;
 					args[1] = argv[0];
 					for (i = 0; i < argc; i++) {
@@ -1085,6 +1162,9 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 	    opt == 'b' ||
 	    opt == 'c' ||
 	    opt == 'y' ||
+	    opt == 'u' ||
+	    opt == 'w' ||
+	    opt == 'l' ||
 	    opt == 'r') {
 		if (is_string_number(optarg)) {
 			printf("Option '-%c' require a valid numeric value"
@@ -1094,20 +1174,21 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 		}
 	}
 	if (opt == 'C' ||
-	    opt == 'y' ||
+	    opt == 'u' ||
 	    opt == 'a' ||
+	    opt == 'w' ||
 	    opt == 'b') {
 		// make sure optind is valid  ... or another option
 		if (optind >= argc) {
 			printf(MAG "\nOption '-%c' require TWO arguments"
-			 " <index>  <set_value>\n\n" RESET, optopt);
+			 " <index>  <set_value>\n\n" RESET, opt);
 			show_usage(argv[0]);
 			return ESMI_MULTI_ERROR;
 		}
 		if (*argv[optind] == '-') {
 			if (*(argv[optind] + 1) < 48 && *(argv[optind] + 1) > 57) {
 				printf(MAG "\nOption '-%c' require TWO arguments"
-				 " <index>  <set_value>\n\n" RESET, optopt);
+				 " <index>  <set_value>\n\n" RESET, opt);
 				show_usage(argv[0]);
 				return ESMI_MULTI_ERROR;
 			}
@@ -1119,6 +1200,26 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 			return ESMI_MULTI_ERROR;
 		}
 	}
+
+	if (opt == 'l') {
+		// make sure optind is valid  ... or another option
+		if ((optind + 2) >= argc || *argv[optind] == '-'
+		    || *argv[optind + 1] == '-' || *argv[optind + 2] == '-') {
+			printf("\nOption '-%c' requires FOUR arguments"
+			 " <socket> <nbioid> <min_value> <max_value>\n\n", opt);
+			show_usage(argv[0]);
+			return ESMI_MULTI_ERROR;
+		}
+
+		if (is_string_number(argv[optind]) || is_string_number(argv[optind + 1])
+		    || is_string_number(argv[optind + 2])) {
+			printf("Option '-%c' requires 2nd, 3rd, 4th argument as valid"
+					" numeric value\n\n", opt);
+			show_usage(argv[0]);
+			return ESMI_MULTI_ERROR;
+		}
+	}
+
 	switch (opt) {
 		case 'e' :
 			/* Get the energy for a given core index */
@@ -1151,10 +1252,16 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 			break;
 		case 'y' :
 			sock_id = atoi(optarg);
+			/* Set auto DF Pstate */
+			ret = epyc_apb_enable(sock_id);
+			break;
+		case 'u' :
+			sock_id = atoi(optarg);
 			pstate = atoi(argv[optind++]);
-			/* Set DF Pstate */
+			/* Set DF Pstate to user specified value */
 			ret = epyc_set_df_pstate(sock_id, pstate);
 			break;
+
 		case 'z' :
 			/* Get Clock Frequencies */
 			ret = epyc_get_clock_freq();
@@ -1197,6 +1304,21 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 			ret = epyc_get_temperature();
 			break;
 
+		case 'w' :
+			/* Set xgmi link width */
+			min = atoi(optarg);
+			max = atoi(argv[optind++]);
+			ret = epyc_set_xgmi_width(min, max);
+			break;
+		case 'l' :
+			/* Set lclk dpm level */
+			sock_id = atoi(optarg);
+			nbio_id = atoi(argv[optind++]);
+			min = atoi(argv[optind++]);
+			max = atoi(argv[optind++]);
+			ret = epyc_set_lclk_dpm_level(sock_id, nbio_id, min, max);
+			break;
+
 		case 'A' :
 			ret = show_smi_all_parameters();
 			break;
@@ -1206,15 +1328,15 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 		case ':' :
 			/* missing option argument */
 			printf(RED "%s: option '-%c' requires an argument."
-				RESET "\n\n", argv[0], optopt);
+				RESET "\n\n", argv[0], opt);
 			break;
 		case '?':
-			if (isprint(optopt)) {
+			if (isprint(opt)) {
 				printf(MAG "Try `%s --help' for more"
 				" information." RESET "\n", argv[0]);
 			} else {
 				printf("Unknown option character"
-				" `\\x%x'.\n", optopt);
+				" `\\x%x'.\n", opt);
 			}
 			return ESMI_MULTI_ERROR;
 		default:
