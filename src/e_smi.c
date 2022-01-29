@@ -80,7 +80,7 @@ struct cpu_mapping {
 	int sock_id;
 };
 
-#define CPU_INFO_LINE_SIZE 	1024
+#define CPU_INFO_LINE_SIZE	1024
 #define APICID_BIT		1
 #define PHYSICALID_BIT		2
 #define CPU_INFO_PATH		"/proc/cpuinfo"
@@ -880,40 +880,132 @@ esmi_status_t esmi_prochot_status_get(uint32_t sock_ind, uint32_t *prochot)
 	return errno_to_esmi_status(ret);
 }
 
-/* enable APB, no arguments
- * disable APB, user can set 0 ~ 3
+/* xgmi link is used in multi socket system
+ * width can be set to 2/8/16 lanes
  */
-esmi_status_t esmi_df_pstate_set(uint32_t sock_ind, int32_t pstate)
+esmi_status_t esmi_xgmi_width_set(uint8_t min, uint8_t max)
 {
+	uint16_t width;
+	int drv_val;
 	int ret;
+	int i;
 
 	CHECK_HSMP_INPUT();
+
+	if (psm->total_sockets < 2)
+		return ESMI_NOT_SUPPORTED;
+
+	if ((min > max) || (min > 2) || (max > 2))
+		return ESMI_INVALID_INPUT;
+
+	width = (min << 8) | max;
+	if (psm->is_char_dev) {
+		struct hsmp_message msg = { 0 };
+		for (i = 0; i < psm->total_sockets; i++) {
+			msg.msg_id = XGMI_WIDTH_TYPE;
+			msg.num_args = 1;
+			msg.args[0] = width;
+			msg.sock_ind = i;
+			ret = hsmp_xfer(&msg, O_WRONLY);
+			if (ret)
+				return errno_to_esmi_status(ret);
+		}
+	} else {
+		/* HSMP sysfs driver accepts -1, 0, 1, 2 value as input and based on this,
+		 * driver sets min and max width as (0,2), (2, 2), (1,1),(0,0) respectively
+		 * width = min << 8 | max will arrive as following cases */
+		switch (width) {
+		case 0x2:
+			drv_val = -1;
+			break;
+		case 0x202:
+			drv_val = 0;
+			break;
+		case 0x101:
+			drv_val = 1;
+			break;
+		case 0x0:
+			drv_val = 2;
+			break;
+		default:
+			return ESMI_INVALID_INPUT;
+		}
+		ret = hsmp_write32(XGMI_WIDTH_TYPE, 0, drv_val);
+	}
+
+	return errno_to_esmi_status(ret);
+}
+
+/* enable APB, no arguments */
+esmi_status_t esmi_apb_enable(uint32_t sock_ind, bool *prochot_asserted)
+{
+	int ret;
+	uint32_t prochot_status;
+
+	CHECK_HSMP_GET_INPUT(prochot_asserted);
 
 	if (sock_ind >= psm->total_sockets)
 		return ESMI_INVALID_INPUT;
 
-	if (pstate < -1 || pstate > 3)
-		return ESMI_INVALID_INPUT;
+	/* While the socket is in PC6 or if PROCHOT_L is
+	 * asserted, the lowest DF P-state (highest value) is enforced
+	 * regardless of the APBEnable/APBDisable */
+	ret = esmi_prochot_status_get(sock_ind, &prochot_status);
+	if (ret)
+		return ret;
+
+	if (prochot_status) {
+		*prochot_asserted = true;
+		return ESMI_SUCCESS;
+	}
 
 	if (psm->is_char_dev) {
 		struct hsmp_message msg = { 0 };
-		if (pstate == -1) {
-			msg.msg_id = EN_DF_PSTATE_TYPE;
-			msg.sock_ind = sock_ind;
-			ret = hsmp_xfer(&msg, O_WRONLY);
-		} else {
-			msg.msg_id = DIS_DF_PSTATE_TYPE;
-			msg.num_args = 1;
-			msg.sock_ind = sock_ind;
-			msg.args[0] = pstate;
-			ret = hsmp_xfer(&msg, O_WRONLY);
-		}
+		msg.msg_id = EN_DF_PSTATE_TYPE;
+		msg.sock_ind = sock_ind;
+		ret = hsmp_xfer(&msg, O_WRONLY);
 	} else {
-			/* For sysfs, same file is used for apbenable/disable,
-			 * Hence it doesn't matter, if we give
-			 * DIS_DF_PSTATE_TYPE/EN_DF_PSTATE_TYPE */
-			ret = hsmp_write_s32(DIS_DF_PSTATE_TYPE, sock_ind, pstate);
+		/* For sysfs, -1 indicates driver to enable apb */
+		ret = hsmp_write_s32(EN_DF_PSTATE_TYPE, sock_ind, -1);
 	}
+
+	return errno_to_esmi_status(ret);
+}
+
+/* disable APB, user can set 0 ~ 3 */
+esmi_status_t esmi_apb_disable(uint32_t sock_ind, uint8_t pstate, bool *prochot_asserted)
+{
+	int ret;
+	uint32_t prochot_status;
+
+	CHECK_HSMP_GET_INPUT(prochot_asserted);
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	if (pstate > 3)
+		return ESMI_INVALID_INPUT;
+
+	ret = esmi_prochot_status_get(sock_ind, &prochot_status);
+	if (ret)
+		return ret;
+
+	if (prochot_status) {
+		*prochot_asserted = true;
+		return ESMI_SUCCESS;
+	}
+
+	if (psm->is_char_dev) {
+		struct hsmp_message msg = { 0 };
+		msg.msg_id = DIS_DF_PSTATE_TYPE;
+		msg.num_args = 1;
+		msg.sock_ind = sock_ind;
+		msg.args[0] = pstate;
+		ret = hsmp_xfer(&msg, O_WRONLY);
+	} else {
+		ret = hsmp_write32(DIS_DF_PSTATE_TYPE, sock_ind, pstate);
+	}
+
 	return errno_to_esmi_status(ret);
 }
 
@@ -1002,6 +1094,35 @@ esmi_status_t esmi_socket_c0_residency_get(uint32_t sock_ind,
 	} else {
 		ret = hsmp_read32(SOCKET_C0_RESIDENCY_TYPE, sock_ind, pc0_residency);
 	}
+
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_socket_lclk_dpm_level_set(uint32_t sock_ind, uint8_t nbio_id,
+					     uint8_t min, uint8_t max)
+{
+	struct hsmp_message msg = { 0 };
+	uint32_t dpm_val;
+	int ret;
+
+	CHECK_HSMP_INPUT();
+	if (!psm->is_char_dev)
+		return ESMI_NOT_SUPPORTED;
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+	if (nbio_id > 3)
+		return ESMI_INVALID_INPUT;
+	if ((min > max) || (min > 3) || (max > 3))
+		return ESMI_INVALID_INPUT;
+
+	dpm_val = (nbio_id << 16) | (max << 8) | min;
+
+	msg.msg_id = LCLKDPM_LEVEL;
+	msg.num_args = 1;
+	msg.sock_ind = sock_ind;
+	msg.args[0] = dpm_val;
+	ret = hsmp_xfer(&msg, O_WRONLY);
 
 	return errno_to_esmi_status(ret);
 }

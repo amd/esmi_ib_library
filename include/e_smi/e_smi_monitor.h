@@ -89,14 +89,14 @@ typedef enum {
 	SOCKET_BOOSTLIMIT_TYPE,		//!< Socket Boostlimit coordinate
 	R_CORE_BOOSTLIMIT_TYPE,		//!< Read core Boostlimit coordinate
 	PROCHOT_STATUS_TYPE,		//!< HSMP prochot status coordinate
-	PKG_BOOSTLIMIT_TYPE,		//!< Package Boostlimit coordinate
+	XGMI_WIDTH_TYPE,		//!< HSMP xgmi width coordinate
 	DIS_DF_PSTATE_TYPE,		//!< HSMP disable DF P-state coordinate
 	EN_DF_PSTATE_TYPE,		//!< HSMP enable DF P-state coordinate
 	FCLK_MEMCLK_TYPE,		//!< Current fclk, memclk coordinate
 	CCLK_LIMIT_TYPE,		//!< Core clock limit coordinate
 	SOCKET_C0_RESIDENCY_TYPE,	//!< Socket c0 residency coordinate
 	LCLKDPM_LEVEL,			//!< Socket nbio pstate coordinate
-	HSMP_RES,			//!< Reserved for future use
+	PKG_BOOSTLIMIT_TYPE,		//!< Package Boostlimit coordinate
 	DDR_BW_TYPE,			//!< DDR bandwidth coordinate
 	SOCKET_TEMP_MONITOR_TYPE,	//!< Socket temperature monitor coordinate
 	MONITOR_TYPE_MAX		//!< Max Monitor Type coordinate

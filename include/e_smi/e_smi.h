@@ -41,6 +41,8 @@
 #ifndef INCLUDE_E_SMI_E_SMI_H_
 #define INCLUDE_E_SMI_E_SMI_H_
 
+#include <stdbool.h>
+
 #define ENERGY_DEV_NAME	"amd_energy"	//!< Supported Energy driver name
 #define HSMP_DEV_NAME	"amd_hsmp"	//!< Supported HSMP driver name
 
@@ -234,26 +236,6 @@ esmi_status_t esmi_smu_fw_version_get(struct smu_fw_version *smu_fw);
  *
  */
 esmi_status_t esmi_prochot_status_get(uint32_t socket_idx, uint32_t *prochot);
-
-/**
- *  @brief Set data fabric P-state and disable automatic P-state selection
- *  (analogous to the UEFI setup option APBDIS=1).
- *
- *  Acceptable values for the P-state are 0(highest) - 3 (lowest). DF P-state
- *  passing -1 will enable automatic P-state selection based on data fabric
- *  utilization (analogous to APBDIS=0).
- *
- *  @details This function will set the desired P-state at @p pstate.
-
- *  @param[in] socket_idx a socket index
- *
- *  @param[in] pstate a int32_t that indicates the desired P-state to set.
- *
- *  @retval ::ESMI_SUCCESS is returned upon successful call.
- *  @retval None-zero is returned upon failure.
- *
- */
-esmi_status_t esmi_df_pstate_set(uint32_t socket_idx, int32_t pstate);
 
 /**
  *  @brief Get the Data Fabric clock and Memory clock in MHz, for a given
@@ -540,7 +522,7 @@ esmi_status_t esmi_ddr_bw_get(struct ddr_bw_metrics *ddr_bw);
  *  @brief Get temperature monitor for a given socket
  *
  *  @details This function will return the socket's current temperature
- *  @p ptmon for a particular @p sock_ind.
+ *  in milli degree celsius @p ptmon for a particular @p sock_ind.
  *
  *  @param[in] sock_ind a socket index provided.
  *
@@ -555,6 +537,94 @@ esmi_status_t esmi_socket_temperature_get(uint32_t sock_ind, uint32_t *ptmon);
 
 /** @} */  // end of TempQuer
 
+/*****************************************************************************/
+/** @defgroup xGMIBwCont xGMI bandwidth control
+ *  This function provides a way to control xgmi bandwidth connected in 2P systems.
+ *  @{
+ */
+
+/**
+ *  @brief Set xgmi width for a multi socket system
+ *
+ *  @details This function will set the xgmi width @p min and @p max for all
+ *  the sockets in the system
+ *
+ *  @param[in] min minimum xgmi link width, varies from 0 to 2 with min <= max.
+ *
+ *  @param[in] max maximum xgmi link width, varies from 0 to 2.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_xgmi_width_set(uint8_t min, uint8_t max);
+
+/** @} */  // end of xGMIBwCont
+
+/*****************************************************************************/
+/** @defgroup PStateCont APB and LCLK level control
+ *  This functions provides a way to control APB and lclk values.
+ *  @{
+ */
+
+/**
+ *  @brief Enable automatic P-state selection
+ *
+ *  @details Given a socket index @p sock_ind, this function will enable
+ *  performance boost algorithm provided @p prochot_asserted is not asserted
+ *
+ *  @param[in] sock_ind a socket index
+ *
+ *  @param[inout] prochot_asserted input buffer to fill the prochot status
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_apb_enable(uint32_t sock_ind, bool *prochot_asserted);
+
+/**
+ *  @brief Set data fabric P-state to user specified value
+ *
+ *  @details This function will set the desired P-state at @p pstate.
+ *  provided the @p prochot_asserted is not asserted for @p sock_ind.
+ *  Acceptable values for the P-state are 0(highest) - 3 (lowest).
+ *
+ *  @param[in] sock_ind a socket index
+ *
+ *  @param[in] pstate a uint8_t that indicates the desired P-state to set.
+ *
+ *  @param[inout] prochot_asserted input buffer to fill the proc hot status.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_apb_disable(uint32_t sock_ind, uint8_t pstate, bool *prochot_asserted);
+
+/**
+ *  @brief Set lclk dpm level
+ *
+ *  @details This function will set the lclk dpm level / nbio pstate
+ *  for the specified @p nbio_id in a specified socket @p sock_ind with provided
+ *  values @p min and @p max.
+ *
+ *  @param[in] sock_ind socket index.
+ *
+ *  @param[in] nbio_id northbridge number varies from 0 to 3.
+ *
+ *  @param[in] min pstate minimum value, varies from 0 to 3 with min <= max
+ *
+ *  @param[in] max pstate maximum value, varies from 0 to 3.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_socket_lclk_dpm_level_set(uint32_t sock_ind, uint8_t nbio_id,
+					     uint8_t min, uint8_t max);
+
+/** @} */  // end of PStateCont
 /*****************************************************************************/
 /** @defgroup AuxilQuer Auxiliary functions
  *  Below functions provide interfaces to get the total number of cores and
