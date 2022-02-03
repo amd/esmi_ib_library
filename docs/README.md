@@ -168,29 +168,33 @@ For convenience purposes, following is the output from the -h flag:
 	=============== EPYC System Management Interface ===============
 
 	Usage: ./e_smi_tool [Option]... <INPUT>...
+
 	Output Option<s>:
-	  -h, --help                            Show this help message
-	  -A, --showall                         Get all esmi parameter Values
+	  -h, --help						Show this help message
+	  -A, --showall						Get all esmi parameter Values
 
 	Get Option<s>:
-	  -e, --showcoreenergy CORE             Get energy for a given CPU (Joules)
-	  -s, --showsockenergy                  Get energy for all sockets (KJoules)
-	  -p, --showsockpower                   Get power metrics for all sockets (mWatts)
-	  -L, --showcorebl CORE                 Get Boostlimit for a given CPU (MHz)
-	  -r, --showsockc0res SOCKET            Get c0_residency for a given socket (%)
-	  -d, --showddrbw                       Show DDR bandwidth details (GBps)
-	  --showsmufwver                        Show SMU FW Version
-	  --showhsmpprotover                    Show HSMP Protocol Version
-	  --showprochotstatus                   Show HSMP PROCHOT status (in/active)
-	  --showclocks                          Show (CPU, Mem & Fabric) clock frequencies (MHz)
+	  -e, --showcoreenergy [CORE]				Get energy for a given CPU (Joules)
+	  -s, --showsockenergy					Get energy for all sockets (KJoules)
+	  -p, --showsockpower					Get power metrics for all sockets (mWatts)
+	  -L, --showcorebl [CORE]				Get Boostlimit for a given CPU (MHz)
+	  -r, --showsockc0res [SOCKET]				Get c0_residency for a given socket (%)
+	  -d, --showddrbw					Show DDR bandwidth details (Gbps)
+	  -t, --showsockettemp					Show Temperature monitor of socket (°C)
+	  --showsmufwver					Show SMU FW Version
+	  --showhsmpprotover					Show HSMP Protocol Version
+	  --showprochotstatus					Show HSMP PROCHOT status (in/active)
+	  --showclocks						Show (CPU, Mem & Fabric) clock frequencies (MHz)
 
 	Set Option<s>:
-	  -C, --setpowerlimit SOCKET POWER      Set power limit for a given socket (mWatts)
-	  -a, --setcorebl CORE BOOSTLIMIT       Set boost limit for a given core (MHz)
-	  --setsockbl SOCKET BOOSTLIMIT         Set Boost limit for a given Socket (MHz)
-	  --setpkgbl BOOSTLIMIT                 Set Boost limit for a given package (MHz)
-	  --setdfpstate SOCKET PSTATE           Set Data Fabric Pstate for a given socket
-						(-1 for auto, 1, 2 and 3 for DF P-states)
+	  -C, --setpowerlimit [SOCKET] [POWER]			Set power limit for a given socket (mWatts)
+	  -a, --setcorebl [CORE] [BOOSTLIMIT]			Set boost limit for a given core (MHz)
+	  --setsockbl [SOCKET] [BOOSTLIMIT]			Set Boost limit for a given Socket (MHz)
+	  --setpkgbl [BOOSTLIMIT]				Set Boost limit for all sockets in a package (MHz)
+	  --apbdisable [SOCKET] [PSTATE]			Set Data Fabric Pstate for a given socket, PSTATE = 0 to 3
+	  --apbenable [SOCKET]					Enable the Data Fabric performance boost algorithm for a given socket
+	  --setxgmiwidth [MIN] [MAX]				Set xgmi link width in a multi socket system, MIN = MAX = 0 to 2
+	  --setlclkdpmlevel [SOCKET] [NBIOID] [MIN] [MAX]	Set lclk dpm level for a given nbio, given socket, MIN = MAX = NBIOID = 0 to 3
 
 	====================== End of EPYC SMI Log =====================
 ```
@@ -202,7 +206,7 @@ We can pass arguments in short or long options ex: "./e_smi_tool -e 0" or "./e_s
 
 	=============== EPYC System Management Interface ===============
 
-	core[0]/energy  :            25.733 Joules
+	core[0] energy  :         17211.219 Joules
 
 	====================== End of EPYC SMI Log =====================
 
@@ -210,30 +214,32 @@ We can pass arguments in short or long options ex: "./e_smi_tool -e 0" or "./e_s
 
 	=============== EPYC System Management Interface ===============
 
-	core[0]/energy  :            25.733 Joules
+	core[0] energy  :         17216.800 Joules
 
 	====================== End of EPYC SMI Log =====================
 
-3.      e_smi_library/build> ./e_smi_tool -e 12 --showsocketpower --setpowerlimit 1 220000 -p
+3.      e_smi_library/build>./e_smi_tool -e 12 --showsockpower --setpowerlimit 1 220000 -p
+
 	=============== EPYC System Management Interface ===============
 
-	core[12]/energy :            19.334 Joules
+	core[12] energy :           246.251 Joules
 
 	----------------------------------------------------------------
 	| Sensor Name            | Socket 0         | Socket 1         |
 	----------------------------------------------------------------
-	| Power (Watts)          | 39.053           | 39.633           |
-	| PowerLimit (Watts)     | 200.000          | 210.000          |
-	| PowerLimitMax (Watts)  | 225.000          | 225.000          |
+	| Power (Watts)          | 66.508           | 67.548           |
+	| PowerLimit (Watts)     | 22.000           | 220.000          |
+	| PowerLimitMax (Watts)  | 240.000          | 240.000          |
 	----------------------------------------------------------------
-	Set socket[1]/power_limit :         220.000 Watts successfully
+
+	Set socket[1] power_limit :         220.000 Watts successfully
 
 	----------------------------------------------------------------
 	| Sensor Name            | Socket 0         | Socket 1         |
 	----------------------------------------------------------------
-	| Power (Watts)          | 39.767           | 40.340           |
-	| PowerLimit (Watts)     | 200.000          | 220.000          |
-	| PowerLimitMax (Watts)  | 225.000          | 225.000          |
+	| Power (Watts)          | 66.520           | 67.556           |
+	| PowerLimit (Watts)     | 22.000           | 220.000          |
+	| PowerLimitMax (Watts)  | 240.000          | 240.000          |
 	----------------------------------------------------------------
 
 	====================== End of EPYC SMI Log =====================
