@@ -1187,6 +1187,101 @@ esmi_status_t esmi_socket_temperature_get(uint32_t sock_ind, uint32_t *ptmon)
 	return errno_to_esmi_status(ret);
 }
 
+esmi_status_t esmi_dimm_temp_range_and_refresh_rate_get(uint8_t sock_ind, uint8_t dimm_addr,
+							struct temp_range_refresh_rate *rate)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
+
+	if (psm->hsmp_proto_ver != 5)
+		return ESMI_NO_HSMP_SUP;
+
+	if (!psm->is_char_dev)
+		return ESMI_NO_HSMP_SUP;
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	CHECK_HSMP_GET_INPUT(rate);
+
+	msg.msg_id	= DIMM_TEMP_RANGE_REFRESH_RATE_TYPE;
+	msg.response_sz	= 1;
+	msg.num_args	= 1;
+	msg.args[0]	= dimm_addr;
+	msg.sock_ind	= sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret) {
+		rate->range = msg.args[0];
+		rate->ref_rate = msg.args[0] >> 3;
+	}
+
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_dimm_power_consumption_get(uint8_t sock_ind, uint8_t dimm_addr,
+					      struct dimm_power *dimm_pow)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
+
+	if (psm->hsmp_proto_ver != 5)
+		return ESMI_NO_HSMP_SUP;
+
+	if (!psm->is_char_dev)
+		return ESMI_NO_HSMP_SUP;
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	CHECK_HSMP_GET_INPUT(dimm_pow);
+
+	msg.msg_id	= DIMM_POWER_CONSUMPTION_TYPE;
+	msg.response_sz	= 1;
+	msg.num_args	= 1;
+	msg.args[0]	= dimm_addr;
+	msg.sock_ind	= sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret) {
+		dimm_pow->power = msg.args[0] >> 17;
+		dimm_pow->update_rate = msg.args[0] >> 8;
+		dimm_pow->dimm_addr = msg.args[0];
+	}
+
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_dimm_thermal_sensor_get(uint8_t sock_ind, uint8_t dimm_addr,
+					   struct dimm_thermal *dimm_temp)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
+
+	if (psm->hsmp_proto_ver != 5)
+		return ESMI_NO_HSMP_SUP;
+
+	if (!psm->is_char_dev)
+		return ESMI_NO_HSMP_SUP;
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	CHECK_HSMP_GET_INPUT(dimm_temp);
+
+	msg.msg_id	= DIMM_THERMAL_SENSOR_TYPE;
+	msg.response_sz = 1;
+	msg.num_args 	= 1;
+	msg.args[0] 	= dimm_addr;
+	msg.sock_ind 	= sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret) {
+		dimm_temp->sensor = msg.args[0] >> 21;
+		dimm_temp->update_rate = msg.args[0] >> 8;
+		dimm_temp->dimm_addr = msg.args[0];
+	}
+
+	return errno_to_esmi_status(ret);
+}
+
 esmi_status_t esmi_hsmp_proto_ver_get(uint32_t *proto_ver)
 {
 	int ret;

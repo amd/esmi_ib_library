@@ -79,6 +79,32 @@ struct ddr_bw_metrics {
 };
 
 /**
+ * @brief temperature range and refresh rate metrics of a DIMM
+ */
+struct temp_range_refresh_rate {
+	uint8_t range : 3;	//!< temp range[2:0](3 bit data)
+	uint8_t ref_rate : 1;	//!< DDR refresh rate mode[3](1 bit data)
+};
+
+/**
+ * @brief DIMM Power(mW), power update rate(ms) and dimm address
+ */
+struct dimm_power {
+	uint16_t power : 15;            //!< Dimm power consumption[31:17](15 bits data)
+	uint16_t update_rate : 9;       //!< Time since last update[16:8](9 bit data)
+	uint8_t dimm_addr;              //!< Dimm address[7:0](8 bit data)
+};
+
+/**
+ * @brief DIMM temperature(°C) and update rate(ms) and dimm address
+ */
+struct dimm_thermal {
+	uint16_t sensor : 11;           //!< Dimm thermal sensor[31:21](11 bit data)
+	uint16_t update_rate : 9;       //!< Time since last update[16:8](9 bit data)
+	uint8_t dimm_addr;              //!< Dimm address[7:0](8 bit data)
+};
+
+/**
  * @brief Error codes retured by E-SMI functions
  */
 typedef enum {
@@ -536,6 +562,73 @@ esmi_status_t esmi_ddr_bw_get(struct ddr_bw_metrics *ddr_bw);
 esmi_status_t esmi_socket_temperature_get(uint32_t sock_ind, uint32_t *ptmon);
 
 /** @} */  // end of TempQuer
+
+/*****************************************************************************/
+/** @defgroup DimmStatisticsQuer Dimm statistics
+ *  This function provides the dimm temperature, power and update rates.
+ *  @{
+ */
+
+/**
+ *  @brief Get dimm temperature range and refresh rate
+ *
+ *  @details This function returns the per DIMM temperature range and
+ *  refresh rate from the MR4 register.
+ *
+ *  @param[in] sock_ind Socket index through which the DIMM can be accessed
+ *
+ *  @param[in] dimm_addr DIMM identifier, follow "HSMP DIMM Addres encoding".
+ *
+ *  @param[inout] rate Input buffer of type struct temp_range_refresh_rate with refresh
+ *  rate and temp range.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_dimm_temp_range_and_refresh_rate_get(uint8_t sock_ind, uint8_t dimm_addr,
+							struct temp_range_refresh_rate *rate);
+
+/**
+ *  @brief Get dimm power consumption and update rate
+ *
+ *  @details This function returns the DIMM power and update rate
+ *
+ *  @param[in] sock_ind Socket index through which the DIMM can be accessed.
+ *
+ *  @param[in] dimm_addr DIMM identifier, follow "HSMP DIMM Addres encoding".
+ *
+ *  @param[inout] dimm_pow Input buffer of type struct dimm_power containing power(mW),
+ *  update rate(ms) and  dimm address.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_dimm_power_consumption_get(uint8_t sock_ind, uint8_t dimm_addr,
+					      struct dimm_power *dimm_pow);
+
+/**
+ *  @brief Get dimm thermal sensor
+ *
+ *  @details This function will return the DIMM thermal sensor(2 sensors per DIMM)
+ *  and update rate
+ *
+ *  @param[in] sock_ind Socket index through which the DIMM can be accessed.
+ *
+ *  @param[in] dimm_addr DIMM identifier, follow "HSMP DIMM Addres encoding".
+ *
+ *  @param[inout] dimm_temp Input buffer of type struct dimm_thermal which contains
+ *  temperature(°C), update rate(ms) and dimm address
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_dimm_thermal_sensor_get(uint8_t sock_ind, uint8_t dimm_addr,
+					   struct dimm_thermal *dimm_temp);
+
+/** @} */  // end of DimmStatisticsQuer
 
 /*****************************************************************************/
 /** @defgroup xGMIBwCont xGMI bandwidth control

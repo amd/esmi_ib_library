@@ -77,29 +77,32 @@
  * from Energy/HWMON or HSMP.
  */
 typedef enum {
-	ENERGY_TYPE,			//!< Core and Socket Energy coordinate
+	ENERGY_TYPE,				//!< Core and Socket Energy coordinate
 	HSMP_TEST_TYPE,
-	SMU_FW_VERSION_TYPE,		//!< SMU firmware version coordinate
-	HSMP_PROTO_VER_TYPE,		//!< HSMP interface version coordinate
-	SOCKET_POWER_TYPE,		//!< Socket Power coordinate
-	W_SOCKET_POWER_LIMIT_TYPE,	//!< Write socket Power Limit coordinate
-	R_SOCKET_POWER_LIMIT_TYPE,	//!< Read socket Power Limit coordinate
-	SOCKET_POWER_LIMIT_MAX_TYPE,	//!< Socket PowerLimit Max coordinate
-	W_CORE_BOOSTLIMIT_TYPE,		//!< Write core Boostlimit coordinate
-	SOCKET_BOOSTLIMIT_TYPE,		//!< Socket Boostlimit coordinate
-	R_CORE_BOOSTLIMIT_TYPE,		//!< Read core Boostlimit coordinate
-	PROCHOT_STATUS_TYPE,		//!< HSMP prochot status coordinate
-	XGMI_WIDTH_TYPE,		//!< HSMP xgmi width coordinate
-	DIS_DF_PSTATE_TYPE,		//!< HSMP disable DF P-state coordinate
-	EN_DF_PSTATE_TYPE,		//!< HSMP enable DF P-state coordinate
-	FCLK_MEMCLK_TYPE,		//!< Current fclk, memclk coordinate
-	CCLK_LIMIT_TYPE,		//!< Core clock limit coordinate
-	SOCKET_C0_RESIDENCY_TYPE,	//!< Socket c0 residency coordinate
-	LCLKDPM_LEVEL,			//!< Socket nbio pstate coordinate
-	PKG_BOOSTLIMIT_TYPE,		//!< Package Boostlimit coordinate
-	DDR_BW_TYPE,			//!< DDR bandwidth coordinate
-	SOCKET_TEMP_MONITOR_TYPE,	//!< Socket temperature monitor coordinate
-	MONITOR_TYPE_MAX		//!< Max Monitor Type coordinate
+	SMU_FW_VERSION_TYPE,			//!< SMU firmware version coordinate
+	HSMP_PROTO_VER_TYPE,			//!< HSMP interface version coordinate
+	SOCKET_POWER_TYPE,			//!< Socket Power coordinate
+	W_SOCKET_POWER_LIMIT_TYPE,		//!< Write socket Power Limit coordinate
+	R_SOCKET_POWER_LIMIT_TYPE,		//!< Read socket Power Limit coordinate
+	SOCKET_POWER_LIMIT_MAX_TYPE,		//!< Socket PowerLimit Max coordinate
+	W_CORE_BOOSTLIMIT_TYPE,			//!< Write core Boostlimit coordinate
+	SOCKET_BOOSTLIMIT_TYPE,			//!< Socket Boostlimit coordinate
+	R_CORE_BOOSTLIMIT_TYPE,			//!< Read core Boostlimit coordinate
+	PROCHOT_STATUS_TYPE,			//!< HSMP prochot status coordinate
+	XGMI_WIDTH_TYPE,			//!< HSMP xgmi width coordinate
+	DIS_DF_PSTATE_TYPE,			//!< HSMP disable DF P-state coordinate
+	EN_DF_PSTATE_TYPE,			//!< HSMP enable DF P-state coordinate
+	FCLK_MEMCLK_TYPE,			//!< Current fclk, memclk coordinate
+	CCLK_LIMIT_TYPE,			//!< Core clock limit coordinate
+	SOCKET_C0_RESIDENCY_TYPE,		//!< Socket c0 residency coordinate
+	LCLKDPM_LEVEL,				//!< Socket nbio pstate coordinate
+	PKG_BOOSTLIMIT_TYPE,			//!< Package Boostlimit coordinate
+	DDR_BW_TYPE,				//!< DDR bandwidth coordinate
+	SOCKET_TEMP_MONITOR_TYPE,		//!< Socket temperature monitor coordinate
+	DIMM_TEMP_RANGE_REFRESH_RATE_TYPE,	//!< Dimm temp range and refresh rate
+	DIMM_POWER_CONSUMPTION_TYPE,		//!< Dimm temp range and refresh rate
+	DIMM_THERMAL_SENSOR_TYPE,		//!< Dimm thermal sensor
+	MONITOR_TYPE_MAX			//!< Max Monitor Type coordinate
 } monitor_types_t;
 
 int read_energy(monitor_types_t type, uint32_t sensor_id, uint64_t *val);
