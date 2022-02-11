@@ -939,28 +939,20 @@ esmi_status_t esmi_xgmi_width_set(uint8_t min, uint8_t max)
 }
 
 /* enable APB, no arguments */
-esmi_status_t esmi_apb_enable(uint32_t sock_ind, bool *prochot_asserted)
+esmi_status_t esmi_apb_enable(uint32_t sock_ind)
 {
 	int ret;
-	uint32_t prochot_status;
 
-	CHECK_HSMP_GET_INPUT(prochot_asserted);
+	CHECK_HSMP_INPUT();
 
 	if (sock_ind >= psm->total_sockets)
 		return ESMI_INVALID_INPUT;
 
-	/* While the socket is in PC6 or if PROCHOT_L is
+	/*
+	 * While the socket is in PC6 or if PROCHOT_L is
 	 * asserted, the lowest DF P-state (highest value) is enforced
-	 * regardless of the APBEnable/APBDisable */
-	ret = esmi_prochot_status_get(sock_ind, &prochot_status);
-	if (ret)
-		return ret;
-
-	if (prochot_status) {
-		*prochot_asserted = true;
-		return ESMI_SUCCESS;
-	}
-
+	 * regardless of the APBEnable/APBDisable
+	 */
 	if (psm->is_char_dev) {
 		struct hsmp_message msg = { 0 };
 		msg.msg_id = EN_DF_PSTATE_TYPE;
@@ -975,27 +967,17 @@ esmi_status_t esmi_apb_enable(uint32_t sock_ind, bool *prochot_asserted)
 }
 
 /* disable APB, user can set 0 ~ 3 */
-esmi_status_t esmi_apb_disable(uint32_t sock_ind, uint8_t pstate, bool *prochot_asserted)
+esmi_status_t esmi_apb_disable(uint32_t sock_ind, uint8_t pstate)
 {
 	int ret;
-	uint32_t prochot_status;
 
-	CHECK_HSMP_GET_INPUT(prochot_asserted);
+	CHECK_HSMP_INPUT();
 
 	if (sock_ind >= psm->total_sockets)
 		return ESMI_INVALID_INPUT;
 
 	if (pstate > 3)
 		return ESMI_INVALID_INPUT;
-
-	ret = esmi_prochot_status_get(sock_ind, &prochot_status);
-	if (ret)
-		return ret;
-
-	if (prochot_status) {
-		*prochot_asserted = true;
-		return ESMI_SUCCESS;
-	}
 
 	if (psm->is_char_dev) {
 		struct hsmp_message msg = { 0 };

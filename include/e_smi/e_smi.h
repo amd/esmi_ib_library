@@ -571,36 +571,40 @@ esmi_status_t esmi_xgmi_width_set(uint8_t min, uint8_t max);
  *  @brief Enable automatic P-state selection
  *
  *  @details Given a socket index @p sock_ind, this function will enable
- *  performance boost algorithm provided @p prochot_asserted is not asserted
+ *  performance boost algorithm
+ *  By default, an algorithm adjusts DF P-States automatically in order to
+ *  optimize performance. However, this default may be changed to a fixed
+ *  DF P-State through a CBS option at boottime.
+ *  APBDisable may also be used to disable this algorithm and force a fixed
+ *  DF P-State.
+ *
+ *  NOTE: While the socket is in PC6 or if PROCHOT_L is asserted, the lowest
+ *  DF P-State (highest value) is enforced regardless of the APBEnable/APBDisable
+ *  state.
  *
  *  @param[in] sock_ind a socket index
- *
- *  @param[inout] prochot_asserted input buffer to fill the prochot status
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
  *
  */
-esmi_status_t esmi_apb_enable(uint32_t sock_ind, bool *prochot_asserted);
+esmi_status_t esmi_apb_enable(uint32_t sock_ind);
 
 /**
  *  @brief Set data fabric P-state to user specified value
  *
  *  @details This function will set the desired P-state at @p pstate.
- *  provided the @p prochot_asserted is not asserted for @p sock_ind.
  *  Acceptable values for the P-state are 0(highest) - 3 (lowest).
  *
  *  @param[in] sock_ind a socket index
  *
  *  @param[in] pstate a uint8_t that indicates the desired P-state to set.
  *
- *  @param[inout] prochot_asserted input buffer to fill the proc hot status.
- *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
  *
  */
-esmi_status_t esmi_apb_disable(uint32_t sock_ind, uint8_t pstate, bool *prochot_asserted);
+esmi_status_t esmi_apb_disable(uint32_t sock_ind, uint8_t pstate);
 
 /**
  *  @brief Set lclk dpm level
