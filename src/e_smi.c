@@ -422,7 +422,10 @@ esmi_status_t esmi_init()
 
 void esmi_exit(void)
 {
-	free(psm->map);
+	if (psm->map)
+		free(psm->map);
+	psm = NULL;
+
 	return;
 }
 
@@ -744,6 +747,9 @@ esmi_status_t esmi_core_boostlimit_get(uint32_t core_ind,
 		return ESMI_INVALID_INPUT;
 	}
 
+	if (!psm->map)
+		return ESMI_IO_ERROR;
+
 	if (psm->is_char_dev) {
 		struct hsmp_message msg = { 0 };
 		msg.msg_id = R_CORE_BOOSTLIMIT_TYPE;
@@ -778,6 +784,9 @@ esmi_status_t esmi_core_boostlimit_set(uint32_t core_ind,
 	if (core_ind >= psm->total_cores) {
 		return ESMI_INVALID_INPUT;
 	}
+
+	if (!psm->map)
+		return ESMI_IO_ERROR;
 
 	if (psm->is_char_dev) {
 		struct hsmp_message msg = { 0 };
