@@ -91,6 +91,8 @@ static const char *proc_str = "processor";
 static const char *apic_str = "apicid";
 static const char *node_str = "physical id";
 
+extern char energymon_path[DRVPATHSIZ], hsmpmon_path[DRVPATHSIZ];
+
 /*
  * To Calculate maximum possible number of cores and sockets,
  * cpu/present and node/possible entires may return 0-127.

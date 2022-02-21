@@ -102,8 +102,6 @@ typedef enum {
 	MONITOR_TYPE_MAX		//!< Max Monitor Type coordinate
 } monitor_types_t;
 
-char energymon_path[DRVPATHSIZ], hsmpmon_path[DRVPATHSIZ];
-
 int read_energy(monitor_types_t type, uint32_t sensor_id, uint64_t *val);
 int batch_read_energy(monitor_types_t type, uint64_t *pval, uint32_t entries);
 

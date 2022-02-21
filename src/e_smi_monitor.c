@@ -96,6 +96,8 @@ static char *filenames[MONITOR_TYPE_MAX] = {energy_file,
 					    socket_temp_mon_file,
 };
 
+char energymon_path[DRVPATHSIZ], hsmpmon_path[DRVPATHSIZ];
+
 int find_energy(char *devname, char *hwmon_name)
 {
 	DIR *pdir;
