@@ -371,21 +371,15 @@ esmi_status_t epyc_get_clock_freq(void)
 
 esmi_status_t epyc_apb_enable(uint32_t sock_id)
 {
-	bool prochot_asserted;
 	esmi_status_t ret;
 
-	ret = esmi_apb_enable(sock_id, &prochot_asserted);
+	ret = esmi_apb_enable(sock_id);
 	if (ret != ESMI_SUCCESS) {
 		printf("Failed: to enable DF performance boost algo on "
 			"socket[%d], Err[%d]: %s\n", sock_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-
-	if (prochot_asserted)
-		printf("PROCHOT_L is asserted, lowest DF-Pstate is enforced.\n");
-	else
-		printf("Enabled performance boost algorithm on socket[%d] successfully\n",
-			sock_id);
+	printf("\nAPB is enabled successfully on socket[%d]\n", sock_id);
 
 	return ESMI_SUCCESS;
 }
@@ -393,20 +387,16 @@ esmi_status_t epyc_apb_enable(uint32_t sock_id)
 esmi_status_t epyc_set_df_pstate(uint32_t sock_id, int32_t pstate)
 {
 	esmi_status_t ret;
-	bool prochot_asserted;
 
-	ret = esmi_apb_disable(sock_id, pstate, &prochot_asserted);
+	ret = esmi_apb_disable(sock_id, pstate);
 	if (ret != ESMI_SUCCESS) {
-		printf("Failed: to set socket[%d] DF Pstate\n", sock_id);
+		printf("Failed: to set socket[%d] DF pstate\n", sock_id);
 		printf(RED "Err[%d]: %s\n" RESET, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
 
-	if (prochot_asserted)
-		printf("PROCHOT_L is asserted, lowest DF-Pstate is enforced.\n");
-	else
-		printf("Socket[%d] P-state set to %d successfully\n",
-			sock_id, pstate);
+	printf("APB is disabled, P-state is set to [%d] on socket[%d] successfully\n",
+		pstate, sock_id);
 
 	return ESMI_SUCCESS;
 }
