@@ -144,6 +144,15 @@ struct link_id_bw_type {
 };
 
 /**
+ * @brief max and min LCLK DPM level on a given NBIO ID.
+ * Valid max and min DPM level values are 0 - 1.
+ */
+struct dpm_level {
+	uint8_t max_dpm_level;          //!< Max LCLK DPM level[15:8](8 bit data)
+	uint8_t min_dpm_level;          //!< Min LCLK DPM level[7:0](8 bit data)
+};
+
+/**
  * @brief frequency limit source names
  */
 static char * const freqlimitsrcnames[] = {
@@ -883,6 +892,25 @@ esmi_status_t esmi_apb_disable(uint32_t sock_ind, uint8_t pstate);
  */
 esmi_status_t esmi_socket_lclk_dpm_level_set(uint32_t sock_ind, uint8_t nbio_id,
 					     uint8_t min, uint8_t max);
+
+/**
+ *  @brief Get lclk dpm level
+ *
+ *  @details This function will get the lclk dpm level.
+ *  DPM lelvel is an encoding to represent PCIe link frequency
+ *
+ *  @param[in] sock_ind Socket index
+ *
+ *  @param[in] nbio_id  NBIO id(0-3)
+ *
+ *  @param[inout] nbio Input buffer of struct dpm_level type to hold min and max dpm levels
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_socket_lclk_dpm_level_get(uint8_t sock_ind, uint8_t nbio_id,
+					     struct dpm_level *nbio);
 
 /**
  *  @brief Set pcie link rate

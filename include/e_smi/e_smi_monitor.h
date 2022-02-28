@@ -95,7 +95,8 @@ typedef enum {
 	FCLK_MEMCLK_TYPE,			//!< Current fclk, memclk coordinate
 	CCLK_LIMIT_TYPE,			//!< Core clock limit coordinate
 	SOCKET_C0_RESIDENCY_TYPE,		//!< Socket c0 residency coordinate
-	LCLKDPM_LEVEL,				//!< Socket nbio pstate coordinate
+	W_LCLKDPM_LEVEL_TYPE,			//!< Set socket nbio pstate
+	R_LCLKDPM_LEVEL_TYPE,			//!< Get LCLK frequency encoding
 	PKG_BOOSTLIMIT_TYPE,			//!< Package Boostlimit coordinate
 	DDR_BW_TYPE,				//!< DDR bandwidth coordinate
 	SOCKET_TEMP_MONITOR_TYPE,		//!< Socket temperature monitor coordinate

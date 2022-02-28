@@ -1117,11 +1117,43 @@ esmi_status_t esmi_socket_lclk_dpm_level_set(uint32_t sock_ind, uint8_t nbio_id,
 
 	dpm_val = (nbio_id << 16) | (max << 8) | min;
 
-	msg.msg_id = LCLKDPM_LEVEL;
+	msg.msg_id = W_LCLKDPM_LEVEL_TYPE;
 	msg.num_args = 1;
 	msg.sock_ind = sock_ind;
 	msg.args[0] = dpm_val;
 	ret = hsmp_xfer(&msg, O_WRONLY);
+
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_socket_lclk_dpm_level_get(uint8_t sock_ind, uint8_t nbio_id,
+					     struct dpm_level *dpm)
+{
+	struct hsmp_message msg = { 0 };
+	uint32_t dpm_val;
+	int ret;
+
+	CHECK_HSMP_GET_INPUT(dpm);
+
+	if (!psm->is_char_dev)
+		return ESMI_NOT_SUPPORTED;
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	if (nbio_id > 3)
+		return ESMI_INVALID_INPUT;
+
+	msg.msg_id	= R_LCLKDPM_LEVEL_TYPE;
+	msg.num_args	= 1;
+	msg.response_sz	= 1;
+	msg.sock_ind	= sock_ind;
+	msg.args[0]	= nbio_id << 16;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret) {
+		dpm->max_dpm_level = msg.args[0] >> 8;
+		dpm->min_dpm_level = msg.args[0];
+	}
 
 	return errno_to_esmi_status(ret);
 }
