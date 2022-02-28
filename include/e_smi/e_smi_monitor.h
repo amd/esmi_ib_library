@@ -102,6 +102,10 @@ typedef enum {
 	DIMM_TEMP_RANGE_REFRESH_RATE_TYPE,	//!< Dimm temp range and refresh rate
 	DIMM_POWER_CONSUMPTION_TYPE,		//!< Dimm temp range and refresh rate
 	DIMM_THERMAL_SENSOR_TYPE,		//!< Dimm thermal sensor
+	CURRENT_ACTIVE_FREQ_LIMIT_SOCKET_TYPE,	//!< Socket frequency limit
+	CURRENT_ACTIVE_FREQ_LIMIT_CORE_TYPE,	//!< Cclk limit set per core
+	PWR_SVI_TELEMTRY_SOCKET_TYPE,		//!< SVI based power telemetry
+	SOCKET_FREQ_RANGE_TYPE,			//!< Socket frequeny range fmax and fmin
 	MONITOR_TYPE_MAX			//!< Max Monitor Type coordinate
 } monitor_types_t;
 

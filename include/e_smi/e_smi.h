@@ -48,6 +48,8 @@
 
 #define HSMP_CHAR_DEVFILE_NAME	"/dev/hsmp" //!< HSMP device path
 
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+
 /** \file e_smi.h
  *  Main header file for the E-SMI library.
  *  All required function, structure, enum, etc. definitions should be defined
@@ -102,6 +104,20 @@ struct dimm_thermal {
 	uint16_t sensor : 11;           //!< Dimm thermal sensor[31:21](11 bit data)
 	uint16_t update_rate : 9;       //!< Time since last update[16:8](9 bit data)
 	uint8_t dimm_addr;              //!< Dimm address[7:0](8 bit data)
+};
+
+/**
+ * @brief frequency limit source names
+ */
+static char * const freqlimitsrcnames[] = {
+	"cHTC-Active",
+	"PROCHOT",
+	"TDC limit",
+	"PPT Limit",
+	"OPN Max",
+	"Reliability Limit",
+	"APML Agent",
+	"HSMP Agent"
 };
 
 /**
@@ -315,6 +331,57 @@ esmi_status_t esmi_cclk_limit_get(uint32_t socket_idx, uint32_t *cclk);
  */
 esmi_status_t esmi_hsmp_proto_ver_get(uint32_t *proto_ver);
 
+/**
+ *  @brief Get the current active frequency limit of the socket.
+ *
+ *  @details This function will get the socket frequency and source of this limit
+ *
+ *  @param[in] socket_ind A socket index.
+ *
+ *  @param[inout] freq Input buffer to return the frequency(MHz).
+ *
+ *  @param[inout] src Input buffer to return the source of this limit
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_socket_current_active_freq_limit_get(uint32_t sock_ind,
+							uint16_t *freq, char **src_type);
+
+/**
+ *  @brief Get the Socket frequency range.
+ *
+ *  @details This function returns the socket frequency range, fmax
+ *  and fmin.
+ *
+ *  @param[in] socket_ind Socket index.
+ *
+ *  @param[inout] fmax Input buffer to return the maximum frequency(MHz).
+ *
+ *  @param[inout] fmin Input buffer to return the minimum frequency(MHz).
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_socket_freq_range_get(uint8_t sock_ind, uint16_t *fmax, uint16_t *fmin);
+
+/**
+ *  @brief Get the current active frequency limit of the core.
+ *
+ *  @details This function returns the core frequency limit for the specified core.
+ *
+ *  @param[in] core_id Core index.
+ *
+ *  @param[inout] freq Input buffer to return the core frequency limit(MHz)
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_current_freq_limit_core_get(uint32_t core_id, uint32_t *freq);
+
 /** @} */  // end of SystemStatisticsQuer
 
 /*****************************************************************************/
@@ -377,6 +444,22 @@ esmi_status_t esmi_socket_power_cap_get(uint32_t socket_idx, uint32_t *pcap);
  */
 esmi_status_t esmi_socket_power_cap_max_get(uint32_t socket_idx,
 					    uint32_t *pmax);
+
+/**
+ *  @brief Get the SVI based power telemetry for all rails.
+ *
+ *  @details This function returns the SVI based power telemetry for all rails.
+ *
+ *  @param[in] socket_ind Socket index.
+ *
+ *  @param[inout] power Input buffer to return the power(mW).
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_pwr_svi_telemetry_all_rails_get(uint32_t sock_ind, uint32_t *power);
+
 
 /** @} */  // end of PowerQuer
 

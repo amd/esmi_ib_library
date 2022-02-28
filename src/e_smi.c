@@ -54,6 +54,8 @@
 #include <e_smi/e_smi_monitor.h>
 #include <e_smi/e_smi_utils.h>
 
+#define TWO_BYTE_MASK           0xFFFF
+
 /*
  * total number of cores and sockets in the system
  * This information is going to be fixed for a boot cycle.
@@ -1277,6 +1279,143 @@ esmi_status_t esmi_dimm_thermal_sensor_get(uint8_t sock_ind, uint8_t dimm_addr,
 		dimm_temp->sensor = msg.args[0] >> 21;
 		dimm_temp->update_rate = msg.args[0] >> 8;
 		dimm_temp->dimm_addr = msg.args[0];
+	}
+
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_socket_current_active_freq_limit_get(uint32_t sock_ind, uint16_t *freq,
+							char **src_type)
+{
+	struct hsmp_message msg = { 0 };
+	uint8_t src_len;
+	uint16_t limit;
+	uint8_t index;
+	uint8_t ind;
+	int ret;
+
+	if (psm->hsmp_proto_ver != 5)
+		return ESMI_NO_HSMP_SUP;
+
+	CHECK_HSMP_INPUT();
+
+	if (freq == NULL || src_type == NULL)
+		return ESMI_INVALID_INPUT;
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	if (!psm->is_char_dev)
+		return ESMI_NOT_SUPPORTED;
+
+	/* frequency limit source names array length */
+	src_len = ARRAY_SIZE(freqlimitsrcnames);
+
+	msg.msg_id	= CURRENT_ACTIVE_FREQ_LIMIT_SOCKET_TYPE;
+	msg.response_sz = 1;
+	msg.sock_ind 	= sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (ret)
+		return errno_to_esmi_status(ret);
+
+	*freq = msg.args[0] >> 16;
+	limit = msg.args[0] & TWO_BYTE_MASK;
+
+	while (limit != 0 && index < src_len) {
+		if ((limit & 1) == 1) {
+			src_type[ind] = freqlimitsrcnames[index];
+			ind++;
+		}
+		index += 1;
+		limit = limit >> 1;
+	}
+
+	return ESMI_SUCCESS;
+}
+
+esmi_status_t esmi_current_freq_limit_core_get(uint32_t core_id, uint32_t *freq)
+{
+	struct hsmp_message msg = { 0 };
+	int ret;
+
+	if (psm->hsmp_proto_ver != 5)
+		return ESMI_NO_HSMP_SUP;
+
+	CHECK_HSMP_GET_INPUT(freq);
+
+	if (!psm->is_char_dev)
+		return ESMI_NOT_SUPPORTED;
+
+	if (core_id >= psm->total_cores)
+		return ESMI_INVALID_INPUT;
+
+	if (!psm->map)
+		return ESMI_IO_ERROR;
+
+	msg.msg_id	= CURRENT_ACTIVE_FREQ_LIMIT_CORE_TYPE;
+	msg.num_args	= 1;
+	msg.response_sz = 1;
+	msg.args[0]	= psm->map[core_id].apic_id;
+	msg.sock_ind	= psm->map[core_id].sock_id;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret)
+		*freq = msg.args[0];
+
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_pwr_svi_telemetry_all_rails_get(uint32_t sock_ind, uint32_t *power)
+{
+	struct hsmp_message msg = { 0 };
+	int ret;
+
+	if (psm->hsmp_proto_ver != 5)
+		return ESMI_NO_HSMP_SUP;
+
+	if (!psm->is_char_dev)
+		return ESMI_NOT_SUPPORTED;
+
+	CHECK_HSMP_GET_INPUT(power);
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	msg.msg_id	= PWR_SVI_TELEMTRY_SOCKET_TYPE;
+	msg.response_sz	= 1;
+	msg.sock_ind	= sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret)
+		*power = msg.args[0];
+
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_socket_freq_range_get(uint8_t sock_ind, uint16_t *fmax, uint16_t *fmin)
+{
+	struct hsmp_message msg = { 0 };
+	int ret;
+
+	if (psm->hsmp_proto_ver != 5)
+		return ESMI_NO_HSMP_SUP;
+
+	if (!psm->is_char_dev)
+		return ESMI_NOT_SUPPORTED;
+
+	if (!fmax || !fmin)
+		return ESMI_INVALID_INPUT;
+
+	CHECK_HSMP_INPUT();
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	msg.msg_id	= SOCKET_FREQ_RANGE_TYPE;
+	msg.response_sz	= 1;
+	msg.sock_ind	= sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret) {
+		*fmax = msg.args[0] >> 16;
+		*fmin = msg.args[0] & TWO_BYTE_MASK;
 	}
 
 	return errno_to_esmi_status(ret);
