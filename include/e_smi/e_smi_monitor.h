@@ -108,6 +108,10 @@ typedef enum {
 	SOCKET_FREQ_RANGE_TYPE,			//!< Socket frequeny range fmax and fmin
 	CURRENT_IO_BANDWIDTH_TYPE,		//!< Bandwidth on IO link
 	CURRENT_XGMI_BANDWIDTH_TYPE,		//!< Bandwidth on XGMI link
+	GMI3_LINK_WIDTH_RANGE_TYPE,		//!< GMI3 link width setting
+	PCIE_GEN5_RATE_CTL_TYPE,		//!< PCIe gen5 rate control
+	POWER_EFFICIENCY_MODE_TYPE,		//!< Power profile setting
+	DF_PSTATE_RANGE_TYPE,			//!< DF pstate range setting
 	MONITOR_TYPE_MAX			//!< Max Monitor Type coordinate
 } monitor_types_t;
 

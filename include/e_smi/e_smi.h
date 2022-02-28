@@ -529,6 +529,23 @@ esmi_status_t esmi_pwr_svi_telemetry_all_rails_get(uint32_t sock_ind, uint32_t *
  */
 esmi_status_t esmi_socket_power_cap_set(uint32_t socket_idx, uint32_t pcap);
 
+/**
+ *  @brief Set the power efficiency profile policy
+ *
+ *  @details This function will set the power efficiency mode
+ *  Power efficiency modes are high performance mode(0)
+ *  power efficient mode(1), IO performance mode(2).
+ *
+ *  @param[in] sock_ind A socket index.
+ *
+ *  @param[in] mode Power efficiency mode to be set.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_pwr_efficiency_mode_set(uint8_t sock_ind, uint8_t mode);
+
 /** @} */  // end of PowerCont
 
 /*****************************************************************************/
@@ -775,6 +792,32 @@ esmi_status_t esmi_xgmi_width_set(uint8_t min, uint8_t max);
 /** @} */  // end of xGMIBwCont
 
 /*****************************************************************************/
+/** @defgroup GMI3WidthCont GMI3 width control
+ *  This function provides a way to control global memory interconnect bandwidth.
+ *  @{
+ */
+
+/**
+ *  @brief Set gmi3 width
+ *
+ *  @details This function will set the global memory interconnect width.
+ *
+ *  @param[in] sock_ind Socket index.
+ *
+ *  @param[in] min_link_width Minimum link width to be set.
+ *
+ *  @param[in] max_link_width Maximum link width to be set.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_gmi3_link_width_range_set(uint8_t sock_ind, uint8_t min_link_width,
+					     uint8_t max_link_width);
+
+/** @} */  // end of GMI3WidthCont
+
+/*****************************************************************************/
 /** @defgroup PStateCont APB and LCLK level control
  *  This functions provides a way to control APB and lclk values.
  *  @{
@@ -840,6 +883,43 @@ esmi_status_t esmi_apb_disable(uint32_t sock_ind, uint8_t pstate);
  */
 esmi_status_t esmi_socket_lclk_dpm_level_set(uint32_t sock_ind, uint8_t nbio_id,
 					     uint8_t min, uint8_t max);
+
+/**
+ *  @brief Set pcie link rate
+ *
+ *  @details This function will set the pcie link rate to gen4/5 or
+ *  auto detection based on bandwidth utilisation.
+ *
+ *  @param[in] sock_ind Socket index.
+ *
+ *  @param[in] rate_ctrl Control value to be set.
+ *
+ *  @param[inout] prev_mode Input buffer to hold the previous mode.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_pcie_link_rate_set(uint8_t sock_ind, uint8_t rate_ctrl, uint8_t *prev_mode);
+
+/**
+ *  @brief Set data fabric pstate range.
+ *
+ *  @details This function will set the max and min pstates for the data fabric.
+ *  Acceptable values for the P-state are 0(highest) - 4 (lowest) with
+ *  max <= min.
+ *
+ *  @param[in] sock_ind a socket index.
+ *
+ *  @param[in] max_pstate Maximum pstate value to be set.
+ *
+ *  @param[in] min_pstate Minimum pstate value to be set.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_df_pstate_range_set(uint8_t sock_ind, uint8_t max_pstate, uint8_t min_pstate);
 
 /** @} */  // end of PStateCont
 

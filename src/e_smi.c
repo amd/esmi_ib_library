@@ -54,6 +54,10 @@
 #include <e_smi/e_smi_monitor.h>
 #include <e_smi/e_smi_utils.h>
 
+#define GEN5_RATE		2
+#define GEN5_RATE_MASK		0x3
+#define MAX_DF_PSTATE_LIMIT	4
+#define FULL_WIDTH		2
 #define TWO_BYTE_MASK           0xFFFF
 
 /*
@@ -1523,6 +1527,145 @@ esmi_status_t esmi_current_xgmi_bw_get(struct link_id_bw_type link,
 	ret = hsmp_xfer(&msg, O_RDONLY);
 	if (!ret)
 		*xgmi_bw = msg.args[0];
+
+	return errno_to_esmi_status(ret);
+}
+
+static esmi_status_t validate_max_min_values(uint8_t max_value, uint8_t min_value,
+					     uint8_t max_limit)
+{
+	if (max_value > max_limit | max_value < min_value)
+		return ESMI_INVALID_INPUT;
+
+	return ESMI_SUCCESS;
+
+}
+
+esmi_status_t esmi_gmi3_link_width_range_set(uint8_t sock_ind, uint8_t min_link_width,
+					     uint8_t max_link_width)
+{
+	struct hsmp_message msg = { 0 };
+	int ret;
+
+	if (psm->hsmp_proto_ver != 5)
+		return ESMI_NO_HSMP_SUP;
+
+	if (!psm->is_char_dev)
+		return ESMI_NOT_SUPPORTED;
+
+	CHECK_HSMP_INPUT();
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	if (validate_max_min_values(max_link_width, min_link_width, FULL_WIDTH))
+		return ret;
+
+	msg.msg_id	= GMI3_LINK_WIDTH_RANGE_TYPE;
+	msg.num_args	= 1;
+	msg.sock_ind	= sock_ind;
+	msg.args[0]	= (min_link_width << 8) | max_link_width;
+	ret = hsmp_xfer(&msg, O_WRONLY);
+
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_pcie_link_rate_set(uint8_t sock_ind, uint8_t rate_ctrl, uint8_t *prev_mode)
+{
+	struct hsmp_message msg = { 0 };
+	int ret;
+
+	if (psm->hsmp_proto_ver != 5)
+		return ESMI_NO_HSMP_SUP;
+
+	if (!psm->is_char_dev)
+		return ESMI_NOT_SUPPORTED;
+
+	CHECK_HSMP_GET_INPUT(prev_mode);
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	if (rate_ctrl > GEN5_RATE)
+		return ESMI_INVALID_INPUT;
+
+	msg.msg_id	= PCIE_GEN5_RATE_CTL_TYPE;
+	msg.num_args	= 1;
+	msg.response_sz	= 1;
+	msg.sock_ind	= sock_ind;
+	msg.args[0]	= rate_ctrl;
+	ret = hsmp_xfer(&msg, O_RDWR);
+	if (!ret)
+		*prev_mode = msg.args[0] & GEN5_RATE_MASK;
+
+	return errno_to_esmi_status(ret);
+}
+
+static esmi_status_t validate_pwr_efficiency_mode(uint8_t mode)
+{
+	switch (mode) {
+		case 0:
+		case 1:
+		case 2:
+			return ESMI_SUCCESS;
+		default:
+			return ESMI_INVALID_INPUT;
+	}
+}
+
+esmi_status_t esmi_pwr_efficiency_mode_set(uint8_t sock_ind, uint8_t mode)
+{
+	struct hsmp_message msg = { 0 };
+	int ret;
+
+	if (psm->hsmp_proto_ver != 5)
+		return ESMI_NO_HSMP_SUP;
+
+	if (!psm->is_char_dev)
+		return ESMI_NOT_SUPPORTED;
+
+	CHECK_HSMP_INPUT();
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	if (validate_pwr_efficiency_mode(mode))
+		return ESMI_INVALID_INPUT;
+
+	msg.msg_id	= POWER_EFFICIENCY_MODE_TYPE;
+	msg.num_args	= 1;
+	msg.sock_ind	= sock_ind;
+	msg.args[0]	= mode;
+	ret = hsmp_xfer(&msg, O_RDWR);
+
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_df_pstate_range_set(uint8_t sock_ind, uint8_t max_pstate,
+				       uint8_t min_pstate)
+{
+	struct hsmp_message msg = { 0 };
+	int ret;
+
+	if (psm->hsmp_proto_ver != 5)
+		return ESMI_NO_HSMP_SUP;
+
+	if (!psm->is_char_dev)
+		return ESMI_NOT_SUPPORTED;
+
+	CHECK_HSMP_INPUT();
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	if (max_pstate > min_pstate || min_pstate > MAX_DF_PSTATE_LIMIT)
+		return ESMI_INVALID_INPUT;
+
+	msg.msg_id	= DIS_DF_PSTATE_TYPE;
+	msg.num_args	= 1;
+	msg.sock_ind	= sock_ind;
+	msg.args[0]	= (min_pstate << 8) || max_pstate;
+	ret = hsmp_xfer(&msg, O_WRONLY);
 
 	return errno_to_esmi_status(ret);
 }
