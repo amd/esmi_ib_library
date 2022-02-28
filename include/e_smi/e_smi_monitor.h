@@ -106,6 +106,8 @@ typedef enum {
 	CURRENT_ACTIVE_FREQ_LIMIT_CORE_TYPE,	//!< Cclk limit set per core
 	PWR_SVI_TELEMTRY_SOCKET_TYPE,		//!< SVI based power telemetry
 	SOCKET_FREQ_RANGE_TYPE,			//!< Socket frequeny range fmax and fmin
+	CURRENT_IO_BANDWIDTH_TYPE,		//!< Bandwidth on IO link
+	CURRENT_XGMI_BANDWIDTH_TYPE,		//!< Bandwidth on XGMI link
 	MONITOR_TYPE_MAX			//!< Max Monitor Type coordinate
 } monitor_types_t;
 

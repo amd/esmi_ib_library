@@ -1421,6 +1421,112 @@ esmi_status_t esmi_socket_freq_range_get(uint8_t sock_ind, uint16_t *fmax, uint1
 	return errno_to_esmi_status(ret);
 }
 
+static int validate_link_id(uint8_t link_id)
+{
+	esmi_status_t ret;
+
+	switch (link_id) {
+		case P0:
+		case P1:
+		case P2:
+		case P3:
+		case G0:
+		case G1:
+		case G2:
+		case G3:
+			ret = ESMI_SUCCESS;
+			break;
+		default:
+			ret = ESMI_INVALID_INPUT;
+	}
+
+	return ret;
+}
+
+static esmi_status_t validate_bw_type(uint8_t bw_type)
+{
+	esmi_status_t ret;
+
+	switch (bw_type) {
+		case AGG_BW:
+		case RD_BW:
+		case WR_BW:
+			ret = ESMI_SUCCESS;
+			break;
+		default:
+			ret = ESMI_INVALID_INPUT;
+	};
+
+	return ret;
+}
+
+
+esmi_status_t esmi_current_io_bandwidth_get(uint8_t sock_ind, struct link_id_bw_type link,
+					    uint32_t *io_bw)
+{
+	struct hsmp_message msg = { 0 };
+	int ret;
+
+	if (psm->hsmp_proto_ver != 5)
+		return ESMI_NO_HSMP_SUP;
+
+	if (!psm->is_char_dev)
+		return ESMI_NOT_SUPPORTED;
+
+	CHECK_HSMP_GET_INPUT(io_bw);
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	/* Only Aggregate Banwdith is valid Bandwidth type for IO links */
+	if (link.bw_type != 1)
+		return ESMI_INVALID_INPUT;
+
+	if (validate_link_id(link.link_id))
+		return ESMI_INVALID_INPUT;
+
+	msg.msg_id	= CURRENT_IO_BANDWIDTH_TYPE;
+	msg.response_sz = 1;
+	msg.num_args	= 1;
+	msg.args[0]	= link.bw_type | link.link_id << 8;
+	msg.sock_ind	= sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret)
+		*io_bw = msg.args[0];
+
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_current_xgmi_bw_get(struct link_id_bw_type link,
+				       uint32_t *xgmi_bw)
+{
+	struct hsmp_message msg = { 0 };
+	int ret;
+
+	if (psm->hsmp_proto_ver != 5)
+		return ESMI_NO_HSMP_SUP;
+
+	if (!psm->is_char_dev)
+		return ESMI_NOT_SUPPORTED;
+
+	CHECK_HSMP_GET_INPUT(xgmi_bw);
+
+	if (validate_link_id(link.link_id))
+		return ESMI_INVALID_INPUT;
+	if (validate_bw_type(link.bw_type))
+		return ESMI_INVALID_INPUT;
+
+	msg.msg_id	= CURRENT_XGMI_BANDWIDTH_TYPE;
+	msg.response_sz = 1;
+	msg.num_args	= 1;
+	msg.args[0]	= link.bw_type | link.link_id << 8;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret)
+		*xgmi_bw = msg.args[0];
+
+	return errno_to_esmi_status(ret);
+}
+
 esmi_status_t esmi_hsmp_proto_ver_get(uint32_t *proto_ver)
 {
 	int ret;

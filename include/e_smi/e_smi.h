@@ -50,6 +50,8 @@
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
+#define BIT(N) (1 << N)
+
 /** \file e_smi.h
  *  Main header file for the E-SMI library.
  *  All required function, structure, enum, etc. definitions should be defined
@@ -104,6 +106,41 @@ struct dimm_thermal {
 	uint16_t sensor : 11;           //!< Dimm thermal sensor[31:21](11 bit data)
 	uint16_t update_rate : 9;       //!< Time since last update[16:8](9 bit data)
 	uint8_t dimm_addr;              //!< Dimm address[7:0](8 bit data)
+};
+
+/**
+ * @brief xGMI Bandwidth Encoding types
+ */
+typedef enum {
+	AGG_BW = BIT(0),	//!< Aggregate Bandwidth
+	RD_BW = BIT(1),		//!< Read Bandwidth
+	WR_BW = BIT(2)		//!< Write Bandwdith
+} io_bw_encoding;
+
+/**
+ * @brief IO LINK and xGMI link Encoding values
+ */
+typedef enum {
+	P0 = BIT(0),
+	P1 = BIT(1),
+	P2 = BIT(2),
+	P3 = BIT(3),
+	G0 = BIT(4),
+	G1 = BIT(5),
+	G2 = BIT(6),
+	G3 = BIT(7)
+} link_id_encoding;
+
+
+/**
+ * @brief LINK ID and Bandwidth type Information.It contains
+ * LINK ID Encoding. Valid Link ID encodings are 1(P0), 2(P1),
+ * 4(P2), 8(P3), 16(G0), 32(G1), 64(G2), 128(G3). Valid xGMI Bandwidth
+ * types 1(Aggregate_BW), 2 (Read BW), 4 (Write BW).
+ */
+struct link_id_bw_type {
+	io_bw_encoding bw_type;    //!< Bandwidth Type Information [1, 2, 4]
+	link_id_encoding link_id;  //!< Link ID [1,2,4,8,16,32,64,128]
 };
 
 /**
@@ -805,6 +842,52 @@ esmi_status_t esmi_socket_lclk_dpm_level_set(uint32_t sock_ind, uint8_t nbio_id,
 					     uint8_t min, uint8_t max);
 
 /** @} */  // end of PStateCont
+
+/*****************************************************************************/
+/** @defgroup BwQuer Bandwidth Query
+ *  This function provides the IO and xGMI bandiwtdh.
+ *  @{
+ */
+
+/**
+ *  @brief Get IO bandwidth on IO link.
+ *
+ *  @details This function returns the IO Aggregate bandwidth for the given link id.
+ *
+ *  @param[in] sock_ind Socket index.
+ *
+ *  @param[in] link  structure containing link_id(Link encoding values of given link) and bwtype
+ *  info.
+ *
+ *  @param[inout] io_bw Input buffer for bandwidth data in Mbps.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_current_io_bandwidth_get(uint8_t sock_ind, struct link_id_bw_type link,
+					    uint32_t *io_bw);
+
+/**
+ *  @brief Get xGMI bandwidth.
+ *
+ *  @details This function will get the xGMI Aggregate bandwidth for the specified link
+ *  in a multi socket system.
+ *
+ *  @param[in] link  structure containing link_id(Link encoding values of given link) and bwtype
+ *  info.
+ *
+ *  @param[inout] xgmi_bw Input buffer for bandwidth data in Mbps.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_current_xgmi_bw_get(struct link_id_bw_type link,
+				       uint32_t *xgmi_bw);
+
+/** @} */  // end of BwQuer
+
 /*****************************************************************************/
 /** @defgroup AuxilQuer Auxiliary functions
  *  Below functions provide interfaces to get the total number of cores and
