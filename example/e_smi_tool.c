@@ -72,7 +72,7 @@ void print_socket_footer(uint32_t sockets)
 {
 	int i;
 
-	printf("\n--------------------------");
+	printf("\n------------------------------------------");
 	for (i = 0; i < sockets; i++) {
 		printf("-------------------");
 	}
@@ -83,9 +83,9 @@ void print_socket_header(uint32_t sockets)
 	int i;
 
 	print_socket_footer(sockets);
-	printf("\n| Sensor Name\t\t |");
+	printf("\n| Sensor Name\t\t\t |");
 	for (i = 0; i < sockets; i++) {
-		printf(" Socket %d         |", i);
+		printf(" Socket %-10d|", i);
 	}
 	print_socket_footer(sockets);
 }
@@ -319,6 +319,89 @@ esmi_status_t epyc_get_prochot_status(void)
 	return ESMI_SUCCESS;
 }
 
+
+static void display_freq_limit_src_names(char **source_type, char *str2, int *len2)
+{
+	uint8_t index = 0;
+
+	for (index = 0; strcmp(source_type[index], "") != 0; index++) {
+		snprintf(str2 + *len2, SHOWLINESZ - *len2, " %-17s|\n", source_type[index]);
+		*len2 += strlen(source_type[index]);
+	}
+	if (index == 0)
+		snprintf(str2 + *len2, SHOWLINESZ - *len2, " %-17s|", "Reserved");
+}
+
+static void get_sock_freq_limit(int sockets)
+{
+	char str1[SHOWLINESZ];
+	char str2[SHOWLINESZ];
+	int len2, len1;
+	uint16_t limit;
+	uint8_t length = ARRAY_SIZE(freqlimitsrcnames);
+	char *src[length];
+	int ret, i;
+	uint8_t index;
+
+	// Initalize to NULL string
+	for (index = 0; index < length; index++)
+		src[index] = "\0";
+	index = 0;
+
+	printf("\n| Current Active Freq limit\t |");
+	snprintf(str1, SHOWLINESZ, "\n| \t Freq limit (MHz) \t |");
+	snprintf(str2, SHOWLINESZ, "\n| \t Freq limit source \t |");
+
+	for (i = 0; i < sockets; i++) {
+		len1 = strlen(str1);
+		len2 = strlen(str2);
+		printf("\t\t    |");
+		ret = esmi_socket_current_active_freq_limit_get(i, &limit, src);
+		if (!ret) {
+			snprintf(str1 + len1, SHOWLINESZ - len1, " %-17u|", limit);
+			display_freq_limit_src_names(src, str2, &len2);
+		} else {
+			err_bits |= 1 << ret;
+			snprintf(str1 + len1, SHOWLINESZ - len1, " NA (Err: %-2d)     |", ret);
+			snprintf(str2 + len2, SHOWLINESZ - len2, " NA (Err: %-2d)     |", ret);
+		}
+	}
+
+	printf("%s", str1);
+	printf("%s", str2);
+}
+
+static void get_sock_freq_range(int sockets)
+{
+	char str1[SHOWLINESZ];
+	char str2[SHOWLINESZ];
+	int len2, len1;
+	uint16_t fmax;
+	uint16_t fmin;
+	int ret, i;
+
+	printf("\n| Socket frequency range\t |");
+	snprintf(str1, SHOWLINESZ, "\n| \t Fmax (MHz)\t\t |");
+	snprintf(str2, SHOWLINESZ, "\n| \t Fmin (MHz)\t\t |");
+	for (i = 0; i < sockets; i++) {
+		printf("                  |");
+		len1 = strlen(str1);
+		len2 = strlen(str2);
+		ret = esmi_socket_freq_range_get(i, &fmax, &fmin);
+		if (!ret) {
+			snprintf(str1 + len1, SHOWLINESZ -len1, " %-17u|", fmax);
+			snprintf(str2 + len2, SHOWLINESZ - len2 , " %-17u|", fmin);
+		} else {
+			err_bits |= 1 << ret;
+			snprintf(str1 + len1, SHOWLINESZ -len1, " NA (Err: %-2d)     |", ret);
+			snprintf(str2 + len2, SHOWLINESZ - len2, " NA (Err: %-2d)     |", ret);
+		}
+	}
+	printf("%s", str1);
+	printf("%s", str2);
+}
+
+
 #define MCLKSZ 256
 esmi_status_t epyc_get_clock_freq(void)
 {
@@ -336,8 +419,8 @@ esmi_status_t epyc_get_clock_freq(void)
 	}
 	err_bits_reset();
 	print_socket_header(sockets);
-	printf("\n| fclk (Mhz)\t\t |");
-	snprintf(str, MCLKSZ, "\n| mclk (Mhz)\t\t |");
+	printf("\n| fclk (Mhz)\t\t\t |");
+	snprintf(str, MCLKSZ, "\n| mclk (Mhz)\t\t\t |");
 	for (i = 0; i < sockets; i++) {
 		len = strlen(str);
 		ret = esmi_fclk_mclk_get(i, &fclk, &mclk);
@@ -352,7 +435,7 @@ esmi_status_t epyc_get_clock_freq(void)
 	}
 	printf("%s", str);
 
-	printf("\n| cclk (Mhz)\t\t |");
+	printf("\n| cclk (Mhz)\t\t\t |");
 	for (i = 0; i < sockets; i++) {
 		ret = esmi_cclk_limit_get(i, &cclk);
 		if (!ret) {
@@ -362,6 +445,10 @@ esmi_status_t epyc_get_clock_freq(void)
 			printf(" NA (Err: %-2d)     |", ret);
 		}
 	}
+
+	get_sock_freq_limit(sockets);
+	get_sock_freq_range(sockets);
+
 	print_socket_footer(sockets);
 	printf("\n");
 	err_bits_print();
