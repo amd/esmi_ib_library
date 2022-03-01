@@ -97,7 +97,6 @@ typedef enum {
 	SOCKET_C0_RESIDENCY_TYPE,		//!< Socket c0 residency coordinate
 	W_LCLKDPM_LEVEL_TYPE,			//!< Set socket nbio pstate
 	R_LCLKDPM_LEVEL_TYPE,			//!< Get LCLK frequency encoding
-	PKG_BOOSTLIMIT_TYPE,			//!< Package Boostlimit coordinate
 	DDR_BW_TYPE,				//!< DDR bandwidth coordinate
 	SOCKET_TEMP_MONITOR_TYPE,		//!< Socket temperature monitor coordinate
 	DIMM_TEMP_RANGE_REFRESH_RATE_TYPE,	//!< Dimm temp range and refresh rate
@@ -113,6 +112,7 @@ typedef enum {
 	PCIE_GEN5_RATE_CTL_TYPE,		//!< PCIe gen5 rate control
 	POWER_EFFICIENCY_MODE_TYPE,		//!< Power profile setting
 	DF_PSTATE_RANGE_TYPE,			//!< DF pstate range setting
+	PKG_BOOSTLIMIT_TYPE,			//!< TODO:Needs to be removed once sysfs is removed
 	MONITOR_TYPE_MAX			//!< Max Monitor Type coordinate
 } monitor_types_t;
 
