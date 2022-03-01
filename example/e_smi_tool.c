@@ -59,6 +59,8 @@
 /* To handle multiple errors while reporting summary */
 #define ESMI_MULTI_ERROR	1234
 
+#define SCALING_FACTOR  0.25
+
 uint32_t err_bits;
 
 esmi_status_t show_smi_parameters(void);
@@ -628,6 +630,85 @@ esmi_status_t epyc_get_sockc0_residency(uint32_t sock_id)
 	return ESMI_SUCCESS;
 }
 
+static esmi_status_t epyc_get_dimm_temp_range_refresh_rate(uint8_t sock_id, uint8_t dimm_addr)
+{
+	struct temp_range_refresh_rate rate;
+	esmi_status_t ret;
+
+	ret = esmi_dimm_temp_range_and_refresh_rate_get(sock_id, dimm_addr, &rate);
+	if (ret) {
+		printf("Failed to get socket[%u] DIMM temperature range and refresh rate,"
+			" Err[%d]: %s\n", sock_id, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+
+	printf("---------------------------------------");
+	printf("\n| Temp Range\t\t |");
+	printf(" %-10u |", rate.range);
+	printf("\n| Refresh rate\t\t |");
+	printf(" %-10u |", rate.ref_rate);
+	printf("\n---------------------------------------\n");
+
+	return ret;
+}
+
+static esmi_status_t epyc_get_dimm_power(uint8_t sock_id, uint8_t dimm_addr)
+{
+	esmi_status_t ret;
+	struct dimm_power d_power;
+
+	ret = esmi_dimm_power_consumption_get(sock_id, dimm_addr, &d_power);
+	if (ret) {
+		printf("Failed to get socket[%u] DIMM power and update rate, Err[%d]: %s\n",
+			sock_id, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+
+	printf("---------------------------------------");
+	printf("\n| Power(mWatts)\t\t |");
+	printf(" %-10u |", d_power.power);
+	printf("\n| Power update rate(ms)\t |");
+	printf(" %-10u |", d_power.update_rate);
+	printf("\n| Dimm address \t\t |");
+	printf(" 0x%-8x |", d_power.dimm_addr);
+	printf("\n---------------------------------------\n");
+
+	return ret;
+}
+
+static void decode_dimm_temp(uint16_t raw, float *temp)
+{
+	if (raw <= 0x3FF)
+		*temp = raw * SCALING_FACTOR;
+	else
+		*temp = (raw - 0x800) * SCALING_FACTOR;
+}
+
+static esmi_status_t epyc_get_dimm_thermal(uint8_t sock_id, uint8_t dimm_addr)
+{
+	struct dimm_thermal d_sensor;
+	esmi_status_t ret;
+	float temp;
+
+	ret = esmi_dimm_thermal_sensor_get(sock_id, dimm_addr, &d_sensor);
+	if (ret) {
+		printf("Failed to get socket[%u] DIMM temperature and update rate,"
+			" Err[%d]: %s\n", sock_id, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	decode_dimm_temp(d_sensor.sensor, &temp);
+	printf("------------------------------------------");
+	printf("\n| Temperature(°C)\t |");
+	printf(" %-10.3f\t |", temp);
+	printf("\n| Update rate(ms)\t |");
+	printf(" %-10u\t |", d_sensor.update_rate);
+	printf("\n| Dimm address returned\t |");
+	printf(" %-10u\t |", d_sensor.dimm_addr);
+	printf("\n------------------------------------------\n");
+
+	return ret;
+}
+
 static void show_usage(char *exe_name)
 {
 	printf("Usage: %s [Option]... <INPUT>...\n\n"
@@ -650,6 +731,9 @@ static void show_usage(char *exe_name)
 	"  --showhsmpprotover\t\t\t\t\tShow HSMP Protocol Version\n"
 	"  --showprochotstatus\t\t\t\t\tShow HSMP PROCHOT status (in/active)\n"
 	"  --showclocks\t\t\t\t\t\tShow (CPU, Mem & Fabric) clock frequencies (MHz)\n"
+	"  --showdimmtemprange [SOCKET] [DIMM_ADDR]\t\tShow dimm temperature range and refresh rate\n"
+	"  --showdimmthermal [SOCKET] [DIMM_ADDR]\t\tShow dimm thermal values\n"
+	"  --showdimmpower [SOCKET] [DIMM_ADDR]\t\t\tShow dimm power consumption\n"
 	"\n"
 	"Set Option<s>:\n"
 	"  -C, --setpowerlimit [SOCKET] [POWER]\t\t\tSet power limit"
@@ -1073,6 +1157,8 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 	char sudostr[] = "sudo";
 	uint8_t min, max;
 	uint8_t nbio_id;
+	uint8_t dimm_addr;
+	char *end;
 
 	//Specifying the expected options
 	static struct option long_options[] = {
@@ -1097,6 +1183,9 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 		{"showclocks",		no_argument,		0,	'z'},
 		{"setxgmiwidth",	required_argument,	0,	'w'},
 		{"setlclkdpmlevel",	required_argument,	0,	'l'},
+		{"showdimmthermal",		required_argument,	0,	'H'},
+		{"showdimmpower",		required_argument,	0,	'g'},
+		{"showdimmtemprange",		required_argument,	0,	'T'},
 		{0,			0,			0,	0},
 	};
 
@@ -1155,6 +1244,9 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 	    opt == 'u' ||
 	    opt == 'w' ||
 	    opt == 'l' ||
+	    opt == 'H' ||
+	    opt == 'T' ||
+	    opt == 'g' ||
 	    opt == 'r') {
 		if (is_string_number(optarg)) {
 			printf("Option '-%c' require a valid numeric value"
@@ -1167,6 +1259,9 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 	    opt == 'u' ||
 	    opt == 'a' ||
 	    opt == 'w' ||
+	    opt == 'H' ||
+	    opt == 'T' ||
+	    opt == 'g' ||
 	    opt == 'b') {
 		// make sure optind is valid  ... or another option
 		if (optind >= argc) {
@@ -1175,19 +1270,48 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 			show_usage(argv[0]);
 			return ESMI_MULTI_ERROR;
 		}
-		if (*argv[optind] == '-') {
-			if (*(argv[optind] + 1) < 48 && *(argv[optind] + 1) > 57) {
-				printf(MAG "\nOption '-%c' require TWO arguments"
-				 " <index>  <set_value>\n\n" RESET, opt);
+		if (opt != 'g' && opt != 'H' && opt != 'T') {
+			if (*argv[optind] == '-') {
+				if (*(argv[optind] + 1) < 48 && *(argv[optind] + 1) > 57) {
+					printf(MAG "\nOption '-%c' require TWO arguments"
+					 " <index>  <set_value>\n\n" RESET, opt);
+					show_usage(argv[0]);
+					return ESMI_MULTI_ERROR;
+				}
+			}
+			if (is_string_number(argv[optind])) {
+				printf(MAG "Option '-%c' requires 2nd argument as valid"
+				       " numeric value\n\n" RESET, opt);
 				show_usage(argv[0]);
 				return ESMI_MULTI_ERROR;
 			}
-		}
-		if(is_string_number(argv[optind])) {
-			printf(MAG "Option '-%c' require 2nd argument as valid"
-					" numeric value\n\n" RESET, opt);
-			show_usage(argv[0]);
-			return ESMI_MULTI_ERROR;
+		} else {
+			if (*argv[optind] == '-') {
+				printf(MAG "\nOption '--%s' requires TWO arguments and value"
+				       " should be non negative\n\n"
+				       RESET, long_options[long_index].name);
+				show_usage(argv[0]);
+				return ESMI_MULTI_ERROR;
+			}
+			if (!strncmp(argv[optind], "0x", 2) || !strncmp(argv[optind], "0X", 2)) {
+				dimm_addr = strtoul(argv[optind++], &end, 16);
+				if (*end) {
+					printf(MAG "Option '--%s' requires 2nd argument as valid"
+					       " numeric value\n\n"
+					       RESET, long_options[long_index].name);
+					show_usage(argv[0]);
+					return ESMI_MULTI_ERROR;
+				}
+			} else {
+				if (is_string_number(argv[optind])) {
+					printf(MAG "Option '--%s' requires 2nd argument as valid"
+					       " numeric value\n\n"
+					       RESET, long_options[long_index].name);
+					show_usage(argv[0]);
+					return ESMI_MULTI_ERROR;
+				}
+				dimm_addr = atoi(argv[optind++]);
+			}
 		}
 	}
 
@@ -1307,6 +1431,21 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 			min = atoi(argv[optind++]);
 			max = atoi(argv[optind++]);
 			ret = epyc_set_lclk_dpm_level(sock_id, nbio_id, min, max);
+			break;
+		case 'g' :
+			/* Get DIMM power consumption */
+			sock_id = atoi(optarg);
+			ret = epyc_get_dimm_power(sock_id, dimm_addr);
+			break;
+		case 'T' :
+			/* Get DIMM temp range and refresh rate */
+			sock_id = atoi(optarg);
+			ret = epyc_get_dimm_temp_range_refresh_rate(sock_id, dimm_addr);
+			break;
+		case 'H' :
+			/* Get DIMM temperature */
+			sock_id = atoi(optarg);
+			ret = epyc_get_dimm_thermal(sock_id, dimm_addr);
 			break;
 
 		case 'A' :
