@@ -814,6 +814,37 @@ static esmi_status_t epyc_get_core_clock(uint32_t core_id)
 	return ret;
 }
 
+static esmi_status_t epyc_get_power_telemetry()
+{
+	esmi_status_t ret;
+	uint32_t sockets;
+	uint32_t power;
+	int i;
+
+	ret = esmi_number_of_sockets_get(&sockets);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get number of sockets, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	print_socket_header(sockets);
+	printf("\n| SVI Power Telemetry (mWatts) \t |");
+	for (i = 0; i < sockets; i++) {
+		ret = esmi_pwr_svi_telemetry_all_rails_get(i, &power);
+		if(!ret) {
+			printf(" %-17.3f|", (double)power/1000);
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+		}
+	}
+
+	print_socket_footer(sockets);
+	err_bits_print();
+
+	return ret;
+}
+
 static void show_usage(char *exe_name)
 {
 	printf("Usage: %s [Option]... <INPUT>...\n\n"
@@ -840,6 +871,7 @@ static void show_usage(char *exe_name)
 	"  --showdimmthermal [SOCKET] [DIMM_ADDR]\t\tShow dimm thermal values\n"
 	"  --showdimmpower [SOCKET] [DIMM_ADDR]\t\t\tShow dimm power consumption\n"
 	"  --showcoreclock [CORE]\t\t\t\tShow core clock frequency (MHz) for a given core\n"
+	"  --showpowertelemetry \t\t\t\t\tShow svi based power telemetry of all rails\n"
 	"\n"
 	"Set Option<s>:\n"
 	"  -C, --setpowerlimit [SOCKET] [POWER]\t\t\tSet power limit"
@@ -1293,6 +1325,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 		{"showdimmpower",		required_argument,	0,	'g'},
 		{"showdimmtemprange",		required_argument,	0,	'T'},
 		{"showcoreclock",		required_argument,	0,	'q'},
+		{"showpowertelemetry",		no_argument,		0,	'm'},
 		{0,			0,			0,	0},
 	};
 
@@ -1559,6 +1592,10 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 			/* Get the core clock value for a given core */
 			core_id = atoi(optarg);
 			ret = epyc_get_core_clock(core_id);
+			break;
+		case 'm' :
+			/* Get svi based power telemetry of all rails */
+			epyc_get_power_telemetry();
 			break;
 		case 'A' :
 			ret = show_smi_all_parameters();
