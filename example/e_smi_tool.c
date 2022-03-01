@@ -796,6 +796,24 @@ static esmi_status_t epyc_get_dimm_thermal(uint8_t sock_id, uint8_t dimm_addr)
 	return ret;
 }
 
+static esmi_status_t epyc_get_core_clock(uint32_t core_id)
+{
+	esmi_status_t ret;
+	uint32_t cclk;
+
+	ret = esmi_current_freq_limit_core_get(core_id, &cclk);
+	if (ret) {
+		printf("Failed to get cclk value for core[%3u], Err[%d]: %s\n",
+			core_id, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+
+	printf("-----------------------------------------");
+	printf("\n| CPU[%03u] core clock (MHz) : %u\t|\n", core_id, cclk);
+	printf("-----------------------------------------\n");
+	return ret;
+}
+
 static void show_usage(char *exe_name)
 {
 	printf("Usage: %s [Option]... <INPUT>...\n\n"
@@ -821,6 +839,7 @@ static void show_usage(char *exe_name)
 	"  --showdimmtemprange [SOCKET] [DIMM_ADDR]\t\tShow dimm temperature range and refresh rate\n"
 	"  --showdimmthermal [SOCKET] [DIMM_ADDR]\t\tShow dimm thermal values\n"
 	"  --showdimmpower [SOCKET] [DIMM_ADDR]\t\t\tShow dimm power consumption\n"
+	"  --showcoreclock [CORE]\t\t\t\tShow core clock frequency (MHz) for a given core\n"
 	"\n"
 	"Set Option<s>:\n"
 	"  -C, --setpowerlimit [SOCKET] [POWER]\t\t\tSet power limit"
@@ -1273,6 +1292,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 		{"showdimmthermal",		required_argument,	0,	'H'},
 		{"showdimmpower",		required_argument,	0,	'g'},
 		{"showdimmtemprange",		required_argument,	0,	'T'},
+		{"showcoreclock",		required_argument,	0,	'q'},
 		{0,			0,			0,	0},
 	};
 
@@ -1334,6 +1354,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 	    opt == 'H' ||
 	    opt == 'T' ||
 	    opt == 'g' ||
+	    opt == 'q' ||
 	    opt == 'r') {
 		if (is_string_number(optarg)) {
 			printf("Option '-%c' require a valid numeric value"
@@ -1534,7 +1555,11 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 			sock_id = atoi(optarg);
 			ret = epyc_get_dimm_thermal(sock_id, dimm_addr);
 			break;
-
+		case 'q' :
+			/* Get the core clock value for a given core */
+			core_id = atoi(optarg);
+			ret = epyc_get_core_clock(core_id);
+			break;
 		case 'A' :
 			ret = show_smi_all_parameters();
 			break;
