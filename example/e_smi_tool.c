@@ -923,6 +923,105 @@ static esmi_status_t epyc_get_xgmi_bandwidth_info(char *link, char *bw_type)
 	return ret;
 }
 
+static char *pcie_strings[] = {
+	"automatically detect based on bandwidth utilisation",
+	"limited to Gen4 rate",
+	"limited to Gen5 rate"
+};
+
+static esmi_status_t epyc_set_pciegen5_rate_ctl(uint8_t sock_id, uint8_t rate_ctrl)
+{
+	uint8_t prev_mode;
+	esmi_status_t ret;
+
+	ret = esmi_pcie_link_rate_set(sock_id, rate_ctrl, &prev_mode);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to set pcie link rate control for socket[%u], Err[%d]: %s\n",
+			sock_id, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+
+	printf("Pcie link rate is set to %u (i.e. %s) successfully.\n",
+	       rate_ctrl, pcie_strings[rate_ctrl]);
+	printf("\nPrevious pcie link rate control was : %u\n", prev_mode);
+
+	return ret;
+}
+
+static char *mode_strings[] = {
+	"High performance mode",
+	"Power efficiency mode",
+	"IO performance mode"
+};
+
+static esmi_status_t epyc_set_power_efficiency_mode(uint32_t sock_id, uint8_t mode)
+{
+	esmi_status_t ret;
+
+	ret = esmi_pwr_efficiency_mode_set(sock_id, mode);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to set power efficiency mode for socket[%u], Err[%d]: %s\n",
+			sock_id, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	printf("Power efficiency profile policy is set to %d successfully\n", mode);
+	switch (mode) {
+		case 1:
+			printf("\nThis is a high performance mode,This mode favours core"
+			       " performance.\nDefault df pstate and DLWM algorithms are"
+			       " active in this mode\n");
+			break;
+		case 2:
+			printf("\nCaution : This is a power efficiency mode,"
+			       "\nSetting the power efficiency mode inturn impacts DF pstate,\n"
+			       "core boost limits, core performance etc internally\n");
+			break;
+		case 4:
+			printf("\nThis is a IO performance mode, This mode can result in"
+			       "\nlower core performance in some case, to increase the IO throughput\n");
+			break;
+	}
+
+	return ret;
+}
+
+static esmi_status_t epyc_set_df_pstate_range(uint8_t sock_id, uint8_t max_pstate, uint8_t min_pstate)
+{
+	esmi_status_t ret;
+
+	ret = esmi_df_pstate_range_set(sock_id, max_pstate, min_pstate);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to set df pstate range, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	printf("Data Fabric PState range(max:%d min:%d) set successfully\n",
+		max_pstate, min_pstate);
+	return ret;
+}
+
+static char *width_string[] = {
+	"quarter",
+	"half",
+	"full"
+};
+
+static esmi_status_t epyc_set_gmi3_link_width(uint8_t sock_id, uint8_t min, uint8_t max)
+{
+	esmi_status_t ret;
+
+	ret = esmi_gmi3_link_width_range_set(sock_id, min, max);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to set gmi3 link width for socket[%u] Err[%d]: %s\n",
+			sock_id, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	printf("Gmi3 link width is set to %s to %s width range successfully\n",
+	       width_string[min], width_string[max]);
+
+	return ret;
+}
+
 static void show_usage(char *exe_name)
 {
 	printf("Usage: %s [Option]... <INPUT>...\n\n"
@@ -971,6 +1070,14 @@ static void show_usage(char *exe_name)
 	" in a multi socket system, MIN = MAX = 0 to 2\n"
 	"  --setlclkdpmlevel [SOCKET] [NBIOID] [MIN] [MAX]\tSet lclk dpm level"
 	" for a given nbio, given socket, MIN = MAX = NBIOID = 0 to 3\n"
+	"  --setpcielinkratecontrol [SOCKET] [CTL]\t\tSet rate control for pcie link"
+	" for a given socket CTL = 0, 1, 2 \n"
+	"  --setpowerefficiencymode [SOCKET] [MODE]\t\tSet power efficiency mode"
+	" for a given socket MODE = 1, 2, 4 \n"
+	"  --setdfpstaterange [SOCKET] [MAX] [MIN]\t\tSet df pstate range"
+	" for a given socket MIN = MAX = 0 to 4 with MIN > MAX\n"
+	"  --setgmi3linkwidth [SOCKET] [MIN] [MAX]\t\tSet gmi3 link width"
+	" for a given socket MIN = MAX = 0 to 2 with MAX > MIN\n"
 	, exe_name);
 }
 
@@ -1413,6 +1520,10 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 		{"showpowertelemetry",		no_argument,		0,	'm'},
 		{"showiobandwidth",		required_argument,	0,	'B'},
 		{"showxgmibandwidth",		required_argument,	0,	'i'},
+		{"setpcielinkratecontrol",	required_argument,	0,	'j'},
+		{"setpowerefficiencymode",	required_argument,	0,	'k'},
+		{"setdfpstaterange",		required_argument,	0,	'X'},
+		{"setgmi3linkwidth",		required_argument,	0,	'n'},
 		{0,			0,			0,	0},
 	};
 
@@ -1435,6 +1546,10 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 				case 'u':
 				case 'w':
 				case 'l':
+				case 'k':
+				case 'j':
+				case 'X':
+				case 'n':
 					args[0] = sudostr;
 					args[1] = argv[0];
 					for (i = 0; i < argc; i++) {
@@ -1476,6 +1591,10 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 	    opt == 'g' ||
 	    opt == 'q' ||
 	    opt == 'B' ||
+	    opt == 'j' ||
+	    opt == 'k' ||
+	    opt == 'X' ||
+	    opt == 'n' ||
 	    opt == 'r') {
 		if (is_string_number(optarg)) {
 			printf("Option '-%c' require a valid numeric value"
@@ -1491,6 +1610,10 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 	    opt == 'H' ||
 	    opt == 'T' ||
 	    opt == 'g' ||
+	    opt == 'j' ||
+	    opt == 'k' ||
+	    opt == 'X' ||
+	    opt == 'n' ||
 	    opt == 'b') {
 		// make sure optind is valid  ... or another option
 		if (optind >= argc) {
@@ -1582,6 +1705,24 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 				printf("Please provide valid link names.\n");
 				return ESMI_MULTI_ERROR;
 			}
+		}
+	}
+
+	if ((opt == 'X') || (opt == 'n')) {
+		// make sure optind is valid  ... or another option
+		if ((optind + 1) >= argc || *argv[optind] == '-'
+		    || *argv[optind + 1] == '-') {
+			printf("\nOption '-%c' requires THREE arguments"
+			 " <socket> <min_value> <max_value>\n\n", opt);
+			show_usage(argv[0]);
+			return ESMI_MULTI_ERROR;
+		}
+
+		if (is_string_number(argv[optind]) || is_string_number(argv[optind + 1])) {
+			printf("Option '-%c' requires 2nd, 3rd, as valid"
+					" numeric value\n\n", opt);
+			show_usage(argv[0]);
+			return ESMI_MULTI_ERROR;
 		}
 	}
 
@@ -1718,6 +1859,32 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 			sock_id = atoi(optarg);
 			link_name = argv[optind++];
 			ret = epyc_get_io_bandwidth_info(sock_id, link_name);
+			break;
+		case 'n' :
+			/* Set gmi3 link width */
+			sock_id = atoi(optarg);
+			min = atoi(argv[optind++]);
+			max = atoi(argv[optind++]);
+			ret = epyc_set_gmi3_link_width(sock_id, min, max);
+			break;
+		case 'j' :
+			/* Set rate control on pci3 gen5 capable devices */
+			sock_id = atoi(optarg);
+			ctrl = atoi(argv[optind++]);
+			ret = epyc_set_pciegen5_rate_ctl(sock_id, ctrl);
+			break;
+		case 'k' :
+			/* Set power efficiecny profile policy */
+			sock_id = atoi(optarg);
+			mode = atoi(argv[optind++]);
+			ret = epyc_set_power_efficiency_mode(sock_id, mode);
+			break;
+		case 'X' :
+			/* Set df pstate range */
+			sock_id = atoi(optarg);
+			max = atoi(argv[optind++]);
+			min = atoi(argv[optind++]);
+			ret = epyc_set_df_pstate_range(sock_id, max, min);
 			break;
 		case 'A' :
 			ret = show_smi_all_parameters();
