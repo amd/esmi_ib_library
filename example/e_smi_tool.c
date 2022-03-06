@@ -161,6 +161,37 @@ esmi_status_t epyc_get_sockenergy(void)
 	return ESMI_SUCCESS;
 }
 
+static void ddr_bw_get(uint8_t sockets)
+{
+	struct ddr_bw_metrics ddr;
+	char bw_str[SHOWLINESZ] = {};
+	char pct_str[SHOWLINESZ] = {};
+	uint32_t bw_len;
+	uint32_t pct_len;
+	uint32_t i, ret;
+
+	printf("\n| DDR Max BW (GB/s)\t |");
+	snprintf(bw_str, SHOWLINESZ, "\n| DDR Utilized BW (GB/s) |");
+	snprintf(pct_str, SHOWLINESZ, "\n| DDR Utilized Percent(%%)|");
+	for (i = 0; i < sockets; i++) {
+		ret = esmi_ddr_bw_get(&ddr);
+		bw_len = strlen(bw_str);
+		pct_len = strlen(pct_str);
+		if(!ret) {
+			printf(" %-17d|", ddr.max_bw);
+			snprintf(bw_str + bw_len, SHOWLINESZ - bw_len, " %-17d|", ddr.utilized_bw);
+			snprintf(pct_str + pct_len, SHOWLINESZ - pct_len, " %-17d|", ddr.utilized_pct);
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+			snprintf(bw_str + bw_len, SHOWLINESZ - bw_len, " NA (Err: %-2d)     |", ret);
+			snprintf(pct_str + pct_len, SHOWLINESZ - pct_len, " NA (Err: %-2d)     |", ret);
+		}
+	}
+	printf("%s", bw_str);
+	printf("%s", pct_str);
+}
+
 esmi_status_t epyc_get_ddr_bw(void)
 {
 	esmi_status_t ret;
@@ -177,34 +208,8 @@ esmi_status_t epyc_get_ddr_bw(void)
 			ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	for (i = 0; i < sockets; i++) {
-		ret = esmi_ddr_bw_get(&ddr);
-		if (ret == ESMI_NO_HSMP_SUP) {
-			printf("Get DDR Bandwidth info: Not supported.\n");
-			return ret;
-		}
-		if (i == 0) {
-			err_bits_reset();
-			print_socket_header(sockets);
-			printf("\n| DDR Max BW (GB/s)\t |");
-			snprintf(bw_str, SHOWLINESZ, "\n| DDR Utilized BW (GB/s) |");
-			snprintf(pct_str, SHOWLINESZ, "\n| DDR Utilized Percent(%%)|");
-		}
-		bw_len = strlen(bw_str);
-		pct_len = strlen(pct_str);
-		if(!ret) {
-			printf(" %-17d|", ddr.max_bw);
-			snprintf(bw_str + bw_len, SHOWLINESZ - bw_len, " %-17d|", ddr.utilized_bw);
-			snprintf(pct_str + pct_len, SHOWLINESZ - pct_len, " %-17d|", ddr.utilized_pct);
-		} else {
-			err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
-			snprintf(bw_str + bw_len, SHOWLINESZ - bw_len, " NA (Err: %-2d)     |", ret);
-			snprintf(pct_str + pct_len, SHOWLINESZ - pct_len, " NA (Err: %-2d)     |", ret);
-		}
-	}
-	printf("%s", bw_str);
-	printf("%s", pct_str);
+
+	ddr_bw_get(sockets);
 
 	print_socket_footer(sockets);
 	err_bits_print();
@@ -1148,11 +1153,6 @@ esmi_status_t show_socket_metrics(void)
 	uint32_t i, sockets;
 	uint64_t pkg_input = 0;
 	uint32_t power = 0, powerlimit = 0, powermax = 0;
-	struct ddr_bw_metrics ddr;
-	char bw_str[SHOWLINESZ] = {};
-	char pct_str[SHOWLINESZ] = {};
-	uint32_t bw_len;
-	uint32_t pct_len;
 	uint32_t c0resi;
 	uint32_t tmon = 0;
 
@@ -1218,33 +1218,7 @@ esmi_status_t show_socket_metrics(void)
 			printf(" NA (Err: %-2d)     |", ret);
 		}
 	}
-
-	for (i = 0; i < sockets; i++) {
-		ret = esmi_ddr_bw_get(&ddr);
-		if (ret == ESMI_NO_HSMP_SUP) {
-			break;
-		}
-		if (i == 0) {
-			printf("\n| DDR Max BW (GB/s)\t |");
-			snprintf(bw_str, SHOWLINESZ, "\n| DDR Utilized BW (GB/s) |");
-			snprintf(pct_str, SHOWLINESZ, "\n| DDR Utilized Percent(%%)|");
-		}
-		bw_len = strlen(bw_str);
-		pct_len = strlen(pct_str);
-		if(!ret) {
-			printf(" %-17d|", ddr.max_bw);
-			snprintf(bw_str + bw_len, SHOWLINESZ - bw_len, " %-17d|", ddr.utilized_bw);
-			snprintf(pct_str + pct_len, SHOWLINESZ - pct_len, " %-17d|", ddr.utilized_pct);
-		} else {
-			err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
-			snprintf(bw_str + bw_len, SHOWLINESZ - bw_len, " NA (Err: %-2d)     |", ret);
-			snprintf(pct_str + pct_len, SHOWLINESZ - pct_len, " NA (Err: %-2d)     |", ret);
-		}
-	}
-	printf("%s", bw_str);
-	printf("%s", pct_str);
-
+	ddr_bw_get(sockets);
 	printf("\n| Temperature (°C)\t |");
 	for (i = 0; i < sockets; i++) {
 		ret = esmi_socket_temperature_get(i, &tmon);
