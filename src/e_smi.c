@@ -1290,6 +1290,16 @@ esmi_status_t esmi_dimm_power_consumption_get(uint8_t sock_ind, uint8_t dimm_add
 	return errno_to_esmi_status(ret);
 }
 
+#define SCALING_FACTOR  0.25
+
+static void decode_dimm_temp(uint16_t raw, float *temp)
+{
+	if (raw <= 0x3FF)
+		*temp = raw * SCALING_FACTOR;
+	else
+		*temp = (raw - 0x800) * SCALING_FACTOR;
+}
+
 esmi_status_t esmi_dimm_thermal_sensor_get(uint8_t sock_ind, uint8_t dimm_addr,
 					   struct dimm_thermal *dimm_temp)
 {
@@ -1317,6 +1327,7 @@ esmi_status_t esmi_dimm_thermal_sensor_get(uint8_t sock_ind, uint8_t dimm_addr,
 		dimm_temp->sensor = msg.args[0] >> 21;
 		dimm_temp->update_rate = msg.args[0] >> 8;
 		dimm_temp->dimm_addr = msg.args[0];
+		decode_dimm_temp(dimm_temp->sensor, &dimm_temp->temp);
 	}
 
 	return errno_to_esmi_status(ret);

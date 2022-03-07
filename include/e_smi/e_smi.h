@@ -106,6 +106,7 @@ struct dimm_thermal {
 	uint16_t sensor : 11;           //!< Dimm thermal sensor[31:21](11 bit data)
 	uint16_t update_rate : 9;       //!< Time since last update[16:8](9 bit data)
 	uint8_t dimm_addr;              //!< Dimm address[7:0](8 bit data)
+	float temp;			//!< temperature in degree celcius
 };
 
 /**
@@ -796,7 +797,6 @@ esmi_status_t esmi_dimm_power_consumption_get(uint8_t sock_ind, uint8_t dimm_add
  */
 esmi_status_t esmi_dimm_thermal_sensor_get(uint8_t sock_ind, uint8_t dimm_addr,
 					   struct dimm_thermal *dimm_temp);
-
 /** @} */  // end of DimmStatisticsQuer
 
 /*****************************************************************************/
