@@ -216,6 +216,8 @@ char * esmi_get_err_msg(esmi_status_t esmi_err)
 			return "ESMI not initialized";
 		case ESMI_INVALID_INPUT:
 			return "Input value is invalid";
+		case ESMI_NO_HSMP_SUP:
+			return "HSMP not supported";
 		default:
 			return "Unknown error";
 	}
