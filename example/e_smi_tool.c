@@ -59,8 +59,6 @@
 /* To handle multiple errors while reporting summary */
 #define ESMI_MULTI_ERROR	1234
 
-#define SCALING_FACTOR  0.25
-
 uint32_t err_bits;
 
 esmi_status_t show_smi_parameters(void);
@@ -781,14 +779,6 @@ static esmi_status_t epyc_get_dimm_power(uint8_t sock_id, uint8_t dimm_addr)
 	return ret;
 }
 
-static void decode_dimm_temp(uint16_t raw, float *temp)
-{
-	if (raw <= 0x3FF)
-		*temp = raw * SCALING_FACTOR;
-	else
-		*temp = (raw - 0x800) * SCALING_FACTOR;
-}
-
 static esmi_status_t epyc_get_dimm_thermal(uint8_t sock_id, uint8_t dimm_addr)
 {
 	struct dimm_thermal d_sensor;
@@ -801,7 +791,7 @@ static esmi_status_t epyc_get_dimm_thermal(uint8_t sock_id, uint8_t dimm_addr)
 			" Err[%d]: %s\n", sock_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	decode_dimm_temp(d_sensor.sensor, &temp);
+	esmi_decode_dimm_temp(d_sensor.sensor, &temp);
 	printf("------------------------------------------");
 	printf("\n| Temperature(°C)\t |");
 	printf(" %-10.3f\t |", temp);
