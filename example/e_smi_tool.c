@@ -72,7 +72,7 @@ void print_socket_footer(uint32_t sockets)
 {
 	int i;
 
-	printf("\n------------------------------------------");
+	printf("\n----------------------------------");
 	for (i = 0; i < sockets; i++) {
 		printf("-------------------");
 	}
@@ -121,8 +121,10 @@ esmi_status_t epyc_get_coreenergy(uint32_t core_id)
 			core_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("core[%d] energy\t: %17.3lf Joules\n",
+	printf("-------------------------------------------------");
+	printf("\n| core[%03d] energy  | %17.3lf Joules \t|\n",
 		core_id, (double)core_input/1000000);
+	printf("-------------------------------------------------\n");
 
 	return ESMI_SUCCESS;
 }
@@ -142,7 +144,7 @@ esmi_status_t epyc_get_sockenergy(void)
 
 	err_bits_reset();
 	print_socket_header(sockets);
-	printf("\n| Energy (K Joules)\t |");
+	printf("\n| Energy (K Joules)\t\t |");
 	for (i = 0; i < sockets; i++) {
 		ret = esmi_socket_energy_get(i, &pkg_input);
 		if (!ret) {
@@ -166,28 +168,34 @@ static void ddr_bw_get(uint8_t sockets)
 	struct ddr_bw_metrics ddr;
 	char bw_str[SHOWLINESZ] = {};
 	char pct_str[SHOWLINESZ] = {};
+	char max_str[SHOWLINESZ] = {};
 	uint32_t bw_len;
 	uint32_t pct_len;
 	uint32_t i, ret;
+	uint32_t max_len;
 
-	printf("\n| DDR Max BW (GB/s)\t |");
-	snprintf(bw_str, SHOWLINESZ, "\n| DDR Utilized BW (GB/s) |");
-	snprintf(pct_str, SHOWLINESZ, "\n| DDR Utilized Percent(%%)|");
+	printf("\n| DDR Bandwidth\t\t\t |");
+	snprintf(max_str, SHOWLINESZ, "\n| \tDDR Max BW (GB/s)\t |");
+	snprintf(bw_str, SHOWLINESZ, "\n| \tDDR Utilized BW (GB/s)\t |");
+	snprintf(pct_str, SHOWLINESZ, "\n| \tDDR Utilized Percent(%%)\t |");
 	for (i = 0; i < sockets; i++) {
+		printf("                  |");
 		ret = esmi_ddr_bw_get(&ddr);
 		bw_len = strlen(bw_str);
 		pct_len = strlen(pct_str);
+		max_len = strlen(max_str);
 		if(!ret) {
-			printf(" %-17d|", ddr.max_bw);
+			snprintf(max_str + max_len, SHOWLINESZ - max_len, " %-17d|", ddr.max_bw);
 			snprintf(bw_str + bw_len, SHOWLINESZ - bw_len, " %-17d|", ddr.utilized_bw);
 			snprintf(pct_str + pct_len, SHOWLINESZ - pct_len, " %-17d|", ddr.utilized_pct);
 		} else {
 			err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
+			snprintf(max_str + max_len, SHOWLINESZ - max_len, " NA (Err: %-2d)     |", ret);
 			snprintf(bw_str + bw_len, SHOWLINESZ - bw_len, " NA (Err: %-2d)     |", ret);
 			snprintf(pct_str + pct_len, SHOWLINESZ - pct_len, " NA (Err: %-2d)     |", ret);
 		}
 	}
+	printf("%s", max_str);
 	printf("%s", bw_str);
 	printf("%s", pct_str);
 }
@@ -208,7 +216,9 @@ esmi_status_t epyc_get_ddr_bw(void)
 			ret, esmi_get_err_msg(ret));
 		return ret;
 	}
+	err_bits_reset();
 
+	print_socket_header(sockets);
 	ddr_bw_get(sockets);
 
 	print_socket_footer(sockets);
@@ -234,15 +244,11 @@ esmi_status_t epyc_get_temperature(void)
 
 	err_bits_reset();
 	print_socket_header(sockets);
-	printf("\n| Temperature\t\t |");
+	printf("\n| Temperature\t\t\t |");
 	for (i = 0; i < sockets; i++) {
 		ret = esmi_socket_temperature_get(i, &tmon);
-		if (ret == ESMI_NO_HSMP_SUP) {
-			printf("Temperature Monitor Not supported.\n");
-			return ret;
-		}
 		if (!ret) {
-			printf(" %-15.3f°C|", (double)tmon/1000);
+			printf(" %3.3f°C\t    |", (double)tmon/1000);
 		} else {
 			err_bits |= 1 << ret;
 			printf(" NA (Err: %-2d)     |", ret);
@@ -268,8 +274,10 @@ esmi_status_t epyc_get_smu_fw_version(void)
 			ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("SMU FW Version: %u.%u.%u\n",
+	printf("\n------------------------------------------");
+	printf("\n| SMU FW Version   |  %u.%u.%u \t\t |\n",
 		smu_fw.major, smu_fw.minor, smu_fw.debug);
+	printf("------------------------------------------\n");
 
 	return ESMI_SUCCESS;
 }
@@ -285,7 +293,9 @@ esmi_status_t epyc_get_hsmp_proto_version(void)
 			ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("HSMP Protocol Version: %u\n", hsmp_proto_ver);
+	printf("\n---------------------------------");
+	printf("\n| HSMP Protocol Version  | %u\t|\n", hsmp_proto_ver);
+	printf("---------------------------------\n");
 
 	return ESMI_SUCCESS;
 }
@@ -305,7 +315,7 @@ esmi_status_t epyc_get_prochot_status(void)
 	err_bits_reset();
 	print_socket_header(sockets);
 
-	printf("\n| ProchotStatus:\t |");
+	printf("\n| ProchotStatus:\t\t |");
 	for (i = 0; i < sockets; i++) {
 		ret = esmi_prochot_status_get(i, &prochot);
 		if (!ret) {
@@ -360,7 +370,7 @@ static void get_sock_freq_limit(int sockets)
 	for (i = 0; i < sockets; i++) {
 		len1 = strlen(str1);
 		len2 = strlen(str2);
-		printf("\t\t    |");
+		printf("                  |");
 		ret = esmi_socket_current_active_freq_limit_get(i, &limit, src);
 		if (!ret) {
 			snprintf(str1 + len1, SHOWLINESZ - len1, " %-17u|", limit);
@@ -371,7 +381,6 @@ static void get_sock_freq_limit(int sockets)
 			snprintf(str2 + len2, SHOWLINESZ - len2, " NA (Err: %-2d)     |", ret);
 		}
 	}
-
 	printf("%s", str1);
 	printf("%s", str2);
 }
@@ -473,7 +482,7 @@ esmi_status_t epyc_apb_enable(uint32_t sock_id)
 			"socket[%d], Err[%d]: %s\n", sock_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("\nAPB is enabled successfully on socket[%d]\n", sock_id);
+	printf("APB is enabled successfully on socket[%d]\n", sock_id);
 
 	return ESMI_SUCCESS;
 }
@@ -547,7 +556,7 @@ esmi_status_t epyc_get_socketpower(void)
 	}
 	err_bits_reset();
 	print_socket_header(sockets);
-	printf("\n| Power (Watts)\t\t |");
+	printf("\n| Power (Watts)\t\t\t |");
 	for (i = 0; i < sockets; i++) {
 		ret = esmi_socket_power_get(i, &power);
 		if (!ret) {
@@ -558,7 +567,7 @@ esmi_status_t epyc_get_socketpower(void)
 		}
 	}
 
-	printf("\n| PowerLimit (Watts)\t |");
+	printf("\n| PowerLimit (Watts)\t\t |");
 	for (i = 0; i < sockets; i++) {
 		ret = esmi_socket_power_cap_get(i, &powerlimit);
 		if (!ret) {
@@ -569,7 +578,7 @@ esmi_status_t epyc_get_socketpower(void)
 		}
 	}
 
-	printf("\n| PowerLimitMax (Watts)\t |");
+	printf("\n| PowerLimitMax (Watts)\t\t |");
 	for (i = 0; i < sockets; i++) {
 		ret = esmi_socket_power_cap_max_get(i, &powermax);
 		if (!ret) {
@@ -599,7 +608,9 @@ esmi_status_t epyc_get_coreperf(uint32_t core_id)
 			core_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("core[%d] boostlimit\t: %u MHz\n", core_id, boostlimit);
+	printf("--------------------------------------------------\n");
+	printf("| core[%03d] boostlimit (MHz)\t | %-10u \t |\n", core_id, boostlimit);
+	printf("--------------------------------------------------\n");
 
 	return ESMI_SUCCESS;
 }
@@ -622,7 +633,7 @@ esmi_status_t epyc_setpowerlimit(uint32_t sock_id, uint32_t power)
 		printf(RED "Err[%d]: %s\n" RESET, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("Socket[%d] power_limit set to %15.03f Watts successfully\n",
+	printf("Socket[%d] power_limit set to %6.03f Watts successfully\n",
 		sock_id, (double)power/1000);
 
 	return ESMI_SUCCESS;
@@ -717,7 +728,9 @@ esmi_status_t epyc_get_sockc0_residency(uint32_t sock_id)
 			sock_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("socket[%d] c0_residency	: %u %%\n", sock_id, residency);
+	printf("--------------------------------------\n");
+	printf("| socket[%02d] c0_residency   | %2u %%   |\n", sock_id, residency);
+	printf("--------------------------------------\n");
 
 	return ESMI_SUCCESS;
 }
@@ -832,6 +845,7 @@ static esmi_status_t epyc_get_power_telemetry()
 			ret, esmi_get_err_msg(ret));
 		return ret;
 	}
+	err_bits_reset();
 	print_socket_header(sockets);
 	printf("\n| SVI Power Telemetry (mWatts) \t |");
 	for (i = 0; i < sockets; i++) {
@@ -846,8 +860,10 @@ static esmi_status_t epyc_get_power_telemetry()
 
 	print_socket_footer(sockets);
 	err_bits_print();
+	if (err_bits > 1)
+		return ESMI_MULTI_ERROR;
 
-	return ret;
+	return ESMI_SUCCESS;
 }
 
 static char *links[] = {"P0", "P1", "P2", "P3", "G0", "G1", "G2", "G3"};
@@ -1088,12 +1104,12 @@ static void show_usage(char *exe_name)
 
 void show_smi_message(void)
 {
-	printf("\n=============== EPYC System Management Interface ===============\n\n");
+	printf("\n====================== EPYC System Management Interface ======================\n\n");
 }
 
 void show_smi_end_message(void)
 {
-	printf("\n====================== End of EPYC SMI Log =====================\n");
+	printf("\n============================= End of EPYC SMI Log ============================\n");
 }
 
 esmi_status_t show_cpu_metrics(void)
@@ -1109,7 +1125,7 @@ esmi_status_t show_cpu_metrics(void)
 			ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("\n| Core[0] Energy (Joules)|");
+	printf("\n| Core[0] Energy (Joules)\t |");
 	for (i = 0; i < sockets; i++) {
 		ret = esmi_first_online_core_on_socket(i, &core_id);
 		if (ret) {
@@ -1125,7 +1141,7 @@ esmi_status_t show_cpu_metrics(void)
 		}
 	}
 
-	printf("\n| Core[0] boostlimit(MHz)|");
+	printf("\n| Core[0] boostlimit(MHz)\t |");
 	for (i = 0; i < sockets; i++) {
 		ret = esmi_first_online_core_on_socket(i, &core_id);
 		if (ret) {
@@ -1164,7 +1180,7 @@ esmi_status_t show_socket_metrics(void)
 	}
 
 	print_socket_header(sockets);
-	printf("\n| Energy (K Joules)\t |");
+	printf("\n| Energy (K Joules)\t\t |");
 	for (i = 0; i < sockets; i++) {
 		ret = esmi_socket_energy_get(i, &pkg_input);
 		if (!ret) {
@@ -1175,7 +1191,7 @@ esmi_status_t show_socket_metrics(void)
 		}
 	}
 
-	printf("\n| Power (Watts)\t\t |");
+	printf("\n| Power (Watts)\t\t\t |");
 	for (i = 0; i < sockets; i++) {
 		ret = esmi_socket_power_get(i, &power);
 		if (!ret) {
@@ -1186,7 +1202,7 @@ esmi_status_t show_socket_metrics(void)
 		}
 	}
 
-	printf("\n| PowerLimit (Watts)\t |");
+	printf("\n| PowerLimit (Watts)\t\t |");
 	for (i = 0; i < sockets; i++) {
 		ret = esmi_socket_power_cap_get(i, &powerlimit);
 		if (!ret) {
@@ -1197,7 +1213,7 @@ esmi_status_t show_socket_metrics(void)
 		}
 	}
 
-	printf("\n| PowerLimitMax (Watts)\t |");
+	printf("\n| PowerLimitMax (Watts)\t\t |");
 	for (i = 0; i < sockets; i++) {
 		ret = esmi_socket_power_cap_max_get(i, &powermax);
 		if(!ret) {
@@ -1208,7 +1224,7 @@ esmi_status_t show_socket_metrics(void)
 		}
 	}
 
-	printf("\n| C0 Residency (%%)\t |");
+	printf("\n| C0 Residency (%%)\t\t |");
 	for (i = 0; i < sockets; i++) {
 		ret = esmi_socket_c0_residency_get(i, &c0resi);
 		if(!ret) {
@@ -1219,7 +1235,7 @@ esmi_status_t show_socket_metrics(void)
 		}
 	}
 	ddr_bw_get(sockets);
-	printf("\n| Temperature (°C)\t |");
+	printf("\n| Temperature (°C)\t\t |");
 	for (i = 0; i < sockets; i++) {
 		ret = esmi_socket_temperature_get(i, &tmon);
 		if (ret == ESMI_NO_HSMP_SUP) {
