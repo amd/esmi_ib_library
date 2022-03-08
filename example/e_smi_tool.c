@@ -1069,7 +1069,7 @@ static void show_usage(char *exe_name)
 	"  --showdimmthermal [SOCKET] [DIMM_ADDR]\t\tShow dimm thermal values\n"
 	"  --showdimmpower [SOCKET] [DIMM_ADDR]\t\t\tShow dimm power consumption\n"
 	"  --showcoreclock [CORE]\t\t\t\tShow core clock frequency (MHz) for a given core\n"
-	"  --showpowertelemetry \t\t\t\t\tShow svi based power telemetry of all rails\n"
+	"  --showsvipower \t\t\t\t\tShow svi based power telemetry of all rails\n"
 	"  --showxgmibandwidth [LINKNAME] [BWTYPE]\t\tShow xGMI bandwidth for LINKNAME = P0-P3/G0-G3"
 	" and BWTYPE = AGG_BW/RD_BW/WR_BW\n"
 	"  --showiobandwidth [SOCKET] [LINKNAME]\t\t\tShow IO bandwidth for LINKNAME = P0-P3/G0-G3\n"
@@ -1507,7 +1507,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 		{"showdimmpower",		required_argument,	0,	'g'},
 		{"showdimmtemprange",		required_argument,	0,	'T'},
 		{"showcoreclock",		required_argument,	0,	'q'},
-		{"showpowertelemetry",		no_argument,		0,	'm'},
+		{"showsvipower",		no_argument,		0,	'm'},
 		{"showiobandwidth",		required_argument,	0,	'B'},
 		{"showxgmibandwidth",		required_argument,	0,	'i'},
 		{"setpcielinkratecontrol",	required_argument,	0,	'j'},
