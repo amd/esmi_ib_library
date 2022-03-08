@@ -200,6 +200,16 @@ typedef enum {
 	ESMI_INVALID_INPUT	//!< Input value is invalid
 } esmi_status_t;
 
+/**
+ * @brief HSMP protocol version names
+ */
+enum hsmp_proto_versions {
+	HSMP_PROTO_VER2 = 2,
+	HSMP_PROTO_VER3,
+	HSMP_PROTO_VER4,
+	HSMP_PROTO_VER5
+};
+
 /****************************************************************************/
 /** @defgroup InitShut Initialization and Shutdown
  *  This function validates the dependencies exists and initializes the library.

@@ -1167,7 +1167,7 @@ esmi_status_t esmi_ddr_bw_get(struct ddr_bw_metrics *ddr_bw)
 
 	CHECK_HSMP_GET_INPUT(ddr_bw);
 
-	if (psm->hsmp_proto_ver < 3) {
+	if (psm->hsmp_proto_ver < HSMP_PROTO_VER3) {
 		return ESMI_NO_HSMP_SUP;
 	}
 
@@ -1197,7 +1197,7 @@ esmi_status_t esmi_socket_temperature_get(uint32_t sock_ind, uint32_t *ptmon)
 {
 	esmi_status_t ret;
 
-	if (psm->hsmp_proto_ver != 4)
+	if (psm->hsmp_proto_ver != HSMP_PROTO_VER4)
 		return ESMI_NO_HSMP_SUP;
 
 	if (sock_ind >= psm->total_sockets) {
@@ -1233,7 +1233,7 @@ esmi_status_t esmi_dimm_temp_range_and_refresh_rate_get(uint8_t sock_ind, uint8_
 	struct hsmp_message msg = { 0 };
 	esmi_status_t ret;
 
-	if (psm->hsmp_proto_ver != 5)
+	if (psm->hsmp_proto_ver != HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_SUP;
 
 	if (!psm->is_char_dev)
@@ -1264,7 +1264,7 @@ esmi_status_t esmi_dimm_power_consumption_get(uint8_t sock_ind, uint8_t dimm_add
 	struct hsmp_message msg = { 0 };
 	esmi_status_t ret;
 
-	if (psm->hsmp_proto_ver != 5)
+	if (psm->hsmp_proto_ver != HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_SUP;
 
 	if (!psm->is_char_dev)
@@ -1296,7 +1296,7 @@ esmi_status_t esmi_dimm_thermal_sensor_get(uint8_t sock_ind, uint8_t dimm_addr,
 	struct hsmp_message msg = { 0 };
 	esmi_status_t ret;
 
-	if (psm->hsmp_proto_ver != 5)
+	if (psm->hsmp_proto_ver != HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_SUP;
 
 	if (!psm->is_char_dev)
@@ -1332,7 +1332,7 @@ esmi_status_t esmi_socket_current_active_freq_limit_get(uint32_t sock_ind, uint1
 	uint8_t ind;
 	int ret;
 
-	if (psm->hsmp_proto_ver != 5)
+	if (psm->hsmp_proto_ver != HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_SUP;
 
 	CHECK_HSMP_INPUT();
@@ -1376,7 +1376,7 @@ esmi_status_t esmi_current_freq_limit_core_get(uint32_t core_id, uint32_t *freq)
 	struct hsmp_message msg = { 0 };
 	int ret;
 
-	if (psm->hsmp_proto_ver != 5)
+	if (psm->hsmp_proto_ver != HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_SUP;
 
 	CHECK_HSMP_GET_INPUT(freq);
@@ -1407,7 +1407,7 @@ esmi_status_t esmi_pwr_svi_telemetry_all_rails_get(uint32_t sock_ind, uint32_t *
 	struct hsmp_message msg = { 0 };
 	int ret;
 
-	if (psm->hsmp_proto_ver != 5)
+	if (psm->hsmp_proto_ver != HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_SUP;
 
 	if (!psm->is_char_dev)
@@ -1433,7 +1433,7 @@ esmi_status_t esmi_socket_freq_range_get(uint8_t sock_ind, uint16_t *fmax, uint1
 	struct hsmp_message msg = { 0 };
 	int ret;
 
-	if (psm->hsmp_proto_ver != 5)
+	if (psm->hsmp_proto_ver != HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_SUP;
 
 	if (!psm->is_char_dev)
@@ -1505,7 +1505,7 @@ esmi_status_t esmi_current_io_bandwidth_get(uint8_t sock_ind, struct link_id_bw_
 	struct hsmp_message msg = { 0 };
 	int ret;
 
-	if (psm->hsmp_proto_ver != 5)
+	if (psm->hsmp_proto_ver != HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_SUP;
 
 	if (!psm->is_char_dev)
@@ -1541,7 +1541,7 @@ esmi_status_t esmi_current_xgmi_bw_get(struct link_id_bw_type link,
 	struct hsmp_message msg = { 0 };
 	int ret;
 
-	if (psm->hsmp_proto_ver != 5)
+	if (psm->hsmp_proto_ver != HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_SUP;
 
 	if (!psm->is_char_dev)
@@ -1581,7 +1581,7 @@ esmi_status_t esmi_gmi3_link_width_range_set(uint8_t sock_ind, uint8_t min_link_
 	struct hsmp_message msg = { 0 };
 	int ret;
 
-	if (psm->hsmp_proto_ver != 5)
+	if (psm->hsmp_proto_ver != HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_SUP;
 
 	if (!psm->is_char_dev)
@@ -1609,7 +1609,7 @@ esmi_status_t esmi_pcie_link_rate_set(uint8_t sock_ind, uint8_t rate_ctrl, uint8
 	struct hsmp_message msg = { 0 };
 	int ret;
 
-	if (psm->hsmp_proto_ver != 5)
+	if (psm->hsmp_proto_ver != HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_SUP;
 
 	if (!psm->is_char_dev)
@@ -1652,7 +1652,7 @@ esmi_status_t esmi_pwr_efficiency_mode_set(uint8_t sock_ind, uint8_t mode)
 	struct hsmp_message msg = { 0 };
 	int ret;
 
-	if (psm->hsmp_proto_ver != 5)
+	if (psm->hsmp_proto_ver != HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_SUP;
 
 	if (!psm->is_char_dev)
@@ -1681,7 +1681,7 @@ esmi_status_t esmi_df_pstate_range_set(uint8_t sock_ind, uint8_t max_pstate,
 	struct hsmp_message msg = { 0 };
 	int ret;
 
-	if (psm->hsmp_proto_ver != 5)
+	if (psm->hsmp_proto_ver != HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_SUP;
 
 	if (!psm->is_char_dev)
