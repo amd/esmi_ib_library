@@ -1708,6 +1708,10 @@ esmi_status_t esmi_hsmp_proto_ver_get(uint32_t *proto_ver)
 
 	CHECK_HSMP_GET_INPUT(proto_ver);
 
+	if (psm->hsmp_proto_ver) {
+		*proto_ver = psm->hsmp_proto_ver;
+		return errno_to_esmi_status(0);
+	}
 	if (psm->is_char_dev) {
 		struct hsmp_message msg = { 0 };
 		msg.msg_id = HSMP_PROTO_VER_TYPE;
