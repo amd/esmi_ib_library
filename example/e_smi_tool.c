@@ -1303,11 +1303,9 @@ esmi_status_t show_smi_parameters(void)
 	ret = show_cpu_details();
 	err_bits |= 1 << ret;
 
-	ret = show_socket_metrics();
-	err_bits |= 1 << ret;
+	show_socket_metrics();
 
 	ret = show_cpu_metrics();
-	err_bits |= 1 << ret;
 
 	printf("\n");
 	err_bits_print();
@@ -1408,8 +1406,7 @@ esmi_status_t show_smi_all_parameters(void)
 
 	err_bits_reset();
 
-	ret = show_socket_metrics();
-	err_bits |= 1 << ret;
+	show_socket_metrics();
 
 	ret = show_cpu_energy_all();
 	err_bits |= 1 << ret;
