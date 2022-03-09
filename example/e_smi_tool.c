@@ -1228,9 +1228,6 @@ esmi_status_t show_socket_metrics(void)
 	printf("\n| Temperature (°C)\t\t |");
 	for (i = 0; i < sockets; i++) {
 		ret = esmi_socket_temperature_get(i, &tmon);
-		if (ret == ESMI_NO_HSMP_SUP) {
-			break;
-		}
 		if (!ret) {
 			printf(" %-17.3f|", (double)tmon/1000);
 		} else {
