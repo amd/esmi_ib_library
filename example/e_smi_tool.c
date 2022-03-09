@@ -65,6 +65,9 @@ esmi_status_t show_smi_all_parameters(void);
 void show_smi_message(void);
 void show_smi_end_message(void);
 
+static void (*show_addon_cpu_metrics)(void);
+static void (*show_addon_socket_metrics)(int);
+
 void print_socket_footer(uint32_t sockets)
 {
 	int i;
@@ -1101,6 +1104,42 @@ void show_smi_end_message(void)
 	printf("\n============================= End of EPYC SMI Log ============================\n");
 }
 
+static void no_addon_socket_metrics(int sockets)
+{
+	return;
+}
+
+static void no_addon_cpu_metrics(void)
+{
+	return;
+}
+
+static void socket_ver4_metrics(int sockets)
+{
+	esmi_status_t ret;
+	uint32_t tmon;
+	int i;
+
+	ddr_bw_get(sockets);
+	printf("\n| Temperature (°C)\t\t |");
+	for (i = 0; i < sockets; i++) {
+		ret = esmi_socket_temperature_get(i, &tmon);
+		if (!ret) {
+			printf(" %-17.3f|", (double)tmon/1000);
+		} else {
+			err_bits |= 1 << ret;
+			printf(" NA (Err: %-2d)     |", ret);
+		}
+	}
+}
+
+static void socket_ver5_metrics(int sockets)
+{
+	ddr_bw_get(sockets);
+	get_sock_freq_limit(sockets);
+	get_sock_freq_range(sockets);
+}
+
 esmi_status_t show_socket_metrics(void)
 {
 	esmi_status_t ret;
@@ -1108,7 +1147,6 @@ esmi_status_t show_socket_metrics(void)
 	uint64_t pkg_input = 0;
 	uint32_t power = 0, powerlimit = 0, powermax = 0;
 	uint32_t c0resi;
-	uint32_t tmon = 0;
 
 	ret = esmi_number_of_sockets_get(&sockets);
 	if (ret != ESMI_SUCCESS) {
@@ -1172,18 +1210,8 @@ esmi_status_t show_socket_metrics(void)
 			printf(" NA (Err: %-2d)     |", ret);
 		}
 	}
-	ddr_bw_get(sockets);
-	printf("\n| Temperature (°C)\t\t |");
-	for (i = 0; i < sockets; i++) {
-		ret = esmi_socket_temperature_get(i, &tmon);
-		if (!ret) {
-			printf(" %-17.3f|", (double)tmon/1000);
-		} else {
-			err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
-		}
-	}
-
+	/* proto version specific socket metrics are printed here */
+	show_addon_socket_metrics(sockets);
 
 	print_socket_footer(sockets);
 	if (err_bits > 1) {
@@ -1327,6 +1355,51 @@ esmi_status_t show_cpu_boostlimit_all(void)
 	return ESMI_SUCCESS;
 }
 
+static esmi_status_t show_core_clocks_all()
+{
+	esmi_status_t ret;
+	uint32_t cpus, threads;
+	uint32_t cclk;
+	int i;
+
+	ret = esmi_threads_per_core_get(&threads);
+	if (ret != ESMI_SUCCESS) {
+		printf("\nFailed to get threads per core, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	ret = esmi_number_of_cpus_get(&cpus);
+	if (ret != ESMI_SUCCESS) {
+		printf("\nFailed to get number of cpus, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	cpus = cpus/threads;
+
+	printf("\n\nCPU core clock in MHz:");
+	for (i = 0; i < cpus; i++) {
+		cclk = 0;
+		ret = esmi_current_freq_limit_core_get(cpus, &cclk);
+		if(!(i % 16)) {
+			printf("\ncpu [%3d] :", i);
+		}
+		if (!ret) {
+			printf(" %5u", cclk);
+		} else {
+			printf(" NA   ");
+		}
+	}
+	return ESMI_SUCCESS;
+}
+
+static void cpu_ver5_metrics()
+{
+	esmi_status_t ret;
+
+	ret = show_core_clocks_all();
+	err_bits |= 1 << ret;
+}
+
 esmi_status_t show_cpu_metrics(void)
 {
 	esmi_status_t ret;
@@ -1346,6 +1419,8 @@ esmi_status_t show_cpu_metrics(void)
 
 	ret = show_cpu_boostlimit_all();
 	err_bits |= 1 << ret;
+	/* proto version specific cpu metrics are printed here */
+	show_addon_cpu_metrics();
 
 	print_socket_footer(sockets);
 	if (err_bits > 1) {
@@ -1389,6 +1464,38 @@ static int is_string_number(char *str)
 		}
 	}
 	return 0;
+}
+
+static esmi_status_t init_proto_version_func_pointers()
+{
+	uint32_t proto_ver;
+	esmi_status_t ret;
+
+	ret = esmi_hsmp_proto_ver_get(&proto_ver);
+	if (ret)
+		return ret;
+
+	switch(proto_ver) {
+	case 2:
+		/* proto version 2 is the baseline for HSMP fetaures, so there is no addon */
+		show_addon_cpu_metrics = no_addon_cpu_metrics;
+		show_addon_socket_metrics = no_addon_socket_metrics;
+		break;
+
+	case 4:
+		/* proto version 4 has extra socket metrics, cpu metrics are same as ver2 */
+		show_addon_cpu_metrics = no_addon_cpu_metrics;
+		show_addon_socket_metrics = socket_ver4_metrics;
+		break;
+	case 5:
+	default:
+		/* proto version 5 has extra socket metrics as well as extra cpu metrics */
+		show_addon_cpu_metrics = cpu_ver5_metrics;
+		show_addon_socket_metrics = socket_ver5_metrics;
+		break;
+	}
+
+	return ESMI_SUCCESS;
 }
 
 /**
@@ -1493,6 +1600,13 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 		       "\tErr[%d]: %s\n" RESET, ret, esmi_get_err_msg(ret));
 		return ESMI_MULTI_ERROR;
 	}
+	ret = init_proto_version_func_pointers();
+	if(ret != ESMI_SUCCESS) {
+		printf(RED "\tError in initialising version sepcific info\n"
+		       "\tErr[%d]: %s\n" RESET, ret, esmi_get_err_msg(ret));
+		return ESMI_MULTI_ERROR;
+	}
+
 	if (argc <= 1) {
 		ret = show_smi_all_parameters();
 		printf(MAG"\nTry `%s --help' for more information." RESET
