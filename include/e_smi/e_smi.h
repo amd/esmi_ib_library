@@ -551,9 +551,20 @@ esmi_status_t esmi_socket_power_cap_set(uint32_t socket_idx, uint32_t pcap);
 /**
  *  @brief Set the power efficiency profile policy
  *
- *  @details This function will set the power efficiency mode
- *  Power efficiency modes are high performance mode(0)
- *  power efficient mode(1), IO performance mode(2).
+ *  @details This function will set the power efficiency mode.
+ *
+ *  Power efficiency modes are:
+ *
+ *  0 = High performance mode: This mode favours core performance.
+ *  In this mode all df pstates are available and
+ *  default df pstate and DLWM algorithms are active.
+ *
+ *  1 = Power efficient mode: This mode limits the boost frequency available to
+ *  the cores and restricts the DF P-States. This mode also monitors the system load to 
+ *  dynamically adjust performance for maximum power efficiency.
+ *
+ *  2 = IO performance mode: This mode sets up data fabric to maximize IO performance.
+ *  This can result in lower core performance to increase the IO throughput.
  *
  *  @param[in] sock_ind A socket index.
  *
@@ -776,6 +787,8 @@ esmi_status_t esmi_dimm_power_consumption_get(uint8_t sock_ind, uint8_t dimm_add
  *
  *  @param[inout] dimm_temp Input buffer of type struct dimm_thermal which contains
  *  temperature(°C), update rate(ms) and dimm address
+ *  Update rate value can vary from 0 to 511ms.
+ *  Update rate of "0" means last update was < 1ms and 511ms means update was >= 511ms.
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
@@ -820,6 +833,10 @@ esmi_status_t esmi_xgmi_width_set(uint8_t min, uint8_t max);
  *  @brief Set gmi3 width
  *
  *  @details This function will set the global memory interconnect width.
+ *  Values can be 0, 1 or 2.
+ *  0 = Quarter width
+ *  1 = Half width
+ *  2 = Full width
  *
  *  @param[in] sock_ind Socket index.
  *
@@ -927,6 +944,10 @@ esmi_status_t esmi_socket_lclk_dpm_level_get(uint8_t sock_ind, uint8_t nbio_id,
  *
  *  @details This function will set the pcie link rate to gen4/5 or
  *  auto detection based on bandwidth utilisation.
+ *  Value are:
+ *  0 = auto detect bandwidth utilisation and set link rate
+ *  1 = Limit at gen4 rate
+ *  2 = Limit at gen5 rate
  *
  *  @param[in] sock_ind Socket index.
  *
