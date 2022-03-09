@@ -61,7 +61,6 @@
 
 uint32_t err_bits;
 
-esmi_status_t show_smi_parameters(void);
 esmi_status_t show_smi_all_parameters(void);
 void show_smi_message(void);
 void show_smi_end_message(void);
@@ -1102,57 +1101,6 @@ void show_smi_end_message(void)
 	printf("\n============================= End of EPYC SMI Log ============================\n");
 }
 
-esmi_status_t show_cpu_metrics(void)
-{
-	esmi_status_t ret;
-	uint32_t i, core_id, sockets;
-	uint64_t core_input = 0;
-	uint32_t boostlimit = 0;
-
-	ret = esmi_number_of_sockets_get(&sockets);
-	if (ret != ESMI_SUCCESS) {
-		printf("Failed to get number of sockets, Err[%d]: %s\n",
-			ret, esmi_get_err_msg(ret));
-		return ret;
-	}
-	printf("\n| Core[0] Energy (Joules)\t |");
-	for (i = 0; i < sockets; i++) {
-		ret = esmi_first_online_core_on_socket(i, &core_id);
-		if (ret) {
-			err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
-		}
-		ret = esmi_core_energy_get(core_id, &core_input);
-		if (!ret) {
-			printf(" %-17.3lf|", (double)core_input/1000000);
-		} else {
-			err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
-		}
-	}
-
-	printf("\n| Core[0] boostlimit(MHz)\t |");
-	for (i = 0; i < sockets; i++) {
-		ret = esmi_first_online_core_on_socket(i, &core_id);
-		if (ret) {
-			err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
-		}
-		ret = esmi_core_boostlimit_get(core_id, &boostlimit);
-		if (!ret) {
-			printf(" %-17u|", boostlimit);
-		} else {
-			err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
-		}
-	}
-	print_socket_footer(sockets);
-	if (err_bits > 1) {
-		return ESMI_MULTI_ERROR;
-	}
-	return ESMI_SUCCESS;
-}
-
 esmi_status_t show_socket_metrics(void)
 {
 	esmi_status_t ret;
@@ -1244,7 +1192,7 @@ esmi_status_t show_socket_metrics(void)
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t show_cpu_details(void)
+esmi_status_t show_system_info(void)
 {
 	esmi_status_t ret;
 	uint32_t cpus, sockets, threads, family, model;
@@ -1291,27 +1239,6 @@ esmi_status_t show_cpu_details(void)
 		printf("| THREADS PER CORE	| %d (SMT OFF)|\n", threads);
 	}
 	printf("--------------------------------------\n");
-
-	return ESMI_SUCCESS;
-}
-
-esmi_status_t show_smi_parameters(void)
-{
-	esmi_status_t ret;
-
-	err_bits_reset();
-	ret = show_cpu_details();
-	err_bits |= 1 << ret;
-
-	show_socket_metrics();
-
-	ret = show_cpu_metrics();
-
-	printf("\n");
-	err_bits_print();
-	if (err_bits > 1) {
-		return ESMI_MULTI_ERROR;
-	}
 
 	return ESMI_SUCCESS;
 }
@@ -1400,13 +1327,19 @@ esmi_status_t show_cpu_boostlimit_all(void)
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t show_smi_all_parameters(void)
+esmi_status_t show_cpu_metrics(void)
 {
 	esmi_status_t ret;
+	uint32_t i, core_id, sockets;
+	uint64_t core_input = 0;
+	uint32_t boostlimit = 0;
 
-	err_bits_reset();
-
-	show_socket_metrics();
+	ret = esmi_number_of_sockets_get(&sockets);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get number of sockets, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
 
 	ret = show_cpu_energy_all();
 	err_bits |= 1 << ret;
@@ -1414,11 +1347,29 @@ esmi_status_t show_smi_all_parameters(void)
 	ret = show_cpu_boostlimit_all();
 	err_bits |= 1 << ret;
 
-	printf("\n");
-	err_bits_print();
+	print_socket_footer(sockets);
 	if (err_bits > 1) {
 		return ESMI_MULTI_ERROR;
 	}
+	return ESMI_SUCCESS;
+}
+
+esmi_status_t show_smi_all_parameters(void)
+{
+	esmi_status_t ret;
+
+	err_bits_reset();
+
+	show_system_info();
+
+	show_socket_metrics();
+
+	show_cpu_metrics();
+
+	printf("\n");
+	err_bits_print();
+	if (err_bits > 1)
+		return ESMI_MULTI_ERROR;
 
 	return ESMI_SUCCESS;
 }
@@ -1543,7 +1494,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 		return ESMI_MULTI_ERROR;
 	}
 	if (argc <= 1) {
-		ret = show_smi_parameters();
+		ret = show_smi_all_parameters();
 		printf(MAG"\nTry `%s --help' for more information." RESET
 			"\n\n", argv[0]);
 	}
