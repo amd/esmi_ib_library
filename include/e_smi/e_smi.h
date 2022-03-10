@@ -48,9 +48,9 @@
 
 #define HSMP_CHAR_DEVFILE_NAME	"/dev/hsmp" //!< HSMP device path
 
-#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0])) //!< macro to calculate size
 
-#define BIT(N) (1 << N)
+#define BIT(N)	(1 << N)		//!< macro for mask
 
 /** \file e_smi.h
  *  Main header file for the E-SMI library.
@@ -393,11 +393,11 @@ esmi_status_t esmi_hsmp_proto_ver_get(uint32_t *proto_ver);
  *
  *  @details This function will get the socket frequency and source of this limit
  *
- *  @param[in] socket_ind A socket index.
+ *  @param[in] sock_ind A socket index.
  *
  *  @param[inout] freq Input buffer to return the frequency(MHz).
  *
- *  @param[inout] src Input buffer to return the source of this limit
+ *  @param[inout] src_type Input buffer to return the source of this limit
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
@@ -412,7 +412,7 @@ esmi_status_t esmi_socket_current_active_freq_limit_get(uint32_t sock_ind,
  *  @details This function returns the socket frequency range, fmax
  *  and fmin.
  *
- *  @param[in] socket_ind Socket index.
+ *  @param[in] sock_ind Socket index.
  *
  *  @param[inout] fmax Input buffer to return the maximum frequency(MHz).
  *
@@ -507,7 +507,7 @@ esmi_status_t esmi_socket_power_cap_max_get(uint32_t socket_idx,
  *
  *  @details This function returns the SVI based power telemetry for all rails.
  *
- *  @param[in] socket_ind Socket index.
+ *  @param[in] sock_ind Socket index.
  *
  *  @param[inout] power Input buffer to return the power(mW).
  *
