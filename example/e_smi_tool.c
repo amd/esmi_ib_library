@@ -1035,65 +1035,6 @@ static esmi_status_t epyc_set_gmi3_link_width(uint8_t sock_id, uint8_t min, uint
 	return ret;
 }
 
-static void show_usage(char *exe_name)
-{
-	printf("Usage: %s [Option]... <INPUT>...\n\n"
-	"Output Option<s>:\n"
-	"  -h, --help\t\t\t\t\t\tShow this help message\n"
-	"  -A, --showall\t\t\t\t\t\tGet all esmi parameter Values\n"
-	"\n"
-	"Get Option<s>:\n"
-	"  -e, --showcoreenergy [CORE]\t\t\t\tGet energy for a given"
-	" CPU (Joules)\n"
-	"  -s, --showsockenergy\t\t\t\t\tGet energy for all sockets (KJoules)\n"
-	"  -p, --showsockpower\t\t\t\t\tGet power metrics for all sockets (mWatts)\n"
-	"  -L, --showcorebl [CORE]\t\t\t\tGet Boostlimit for a"
-	" given CPU (MHz)\n"
-	"  -r, --showsockc0res [SOCKET]\t\t\t\tGet c0_residency for a"
-	" given socket (%%)\n"
-	"  -d, --showddrbw\t\t\t\t\tShow DDR bandwidth details (Gbps)\n"
-	"  -t, --showsockettemp\t\t\t\t\tShow Temperature monitor of socket (°C)\n"
-	"  --showsmufwver\t\t\t\t\tShow SMU FW Version\n"
-	"  --showhsmpprotover\t\t\t\t\tShow HSMP Protocol Version\n"
-	"  --showprochotstatus\t\t\t\t\tShow HSMP PROCHOT status (in/active)\n"
-	"  --showclocks\t\t\t\t\t\tShow (CPU, Mem & Fabric) clock frequencies (MHz)\n"
-	"  --showdimmtemprange [SOCKET] [DIMM_ADDR]\t\tShow dimm temperature range and refresh rate\n"
-	"  --showdimmthermal [SOCKET] [DIMM_ADDR]\t\tShow dimm thermal values\n"
-	"  --showdimmpower [SOCKET] [DIMM_ADDR]\t\t\tShow dimm power consumption\n"
-	"  --showcoreclock [CORE]\t\t\t\tShow core clock frequency (MHz) for a given core\n"
-	"  --showsvipower \t\t\t\t\tShow svi based power telemetry of all rails\n"
-	"  --showxgmibandwidth [LINKNAME] [BWTYPE]\t\tShow xGMI bandwidth for LINKNAME = P0-P3/G0-G3"
-	" and BWTYPE = AGG_BW/RD_BW/WR_BW\n"
-	"  --showiobandwidth [SOCKET] [LINKNAME]\t\t\tShow IO bandwidth for LINKNAME = P0-P3/G0-G3\n"
-	"\n"
-	"Set Option<s>:\n"
-	"  -C, --setpowerlimit [SOCKET] [POWER]\t\t\tSet power limit"
-	" for a given socket (mWatts)\n"
-	"  -a, --setcorebl [CORE] [BOOSTLIMIT]\t\t\tSet boost limit"
-	" for a given core (MHz)\n"
-	"  --setsockbl [SOCKET] [BOOSTLIMIT]\t\t\tSet Boost"
-	" limit for a given Socket (MHz)\n"
-	"  --setpkgbl [BOOSTLIMIT]\t\t\t\tSet Boost limit"
-	" for all sockets in a package (MHz)\n"
-	"  --apbdisable [SOCKET] [PSTATE]\t\t\tSet Data Fabric"
-	" Pstate for a given socket, PSTATE = 0 to 3\n"
-	"  --apbenable [SOCKET]\t\t\t\t\tEnable the Data Fabric performance"
-	" boost algorithm for a given socket\n"
-	"  --setxgmiwidth [MIN] [MAX]\t\t\t\tSet xgmi link width"
-	" in a multi socket system, MIN = MAX = 0 to 2\n"
-	"  --setlclkdpmlevel [SOCKET] [NBIOID] [MIN] [MAX]\tSet lclk dpm level"
-	" for a given nbio, given socket, MIN = MAX = NBIOID = 0 to 3\n"
-	"  --setpcielinkratecontrol [SOCKET] [CTL]\t\tSet rate control for pcie link"
-	" for a given socket CTL = 0, 1, 2 \n"
-	"  --setpowerefficiencymode [SOCKET] [MODE]\t\tSet power efficiency mode"
-	" for a given socket MODE = 1, 2, 4 \n"
-	"  --setdfpstaterange [SOCKET] [MAX] [MIN]\t\tSet df pstate range"
-	" for a given socket MIN = MAX = 0 to 4 with MIN > MAX\n"
-	"  --setgmi3linkwidth [SOCKET] [MIN] [MAX]\t\tSet gmi3 link width"
-	" for a given socket MIN = MAX = 0 to 2 with MAX > MIN\n"
-	, exe_name);
-}
-
 void show_smi_message(void)
 {
 	printf("\n====================== EPYC System Management Interface ======================\n\n");
@@ -1211,7 +1152,8 @@ esmi_status_t show_socket_metrics(void)
 		}
 	}
 	/* proto version specific socket metrics are printed here */
-	show_addon_socket_metrics(sockets);
+	if (show_addon_socket_metrics)
+		show_addon_socket_metrics(sockets);
 
 	print_socket_footer(sockets);
 	if (err_bits > 1) {
@@ -1419,8 +1361,10 @@ esmi_status_t show_cpu_metrics(void)
 
 	ret = show_cpu_boostlimit_all();
 	err_bits |= 1 << ret;
+
 	/* proto version specific cpu metrics are printed here */
-	show_addon_cpu_metrics();
+	if (show_addon_cpu_metrics)
+		show_addon_cpu_metrics();
 
 	print_socket_footer(sockets);
 	if (err_bits > 1) {
@@ -1449,6 +1393,106 @@ esmi_status_t show_smi_all_parameters(void)
 	return ESMI_SUCCESS;
 }
 
+static char* const feat_comm[] = {
+	"Output Option<s>:",
+	"  -h, --help\t\t\t\t\t\tShow this help message\n"
+	"  -A, --showall\t\t\t\t\t\tGet all esmi parameter Values\n"
+};
+
+static char* const feat_ver2_get[] = {
+	"Get Option<s>:",
+	"  -e, --showcoreenergy [CORE]\t\t\t\tGet energy for a given CPU (Joules)",
+	"  -s, --showsockenergy\t\t\t\t\tGet energy for all sockets (KJoules)",
+	"  -p, --showsockpower\t\t\t\t\tGet power metrics for all sockets (mWatts)",
+	"  -L, --showcorebl [CORE]\t\t\t\tGet Boostlimit for a given CPU (MHz)",
+	"  -r, --showsockc0res [SOCKET]\t\t\t\tGet c0_residency for a given socket (%%)",
+	"  --showsmufwver\t\t\t\t\tShow SMU FW Version",
+	"  --showhsmpprotover\t\t\t\t\tShow HSMP Protocol Version",
+	"  --showprochotstatus\t\t\t\t\tShow HSMP PROCHOT status (in/active)",
+	"  --showclocks\t\t\t\t\t\tShow (CPU, Mem & Fabric) clock frequencies (MHz)",
+};
+
+static char* const feat_ver2_set[] = {
+	"Set Option<s>:",
+	"  -C, --setpowerlimit [SOCKET] [POWER]\t\t\tSet power limit"
+	" for a given socket (mWatts)",
+	"  -a, --setcorebl [CORE] [BOOSTLIMIT]\t\t\tSet boost limit"
+	" for a given core (MHz)",
+	"  --setsockbl [SOCKET] [BOOSTLIMIT]\t\t\tSet Boost"
+	" limit for a given Socket (MHz)",
+	"  --setpkgbl [BOOSTLIMIT]\t\t\t\tSet Boost limit"
+	" for all sockets in a package (MHz)",
+	"  --apbdisable [SOCKET] [PSTATE]\t\t\tSet Data Fabric"
+	" Pstate for a given socket, PSTATE = 0 to 3",
+	"  --apbenable [SOCKET]\t\t\t\t\tEnable the Data Fabric performance"
+	" boost algorithm for a given socket",
+	"  --setxgmiwidth [MIN] [MAX]\t\t\t\tSet xgmi link width"
+	" in a multi socket system, MIN = MAX = 0 to 2",
+	"  --setlclkdpmlevel [SOCKET] [NBIOID] [MIN] [MAX]\tSet lclk dpm level"
+	" for a given nbio, given socket, MIN = MAX = NBIOID = 0 to 3",
+};
+
+static char* const feat_ver3[] = {
+	"  -d, --showddrbw\t\t\t\t\tShow DDR bandwidth details (Gbps)",
+};
+
+static char* const feat_ver4[] = {
+	"  -t, --showsockettemp\t\t\t\t\tShow Temperature monitor of socket (°C)",
+};
+
+static char* const feat_ver5_get[] = {
+	"  --showdimmtemprange [SOCKET] [DIMM_ADDR]\t\tShow dimm temperature range and"
+	" refresh rate",
+	"  --showdimmthermal [SOCKET] [DIMM_ADDR]\t\tShow dimm thermal values",
+	"  --showdimmpower [SOCKET] [DIMM_ADDR]\t\t\tShow dimm power consumption",
+	"  --showcoreclock [CORE]\t\t\t\tShow core clock frequency (MHz) for a given core",
+	"  --showsvipower \t\t\t\t\tShow svi based power telemetry of all rails",
+	"  --showxgmibandwidth [LINKNAME] [BWTYPE]\t\tShow xGMI bandwidth for LINKNAME = P0-P3/G0-G3"
+	" and BWTYPE = AGG_BW/RD_BW/WR_BW",
+	"  --showiobandwidth [SOCKET] [LINKNAME]\t\t\tShow IO bandwidth for LINKNAME = P0-P3/G0-G3",
+};
+
+static char* const feat_ver5_set[] = {
+	"  --setpcielinkratecontrol [SOCKET] [CTL]\t\tSet rate control for pcie link"
+	" for a given socket CTL = 0, 1, 2 ",
+	"  --setpowerefficiencymode [SOCKET] [MODE]\t\tSet power efficiency mode"
+	" for a given socket MODE = 1, 2, 4 ",
+	"  --setdfpstaterange [SOCKET] [MAX] [MIN]\t\tSet df pstate range"
+	" for a given socket MIN = MAX = 0 to 4 with MIN > MAX",
+	"  --setgmi3linkwidth [SOCKET] [MIN] [MAX]\t\tSet gmi3 link width"
+	" for a given socket MIN = MAX = 0 to 2 with MAX > MIN",
+};
+
+static char* const blankline[] =
+{
+	""
+};
+
+static char **features;
+
+static void show_usage(char *exe_name)
+{
+	int i = 0;
+
+	printf("Usage: %s [Option]... <INPUT>...\n\n", exe_name);
+	while (features[i]) {
+		printf("%s\n", features[i]);
+		i++;
+	}
+}
+
+static void copy_features(char* const feat[], int size)
+{
+	static int offset = 0;
+	int i = 0;
+
+	while (i != size) {
+		features[i + offset] = feat[i];
+		i++;
+	}
+	offset += size;
+}
+
 /*
  * returns 0 if the given string is a number, else 1
  */
@@ -1470,28 +1514,66 @@ static esmi_status_t init_proto_version_func_pointers()
 {
 	uint32_t proto_ver;
 	esmi_status_t ret;
+	int size;
 
 	ret = esmi_hsmp_proto_ver_get(&proto_ver);
 	if (ret)
 		return ret;
 
-	switch(proto_ver) {
+	switch (proto_ver) {
 	case 2:
 		/* proto version 2 is the baseline for HSMP fetaures, so there is no addon */
 		show_addon_cpu_metrics = no_addon_cpu_metrics;
 		show_addon_socket_metrics = no_addon_socket_metrics;
+		size = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_ver2_get) +
+		       ARRAY_SIZE(feat_ver2_set) + ARRAY_SIZE(blankline);
+		features = malloc((size + 1) * sizeof(char *));
+		if (!features)
+			return ESMI_NO_MEMORY;
+		copy_features(feat_comm, ARRAY_SIZE(feat_comm));
+		copy_features(feat_ver2_get, ARRAY_SIZE(feat_ver2_get));
+		copy_features(blankline, ARRAY_SIZE(blankline));
+		copy_features(feat_ver2_set, ARRAY_SIZE(feat_ver2_set));
+		features[size] = NULL;
 		break;
-
 	case 4:
 		/* proto version 4 has extra socket metrics, cpu metrics are same as ver2 */
 		show_addon_cpu_metrics = no_addon_cpu_metrics;
 		show_addon_socket_metrics = socket_ver4_metrics;
+		size = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_ver2_get) +
+		       ARRAY_SIZE(feat_ver2_set) + ARRAY_SIZE(feat_ver4) +
+		       ARRAY_SIZE(blankline) + ARRAY_SIZE(feat_ver3);
+		features = malloc((size + 1) * sizeof(char *));
+		if (!features)
+			return ESMI_NO_MEMORY;
+		copy_features(feat_comm, ARRAY_SIZE(feat_comm));
+		copy_features(feat_ver2_get, ARRAY_SIZE(feat_ver2_get));
+		copy_features(feat_ver3, ARRAY_SIZE(feat_ver3));
+		copy_features(feat_ver4, ARRAY_SIZE(feat_ver4));
+		copy_features(blankline, ARRAY_SIZE(blankline));
+		copy_features(feat_ver2_set, ARRAY_SIZE(feat_ver2_set));
+		features[size] = NULL;
 		break;
 	case 5:
 	default:
 		/* proto version 5 has extra socket metrics as well as extra cpu metrics */
 		show_addon_cpu_metrics = cpu_ver5_metrics;
 		show_addon_socket_metrics = socket_ver5_metrics;
+		size = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_ver2_get) +
+		       ARRAY_SIZE(feat_ver2_set) + ARRAY_SIZE(feat_ver5_get) +
+		       ARRAY_SIZE(feat_ver5_set) + ARRAY_SIZE(blankline) +
+		       ARRAY_SIZE(feat_ver3);
+		features = malloc((size + 1) * sizeof(char *));
+		if (!features)
+			return ESMI_NO_MEMORY;
+		copy_features(feat_comm, ARRAY_SIZE(feat_comm));
+		copy_features(feat_ver2_get, ARRAY_SIZE(feat_ver2_get));
+		copy_features(feat_ver3, ARRAY_SIZE(feat_ver3));
+		copy_features(feat_ver5_get, ARRAY_SIZE(feat_ver5_get));
+		copy_features(blankline, ARRAY_SIZE(blankline));
+		copy_features(feat_ver2_set, ARRAY_SIZE(feat_ver2_set));
+		copy_features(feat_ver5_set, ARRAY_SIZE(feat_ver5_set));
+		features[size] = NULL;
 		break;
 	}
 
@@ -1971,5 +2053,7 @@ int main(int argc, char **argv)
 	/* Program termination */
 	esmi_exit();
 
+	if (features)
+		free(features);
 	return ret;
 }
