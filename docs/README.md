@@ -56,7 +56,8 @@ The Energy counters reported by the RAPL MSRs, the AMD Energy driver exposes the
 ## Monitoring and managing power metrics, boostlimits and other system management features
 The power metrics, boostlimits and other features are managed by the SMU firmware and exposed via PCI config space. AMD provides Linux kernel module exposing this information to the user-space via sys entries.
 
-* amd_hsmp module will be made available at https://github.com/amd/amd_hsmp.git
+* amd_hsmp driver is accepted upstream under drivers/platform/x86 is availble https://git.kernel.org/pub/scm/linux/kernel/git/pdx86/platform-drivers-x86.git/commit/?h=for-next&id=91f410aa679a035e7abdff47daca4418c384c770
+  * Please build the library against uapi header asm/amd_hsmp.h
 
 * PCIe interface needs to be enabled in the BIOS. On the reference BIOS, the CBS option may be found in the following path
 #####  ```Advanced > AMD CBS > NBIO Common Options > SMU Common Options > HSMP Support```
