@@ -542,6 +542,27 @@ esmi_status_t epyc_set_lclk_dpm_level(uint8_t sock_id, uint8_t nbio_id, uint8_t 
 	return ESMI_SUCCESS;
 }
 
+esmi_status_t epyc_get_lclk_dpm_level(uint32_t sock_id, uint8_t nbio_id)
+{
+	struct dpm_level nbio;
+	esmi_status_t ret;
+
+	ret = esmi_socket_lclk_dpm_level_get(sock_id, nbio_id, &nbio);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get LCLK dpm level for socket[%d], nbiod[%d], "
+		       "Err[%d]: %s\n",
+			sock_id, nbio_id, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+
+	printf("\n------------------------------------\n");
+	printf("| \tMIN\t | %5u\t   |\n", nbio.min_dpm_level);
+	printf("| \tMAX\t | %5u\t   |\n", nbio.max_dpm_level);
+	printf("------------------------------------\n");
+
+	return ret;
+}
+
 esmi_status_t epyc_get_socketpower(void)
 {
 	esmi_status_t ret;
@@ -1428,7 +1449,8 @@ static char* const feat_ver2_set[] = {
 	"  --setxgmiwidth [MIN] [MAX]\t\t\t\tSet xgmi link width"
 	" in a multi socket system, MIN = MAX = 0 to 2",
 	"  --setlclkdpmlevel [SOCKET] [NBIOID] [MIN] [MAX]\tSet lclk dpm level"
-	" for a given nbio, given socket, MIN = MAX = NBIOID = 0 to 3",
+	" for a given nbio, given socket "
+	" \n\t\t\t\t\t\t\tMIN = MAX = 0-1 for v5, 0-3 for v4, NBIOID = 0-3 ",
 };
 
 static char* const feat_ver3[] = {
@@ -1449,6 +1471,8 @@ static char* const feat_ver5_get[] = {
 	"  --showxgmibandwidth [LINKNAME] [BWTYPE]\t\tShow xGMI bandwidth for LINKNAME = P0-P3/G0-G3"
 	" and BWTYPE = AGG_BW/RD_BW/WR_BW",
 	"  --showiobandwidth [SOCKET] [LINKNAME]\t\t\tShow IO bandwidth for LINKNAME = P0-P3/G0-G3",
+	"  --showlclkdpmlevel [SOCKET] [NBIOID]\t\t\tShow lclk dpm level"
+	" for a given nbio, given socket\n"
 };
 
 static char* const feat_ver5_set[] = {
@@ -1637,6 +1661,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 		{"setpowerefficiencymode",	required_argument,	0,	'k'},
 		{"setdfpstaterange",		required_argument,	0,	'X'},
 		{"setgmi3linkwidth",		required_argument,	0,	'n'},
+		{"showlclkdpmlevel",		required_argument,	0,	'Y'},
 		{0,			0,			0,	0},
 	};
 
@@ -1715,6 +1740,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 	    opt == 'k' ||
 	    opt == 'X' ||
 	    opt == 'n' ||
+	    opt == 'Y' ||
 	    opt == 'r') {
 		if (is_string_number(optarg)) {
 			printf("Option '-%c' require a valid numeric value"
@@ -1734,6 +1760,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 	    opt == 'k' ||
 	    opt == 'X' ||
 	    opt == 'n' ||
+	    opt == 'Y' ||
 	    opt == 'b') {
 		// make sure optind is valid  ... or another option
 		if (optind >= argc) {
@@ -2005,6 +2032,12 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 			max = atoi(argv[optind++]);
 			min = atoi(argv[optind++]);
 			ret = epyc_set_df_pstate_range(sock_id, max, min);
+			break;
+		case 'Y' :
+			/* Get lclk DPM level for a given nbio and a socket */
+			sock_id = atoi(optarg);
+			nbio_id = atoi(argv[optind++]);
+			epyc_get_lclk_dpm_level(sock_id, nbio_id);
 			break;
 		case 'A' :
 			ret = show_smi_all_parameters();
