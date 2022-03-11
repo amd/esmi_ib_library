@@ -793,10 +793,9 @@ static esmi_status_t epyc_get_dimm_thermal(uint8_t sock_id, uint8_t dimm_addr)
 			" Err[%d]: %s\n", sock_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	esmi_decode_dimm_temp(d_sensor.sensor, &temp);
 	printf("------------------------------------------");
 	printf("\n| Temperature(°C)\t |");
-	printf(" %-10.3f\t |", temp);
+	printf(" %-10.3f\t |", d_sensor.temp);
 	printf("\n| Update rate(ms)\t |");
 	printf(" %-10u\t |", d_sensor.update_rate);
 	printf("\n| Dimm address returned\t |");
