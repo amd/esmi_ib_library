@@ -242,6 +242,9 @@ static esmi_status_t errno_to_esmi_status(int err)
 		case EIO:	return ESMI_UNEXPECTED_SIZE;
 		case ENOMEM:	return ESMI_NO_MEMORY;
 		case EFAULT:	return ESMI_ARG_PTR_NULL;
+		case EINVAL:	return ESMI_INVALID_INPUT;
+		case ETIMEDOUT:	return ESMI_HSMP_TIMEOUT;
+		case ENOMSG:	return ESMI_NO_HSMP_SUP;
 		default:	return ESMI_UNKNOWN_ERROR;
 	}
 }

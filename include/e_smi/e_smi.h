@@ -198,7 +198,8 @@ typedef enum {
 	ESMI_ARG_PTR_NULL,	//!< Parsed argument is invalid
 	ESMI_NO_MEMORY,		//!< Not enough memory to allocate
 	ESMI_NOT_INITIALIZED,	//!< ESMI path not initialized
-	ESMI_INVALID_INPUT	//!< Input value is invalid
+	ESMI_INVALID_INPUT,	//!< Input value is invalid
+	ESMI_HSMP_TIMEOUT	//!< HSMP message is timedout
 } esmi_status_t;
 
 /**
