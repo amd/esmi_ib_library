@@ -68,9 +68,9 @@ message("SOVERSION: ${SO_VERSION_STRING}")
 ##  e_smi_lib-dev
 set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}
 	CACHE STRING "Location of E-SMI source code.")
-set(CMAKE_INSTALL_PREFIX "/opt/esmi"
+set(CMAKE_INSTALL_PREFIX "/opt/e-sms"
                                 CACHE STRING "Default installation directory.")
-set(CPACK_PACKAGING_INSTALL_PREFIX "/opt/esmi"
+set(CPACK_PACKAGING_INSTALL_PREFIX "/opt/e-sms"
                                       CACHE STRING "Default packaging prefix.")
 
 project(${E_SMI_TARGET})

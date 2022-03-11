@@ -35,7 +35,7 @@ The next step can be skipped if static lib support is not required
 #### ```$ make```
 The built library `libe_smi64.so.X.Y` will appear in the `build` folder.
 
-#### ```# Install library file and header; default location is /opt/esmi```
+#### ```# Install library file and header; default location is /opt/e-sms```
 #### ```$ sudo make install```
 
 ## Building the Documentation

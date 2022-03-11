@@ -1,3 +1,2 @@
 #!/bin/bash
-
-echo -e "/opt/esmi/e_smi/lib/" > /etc/ld.so.conf.d/x86_64-libesmi_ib_lib.conf && ldconfig
+echo -e "/opt/e-sms/e_smi/lib/" > /etc/ld.so.conf.d/x86_64-libesmi_ib_lib.conf && ldconfig
