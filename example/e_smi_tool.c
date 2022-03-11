@@ -799,7 +799,7 @@ static esmi_status_t epyc_get_dimm_thermal(uint8_t sock_id, uint8_t dimm_addr)
 	printf("\n| Update rate(ms)\t |");
 	printf(" %-10u\t |", d_sensor.update_rate);
 	printf("\n| Dimm address returned\t |");
-	printf(" %-10u\t |", d_sensor.dimm_addr);
+	printf(" 0x%-8x\t |", d_sensor.dimm_addr);
 	printf("\n------------------------------------------\n");
 
 	return ret;
