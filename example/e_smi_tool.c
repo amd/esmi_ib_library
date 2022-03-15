@@ -1272,7 +1272,7 @@ esmi_status_t show_cpu_energy_all(void)
 		if(!(i % 8)) {
 			printf("\ncpu [%3d] :", i);
 		}
-		printf(" %12.3lf", (double)input[i]/1000000);
+		printf(" %10.3lf", (double)input[i]/1000000);
 	}
 	free(input);
 
@@ -1308,7 +1308,7 @@ esmi_status_t show_cpu_boostlimit_all(void)
 			printf("\ncpu [%3d] :", i);
 		}
 		if (!ret) {
-			printf(" %5u", boostlimit);
+			printf(" %-5u", boostlimit);
 		} else {
 			printf(" NA   ");
 		}
@@ -1346,7 +1346,7 @@ static esmi_status_t show_core_clocks_all()
 			printf("\ncpu [%3d] :", i);
 		}
 		if (!ret) {
-			printf(" %5u", cclk);
+			printf(" %-5u", cclk);
 		} else {
 			printf(" NA   ");
 		}
