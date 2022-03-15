@@ -1421,11 +1421,11 @@ static char* const feat_comm[] = {
 
 static char* const feat_ver2_get[] = {
 	"Get Option<s>:",
-	"  -e, --showcoreenergy [CORE]\t\t\t\tGet energy for a given CPU (Joules)",
-	"  -s, --showsockenergy\t\t\t\t\tGet energy for all sockets (KJoules)",
-	"  -p, --showsockpower\t\t\t\t\tGet power metrics for all sockets (mWatts)",
-	"  -L, --showcorebl [CORE]\t\t\t\tGet Boostlimit for a given CPU (MHz)",
-	"  -r, --showsockc0res [SOCKET]\t\t\t\tGet c0_residency for a given socket (%%)",
+	"  --showcoreenergy [CORE]\t\t\t\tGet energy for a given CPU (Joules)",
+	"  --showsockenergy\t\t\t\t\tGet energy for all sockets (KJoules)",
+	"  --showsockpower\t\t\t\t\tGet power metrics for all sockets (mWatts)",
+	"  --showcorebl [CORE]\t\t\t\t\tGet Boostlimit for a given CPU (MHz)",
+	"  --showsockc0res [SOCKET]\t\t\t\tGet c0_residency for a given socket (%%)",
 	"  --showsmufwver\t\t\t\t\tShow SMU FW Version",
 	"  --showhsmpprotover\t\t\t\t\tShow HSMP Protocol Version",
 	"  --showprochotstatus\t\t\t\t\tShow HSMP PROCHOT status (in/active)",
@@ -1434,9 +1434,9 @@ static char* const feat_ver2_get[] = {
 
 static char* const feat_ver2_set[] = {
 	"Set Option<s>:",
-	"  -C, --setpowerlimit [SOCKET] [POWER]\t\t\tSet power limit"
+	"  --setpowerlimit [SOCKET] [POWER]\t\t\tSet power limit"
 	" for a given socket (mWatts)",
-	"  -a, --setcorebl [CORE] [BOOSTLIMIT]\t\t\tSet boost limit"
+	"  --setcorebl [CORE] [BOOSTLIMIT]\t\t\tSet boost limit"
 	" for a given core (MHz)",
 	"  --setsockbl [SOCKET] [BOOSTLIMIT]\t\t\tSet Boost"
 	" limit for a given Socket (MHz)",
@@ -1454,11 +1454,11 @@ static char* const feat_ver2_set[] = {
 };
 
 static char* const feat_ver3[] = {
-	"  -d, --showddrbw\t\t\t\t\tShow DDR bandwidth details (Gbps)",
+	"  --showddrbw\t\t\t\t\t\tShow DDR bandwidth details (Gbps)",
 };
 
 static char* const feat_ver4[] = {
-	"  -t, --showsockettemp\t\t\t\t\tShow Temperature monitor of socket (°C)",
+	"  --showsockettemp\t\t\t\t\tShow Temperature monitor of socket (°C)",
 };
 
 static char* const feat_ver5_get[] = {
@@ -1666,7 +1666,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 	};
 
 	int long_index = 0;
-	char *helperstring = "+hAsfpvxzdte:y:u:L:C:a:b:c:r:w:l:";
+	char *helperstring = "+hA";
 
 	if (getuid() != 0) {
 		while ((opt = getopt_long(argc, argv, helperstring,
