@@ -1406,14 +1406,17 @@ esmi_status_t show_smi_all_parameters(void)
 
 static char* const feat_comm[] = {
 	"Output Option<s>:",
-	"  -h, --help\t\t\t\t\t\tShow this help message\n"
-	"  -A, --showall\t\t\t\t\t\tGet all esmi parameter Values\n"
+	"  -h, --help\t\t\t\t\t\tShow this help message",
+	"  -A, --showall\t\t\t\t\t\tGet all esmi parameter Values\n",
 };
 
-static char* const feat_ver2_get[] = {
+static char* const feat_energy[] = {
 	"Get Option<s>:",
 	"  --showcoreenergy [CORE]\t\t\t\tGet energy for a given CPU (Joules)",
 	"  --showsockenergy\t\t\t\t\tGet energy for all sockets (KJoules)",
+};
+
+static char* const feat_ver2_get[] = {
 	"  --showsockpower\t\t\t\t\tGet power metrics for all sockets (mWatts)",
 	"  --showcorebl [CORE]\t\t\t\t\tGet Boostlimit for a given CPU (MHz)",
 	"  --showsockc0res [SOCKET]\t\t\t\tGet c0_residency for a given socket (%%)",
@@ -1463,7 +1466,7 @@ static char* const feat_ver5_get[] = {
 	" and BWTYPE = AGG_BW/RD_BW/WR_BW",
 	"  --showiobandwidth [SOCKET] [LINKNAME]\t\t\tShow IO bandwidth for LINKNAME = P0-P3/G0-G3",
 	"  --showlclkdpmlevel [SOCKET] [NBIOID]\t\t\tShow lclk dpm level"
-	" for a given nbio, given socket\n"
+	" for a given nbio, given socket"
 };
 
 static char* const feat_ver5_set[] = {
@@ -1477,10 +1480,7 @@ static char* const feat_ver5_set[] = {
 	" for a given socket MIN = MAX = 0 to 2 with MAX > MIN",
 };
 
-static char* const blankline[] =
-{
-	""
-};
+static char* const blankline[] = {""};
 
 static char **features;
 
@@ -1493,18 +1493,6 @@ static void show_usage(char *exe_name)
 		printf("%s\n", features[i]);
 		i++;
 	}
-}
-
-static void copy_features(char* const feat[], int size)
-{
-	static int offset = 0;
-	int i = 0;
-
-	while (i != size) {
-		features[i + offset] = feat[i];
-		i++;
-	}
-	offset += size;
 }
 
 /*
@@ -1529,25 +1517,43 @@ static esmi_status_t init_proto_version_func_pointers()
 	uint32_t proto_ver;
 	esmi_status_t ret;
 	int size;
+	int offset = 0;
 
 	ret = esmi_hsmp_proto_ver_get(&proto_ver);
-	if (ret)
-		return ret;
+	if (ret) {
+		printf(RED "Error in initialising HSMP version sepcific info, "
+			"Only energy data can be obtained...\nErr[%d]: %s\n\n" RESET,
+			ret, esmi_get_err_msg(ret));
+		size = ARRAY_SIZE(feat_energy) + ARRAY_SIZE(feat_comm);
+		features = malloc((size + 1) * sizeof(char *));
+		if (!features)
+			return ESMI_NO_MEMORY;
+		memcpy(features, feat_comm, (ARRAY_SIZE(feat_comm) * sizeof(char *)));
+		offset += ARRAY_SIZE(feat_comm);
+		memcpy(features + offset, feat_energy, (ARRAY_SIZE(feat_energy) * sizeof(char *)));
+		features[size] = NULL;
+		return ESMI_SUCCESS;
+	}
 
 	switch (proto_ver) {
 	case 2:
 		/* proto version 2 is the baseline for HSMP fetaures, so there is no addon */
 		show_addon_cpu_metrics = no_addon_cpu_metrics;
 		show_addon_socket_metrics = no_addon_socket_metrics;
-		size = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_ver2_get) +
-		       ARRAY_SIZE(feat_ver2_set) + ARRAY_SIZE(blankline);
+		size = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_energy) +
+		       ARRAY_SIZE(feat_ver2_get) + ARRAY_SIZE(feat_ver2_set);
 		features = malloc((size + 1) * sizeof(char *));
 		if (!features)
 			return ESMI_NO_MEMORY;
-		copy_features(feat_comm, ARRAY_SIZE(feat_comm));
-		copy_features(feat_ver2_get, ARRAY_SIZE(feat_ver2_get));
-		copy_features(blankline, ARRAY_SIZE(blankline));
-		copy_features(feat_ver2_set, ARRAY_SIZE(feat_ver2_set));
+		memcpy(features, feat_comm, (ARRAY_SIZE(feat_comm) * sizeof(char *)));
+		offset += ARRAY_SIZE(feat_comm);
+		memcpy(features + offset, feat_energy, (ARRAY_SIZE(feat_energy) * sizeof(char *)));
+		offset += ARRAY_SIZE(feat_energy);
+		memcpy(features + offset, feat_ver2_get, (ARRAY_SIZE(feat_ver2_get) * sizeof(char *)));
+		offset += ARRAY_SIZE(feat_ver2_get);
+		memcpy(features + offset, blankline, sizeof(char *));
+		offset += 1;
+		memcpy(features + offset, feat_ver2_set, (ARRAY_SIZE(feat_ver2_set) * sizeof(char *)));
 		features[size] = NULL;
 		break;
 	case 4:
@@ -1556,16 +1562,23 @@ static esmi_status_t init_proto_version_func_pointers()
 		show_addon_socket_metrics = socket_ver4_metrics;
 		size = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_ver2_get) +
 		       ARRAY_SIZE(feat_ver2_set) + ARRAY_SIZE(feat_ver4) +
-		       ARRAY_SIZE(blankline) + ARRAY_SIZE(feat_ver3);
+		       ARRAY_SIZE(feat_energy) + ARRAY_SIZE(feat_ver3);
 		features = malloc((size + 1) * sizeof(char *));
 		if (!features)
 			return ESMI_NO_MEMORY;
-		copy_features(feat_comm, ARRAY_SIZE(feat_comm));
-		copy_features(feat_ver2_get, ARRAY_SIZE(feat_ver2_get));
-		copy_features(feat_ver3, ARRAY_SIZE(feat_ver3));
-		copy_features(feat_ver4, ARRAY_SIZE(feat_ver4));
-		copy_features(blankline, ARRAY_SIZE(blankline));
-		copy_features(feat_ver2_set, ARRAY_SIZE(feat_ver2_set));
+		memcpy(features, feat_comm, (ARRAY_SIZE(feat_comm) * sizeof(char *)));
+		offset += ARRAY_SIZE(feat_comm);
+		memcpy(features + offset, feat_energy, (ARRAY_SIZE(feat_energy) * sizeof(char *)));
+		offset += ARRAY_SIZE(feat_energy);
+		memcpy(features + offset, feat_ver2_get, (ARRAY_SIZE(feat_ver2_get) * sizeof(char *)));
+		offset += ARRAY_SIZE(feat_ver2_get);
+		memcpy(features + offset, feat_ver3, (ARRAY_SIZE(feat_ver3) * sizeof(char *)));
+		offset += ARRAY_SIZE(feat_ver3);
+		memcpy(features + offset, feat_ver4, (ARRAY_SIZE(feat_ver4) * sizeof(char *)));
+		offset += ARRAY_SIZE(feat_ver4);
+		memcpy(features + offset, blankline, sizeof(char *));
+		offset += 1;
+		memcpy(features + offset, feat_ver2_set, (ARRAY_SIZE(feat_ver2_set) * sizeof(char *)));
 		features[size] = NULL;
 		break;
 	case 5:
@@ -1575,18 +1588,26 @@ static esmi_status_t init_proto_version_func_pointers()
 		show_addon_socket_metrics = socket_ver5_metrics;
 		size = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_ver2_get) +
 		       ARRAY_SIZE(feat_ver2_set) + ARRAY_SIZE(feat_ver5_get) +
-		       ARRAY_SIZE(feat_ver5_set) + ARRAY_SIZE(blankline) +
-		       ARRAY_SIZE(feat_ver3);
+		       ARRAY_SIZE(feat_ver5_set) + ARRAY_SIZE(feat_ver3) +
+		       ARRAY_SIZE(feat_energy);
 		features = malloc((size + 1) * sizeof(char *));
 		if (!features)
 			return ESMI_NO_MEMORY;
-		copy_features(feat_comm, ARRAY_SIZE(feat_comm));
-		copy_features(feat_ver2_get, ARRAY_SIZE(feat_ver2_get));
-		copy_features(feat_ver3, ARRAY_SIZE(feat_ver3));
-		copy_features(feat_ver5_get, ARRAY_SIZE(feat_ver5_get));
-		copy_features(blankline, ARRAY_SIZE(blankline));
-		copy_features(feat_ver2_set, ARRAY_SIZE(feat_ver2_set));
-		copy_features(feat_ver5_set, ARRAY_SIZE(feat_ver5_set));
+		memcpy(features, feat_comm, (ARRAY_SIZE(feat_comm) * sizeof(char *)));
+		offset += ARRAY_SIZE(feat_comm);
+		memcpy(features + offset, feat_energy, (ARRAY_SIZE(feat_energy) * sizeof(char *)));
+		offset += ARRAY_SIZE(feat_energy);
+		memcpy(features + offset, feat_ver2_get, (ARRAY_SIZE(feat_ver2_get) * sizeof(char *)));
+		offset += ARRAY_SIZE(feat_ver2_get);
+		memcpy(features + offset, feat_ver3, (ARRAY_SIZE(feat_ver3) * sizeof(char *)));
+		offset += ARRAY_SIZE(feat_ver3);
+		memcpy(features + offset, feat_ver5_get, (ARRAY_SIZE(feat_ver5_get) * sizeof(char *)));
+		offset += ARRAY_SIZE(feat_ver5_get);
+		memcpy(features + offset, blankline, sizeof(char *));
+		offset += 1;
+		memcpy(features + offset, feat_ver2_set, (ARRAY_SIZE(feat_ver2_set) * sizeof(char *)));
+		offset += ARRAY_SIZE(feat_ver2_set);
+		memcpy(features + offset, feat_ver5_set, (ARRAY_SIZE(feat_ver5_set) * sizeof(char *)));
 		features[size] = NULL;
 		break;
 	}
@@ -1698,8 +1719,8 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 		return ESMI_ERROR;
 	}
 	ret = init_proto_version_func_pointers();
-	if(ret != ESMI_SUCCESS) {
-		printf(RED "\tError in initialising version sepcific info\n"
+	if (ret != ESMI_SUCCESS) {
+		printf(RED "\tError in allocating memory \n"
 		       "\tErr[%d]: %s\n" RESET, ret, esmi_get_err_msg(ret));
 		return ESMI_ERROR;
 	}
