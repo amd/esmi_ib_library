@@ -57,16 +57,14 @@
 #define SHOWLINESZ 256
 
 /* To handle multiple errors while reporting summary */
-#define ESMI_MULTI_ERROR	1234
-
-uint32_t err_bits;
+#define ESMI_ERROR	-1
 
 esmi_status_t show_smi_all_parameters(void);
 void show_smi_message(void);
 void show_smi_end_message(void);
 
-static void (*show_addon_cpu_metrics)(void);
-static void (*show_addon_socket_metrics)(int);
+static void (*show_addon_cpu_metrics)(uint32_t *);
+static void (*show_addon_socket_metrics)(int, uint32_t *);
 
 void print_socket_footer(uint32_t sockets)
 {
@@ -90,23 +88,14 @@ void print_socket_header(uint32_t sockets)
 	print_socket_footer(sockets);
 }
 
-void err_bits_reset(void)
-{
-	err_bits = 0;
-}
-
-void err_bits_print(void)
+static void err_bits_print(uint32_t err_bits)
 {
 	int i;
 
 	printf("\n");
 	for (i = 1; i < 32; i++) {
-		if (i == ESMI_MULTI_ERROR) {
-			continue;
-		}
-		if (err_bits & (1 << i)) {
+		if (err_bits & (1 << i))
 			printf(RED "Err[%d]: %s\n" RESET, i, esmi_get_err_msg(i));
-		}
 	}
 }
 
@@ -134,6 +123,7 @@ esmi_status_t epyc_get_sockenergy(void)
 	esmi_status_t ret;
 	uint32_t i, sockets;
 	uint64_t pkg_input = 0;
+	uint32_t err_bits = 0;
 
 	ret = esmi_number_of_sockets_get(&sockets);
 	if (ret != ESMI_SUCCESS) {
@@ -142,7 +132,6 @@ esmi_status_t epyc_get_sockenergy(void)
 		return ret;
 	}
 
-	err_bits_reset();
 	print_socket_header(sockets);
 	printf("\n| Energy (K Joules)\t\t |");
 	for (i = 0; i < sockets; i++) {
@@ -156,14 +145,15 @@ esmi_status_t epyc_get_sockenergy(void)
 	}
 	print_socket_footer(sockets);
 	printf("\n");
-	err_bits_print();
-	if (err_bits > 1) {
-		return ESMI_MULTI_ERROR;
-	}
+	err_bits_print(err_bits);
+
+	if (err_bits > 1)
+		return ESMI_ERROR;
+
 	return ESMI_SUCCESS;
 }
 
-static void ddr_bw_get(uint8_t sockets)
+static void ddr_bw_get(uint8_t sockets, uint32_t *err_bits)
 {
 	struct ddr_bw_metrics ddr;
 	char bw_str[SHOWLINESZ] = {};
@@ -189,7 +179,7 @@ static void ddr_bw_get(uint8_t sockets)
 			snprintf(bw_str + bw_len, SHOWLINESZ - bw_len, " %-17d|", ddr.utilized_bw);
 			snprintf(pct_str + pct_len, SHOWLINESZ - pct_len, " %-17d|", ddr.utilized_pct);
 		} else {
-			err_bits |= 1 << ret;
+			*err_bits |= 1 << ret;
 			snprintf(max_str + max_len, SHOWLINESZ - max_len, " NA (Err: %-2d)     |", ret);
 			snprintf(bw_str + bw_len, SHOWLINESZ - bw_len, " NA (Err: %-2d)     |", ret);
 			snprintf(pct_str + pct_len, SHOWLINESZ - pct_len, " NA (Err: %-2d)     |", ret);
@@ -209,6 +199,7 @@ esmi_status_t epyc_get_ddr_bw(void)
 	char pct_str[SHOWLINESZ] = {};
 	uint32_t bw_len;
 	uint32_t pct_len;
+	uint32_t err_bits = 0;
 
 	ret = esmi_number_of_sockets_get(&sockets);
 	if (ret != ESMI_SUCCESS) {
@@ -216,16 +207,15 @@ esmi_status_t epyc_get_ddr_bw(void)
 			ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	err_bits_reset();
 
 	print_socket_header(sockets);
-	ddr_bw_get(sockets);
+	ddr_bw_get(sockets, &err_bits);
 
 	print_socket_footer(sockets);
-	err_bits_print();
-	if (err_bits > 1) {
-		return ESMI_MULTI_ERROR;
-	}
+	err_bits_print(err_bits);
+	if (err_bits > 1)
+		return ESMI_ERROR;
+
 	return ESMI_SUCCESS;
 }
 
@@ -234,6 +224,7 @@ esmi_status_t epyc_get_temperature(void)
 	esmi_status_t ret;
 	uint32_t i, sockets;
 	uint32_t tmon = 0;
+	uint32_t err_bits = 0;
 
 	ret = esmi_number_of_sockets_get(&sockets);
 	if (ret != ESMI_SUCCESS) {
@@ -242,7 +233,6 @@ esmi_status_t epyc_get_temperature(void)
 		return ret;
 	}
 
-	err_bits_reset();
 	print_socket_header(sockets);
 	printf("\n| Temperature\t\t\t |");
 	for (i = 0; i < sockets; i++) {
@@ -255,10 +245,9 @@ esmi_status_t epyc_get_temperature(void)
 		}
 	}
 	print_socket_footer(sockets);
-	err_bits_print();
-	if (err_bits > 1) {
-		return ESMI_MULTI_ERROR;
-	}
+	err_bits_print(err_bits);
+	if (err_bits > 1)
+		return ESMI_ERROR;
 	return ESMI_SUCCESS;
 }
 
@@ -305,6 +294,7 @@ esmi_status_t epyc_get_prochot_status(void)
 	esmi_status_t ret;
 	uint32_t i, sockets;
 	uint32_t prochot;
+	uint32_t err_bits = 0;
 
 	ret = esmi_number_of_sockets_get(&sockets);
 	if (ret != ESMI_SUCCESS) {
@@ -312,7 +302,6 @@ esmi_status_t epyc_get_prochot_status(void)
 			ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	err_bits_reset();
 	print_socket_header(sockets);
 
 	printf("\n| ProchotStatus:\t\t |");
@@ -327,13 +316,11 @@ esmi_status_t epyc_get_prochot_status(void)
 	}
 	print_socket_footer(sockets);
 	printf("\n");
-	err_bits_print();
-	if (err_bits > 1) {
-		return ESMI_MULTI_ERROR;
-	}
+	err_bits_print(err_bits);
+	if (err_bits > 1)
+		return ESMI_ERROR;
 	return ESMI_SUCCESS;
 }
-
 
 static void display_freq_limit_src_names(char **source_type, char *str2, int *len2)
 {
@@ -347,7 +334,7 @@ static void display_freq_limit_src_names(char **source_type, char *str2, int *le
 		snprintf(str2 + *len2, SHOWLINESZ - *len2, " %-17s|", "Reserved");
 }
 
-static void get_sock_freq_limit(int sockets)
+static void get_sock_freq_limit(int sockets, uint32_t *err_bits)
 {
 	char str1[SHOWLINESZ];
 	char str2[SHOWLINESZ];
@@ -376,7 +363,7 @@ static void get_sock_freq_limit(int sockets)
 			snprintf(str1 + len1, SHOWLINESZ - len1, " %-17u|", limit);
 			display_freq_limit_src_names(src, str2, &len2);
 		} else {
-			err_bits |= 1 << ret;
+			*err_bits |= 1 << ret;
 			snprintf(str1 + len1, SHOWLINESZ - len1, " NA (Err: %-2d)     |", ret);
 			snprintf(str2 + len2, SHOWLINESZ - len2, " NA (Err: %-2d)     |", ret);
 		}
@@ -385,7 +372,7 @@ static void get_sock_freq_limit(int sockets)
 	printf("%s", str2);
 }
 
-static void get_sock_freq_range(int sockets)
+static void get_sock_freq_range(int sockets, uint32_t *err_bits)
 {
 	char str1[SHOWLINESZ];
 	char str2[SHOWLINESZ];
@@ -406,7 +393,7 @@ static void get_sock_freq_range(int sockets)
 			snprintf(str1 + len1, SHOWLINESZ -len1, " %-17u|", fmax);
 			snprintf(str2 + len2, SHOWLINESZ - len2 , " %-17u|", fmin);
 		} else {
-			err_bits |= 1 << ret;
+			*err_bits |= 1 << ret;
 			snprintf(str1 + len1, SHOWLINESZ -len1, " NA (Err: %-2d)     |", ret);
 			snprintf(str2 + len2, SHOWLINESZ - len2, " NA (Err: %-2d)     |", ret);
 		}
@@ -414,7 +401,6 @@ static void get_sock_freq_range(int sockets)
 	printf("%s", str1);
 	printf("%s", str2);
 }
-
 
 #define MCLKSZ 256
 esmi_status_t epyc_get_clock_freq(void)
@@ -424,6 +410,7 @@ esmi_status_t epyc_get_clock_freq(void)
 	uint32_t fclk, mclk, cclk;
 	char str[MCLKSZ] = {};
 	uint32_t len;
+	uint32_t err_bits = 0;
 
 	ret = esmi_number_of_sockets_get(&sockets);
 	if (ret != ESMI_SUCCESS) {
@@ -431,7 +418,6 @@ esmi_status_t epyc_get_clock_freq(void)
 			ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	err_bits_reset();
 	print_socket_header(sockets);
 	printf("\n| fclk (Mhz)\t\t\t |");
 	snprintf(str, MCLKSZ, "\n| mclk (Mhz)\t\t\t |");
@@ -460,15 +446,15 @@ esmi_status_t epyc_get_clock_freq(void)
 		}
 	}
 
-	get_sock_freq_limit(sockets);
-	get_sock_freq_range(sockets);
+	get_sock_freq_limit(sockets, &err_bits);
+	get_sock_freq_range(sockets, &err_bits);
 
 	print_socket_footer(sockets);
 	printf("\n");
-	err_bits_print();
-	if (err_bits > 1) {
-		return ESMI_MULTI_ERROR;
-	}
+	err_bits_print(err_bits);
+	if (err_bits > 1)
+		return ESMI_ERROR;
+
 	return ESMI_SUCCESS;
 }
 
@@ -568,6 +554,7 @@ esmi_status_t epyc_get_socketpower(void)
 	esmi_status_t ret;
 	uint32_t i, sockets;
 	uint32_t power = 0, powerlimit = 0, powermax = 0;
+	uint32_t err_bits = 0;
 
 	ret = esmi_number_of_sockets_get(&sockets);
 	if (ret != ESMI_SUCCESS) {
@@ -575,7 +562,6 @@ esmi_status_t epyc_get_socketpower(void)
 			ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	err_bits_reset();
 	print_socket_header(sockets);
 	printf("\n| Power (Watts)\t\t\t |");
 	for (i = 0; i < sockets; i++) {
@@ -611,10 +597,9 @@ esmi_status_t epyc_get_socketpower(void)
 	}
 	print_socket_footer(sockets);
 	printf("\n");
-	err_bits_print();
-	if (err_bits > 1) {
-		return ESMI_MULTI_ERROR;
-	}
+	err_bits_print(err_bits);
+	if (err_bits > 1)
+		return ESMI_ERROR;
 	return ESMI_SUCCESS;
 }
 
@@ -850,6 +835,7 @@ static esmi_status_t epyc_get_power_telemetry()
 	uint32_t sockets;
 	uint32_t power;
 	int i;
+	uint32_t err_bits = 0;
 
 	ret = esmi_number_of_sockets_get(&sockets);
 	if (ret != ESMI_SUCCESS) {
@@ -857,7 +843,6 @@ static esmi_status_t epyc_get_power_telemetry()
 			ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	err_bits_reset();
 	print_socket_header(sockets);
 	printf("\n| SVI Power Telemetry (mWatts) \t |");
 	for (i = 0; i < sockets; i++) {
@@ -871,9 +856,9 @@ static esmi_status_t epyc_get_power_telemetry()
 	}
 
 	print_socket_footer(sockets);
-	err_bits_print();
+	err_bits_print(err_bits);
 	if (err_bits > 1)
-		return ESMI_MULTI_ERROR;
+		return ESMI_ERROR;
 
 	return ESMI_SUCCESS;
 }
@@ -928,7 +913,6 @@ static esmi_status_t epyc_get_io_bandwidth_info(uint32_t sock_id, char *link)
 
 	return ret;
 }
-
 
 static esmi_status_t epyc_get_xgmi_bandwidth_info(char *link, char *bw_type)
 {
@@ -1065,43 +1049,43 @@ void show_smi_end_message(void)
 	printf("\n============================= End of EPYC SMI Log ============================\n");
 }
 
-static void no_addon_socket_metrics(int sockets)
+static void no_addon_socket_metrics(int sockets, uint32_t *err_bits)
 {
 	return;
 }
 
-static void no_addon_cpu_metrics(void)
+static void no_addon_cpu_metrics(uint32_t *err_bits)
 {
 	return;
 }
 
-static void socket_ver4_metrics(int sockets)
+static void socket_ver4_metrics(int sockets, uint32_t *err_bits)
 {
 	esmi_status_t ret;
 	uint32_t tmon;
 	int i;
 
-	ddr_bw_get(sockets);
+	ddr_bw_get(sockets, err_bits);
 	printf("\n| Temperature (°C)\t\t |");
 	for (i = 0; i < sockets; i++) {
 		ret = esmi_socket_temperature_get(i, &tmon);
 		if (!ret) {
 			printf(" %-17.3f|", (double)tmon/1000);
 		} else {
-			err_bits |= 1 << ret;
+			*err_bits |= 1 << ret;
 			printf(" NA (Err: %-2d)     |", ret);
 		}
 	}
 }
 
-static void socket_ver5_metrics(int sockets)
+static void socket_ver5_metrics(int sockets, uint32_t *err_bits)
 {
-	ddr_bw_get(sockets);
-	get_sock_freq_limit(sockets);
-	get_sock_freq_range(sockets);
+	ddr_bw_get(sockets, err_bits);
+	get_sock_freq_limit(sockets, err_bits);
+	get_sock_freq_range(sockets, err_bits);
 }
 
-esmi_status_t show_socket_metrics(void)
+esmi_status_t show_socket_metrics(uint32_t *err_bits)
 {
 	esmi_status_t ret;
 	uint32_t i, sockets;
@@ -1123,7 +1107,7 @@ esmi_status_t show_socket_metrics(void)
 		if (!ret) {
 			printf(" %-17.3lf|", (double)pkg_input/1000000000);
 		} else {
-			err_bits |= 1 << ret;
+			*err_bits |= 1 << ret;
 			printf(" NA (Err: %-2d)     |", ret);
 		}
 	}
@@ -1134,7 +1118,7 @@ esmi_status_t show_socket_metrics(void)
 		if (!ret) {
 			printf(" %-17.3f|", (double)power/1000);
 		} else {
-			err_bits |= 1 << ret;
+			*err_bits |= 1 << ret;
 			printf(" NA (Err: %-2d)     |", ret);
 		}
 	}
@@ -1145,7 +1129,7 @@ esmi_status_t show_socket_metrics(void)
 		if (!ret) {
 			printf(" %-17.3f|", (double)powerlimit/1000);
 		} else {
-			err_bits |= 1 << ret;
+			*err_bits |= 1 << ret;
 			printf(" NA (Err: %-2d)     |", ret);
 		}
 	}
@@ -1156,7 +1140,7 @@ esmi_status_t show_socket_metrics(void)
 		if(!ret) {
 			printf(" %-17.3f|", (double)powermax/1000);
 		} else {
-			err_bits |= 1 << ret;
+			*err_bits |= 1 << ret;
 			printf(" NA (Err: %-2d)     |", ret);
 		}
 	}
@@ -1167,17 +1151,17 @@ esmi_status_t show_socket_metrics(void)
 		if(!ret) {
 			printf(" %-17u|", c0resi);
 		} else {
-			err_bits |= 1 << ret;
+			*err_bits |= 1 << ret;
 			printf(" NA (Err: %-2d)     |", ret);
 		}
 	}
 	/* proto version specific socket metrics are printed here */
 	if (show_addon_socket_metrics)
-		show_addon_socket_metrics(sockets);
+		show_addon_socket_metrics(sockets, err_bits);
 
 	print_socket_footer(sockets);
-	if (err_bits > 1) {
-		return ESMI_MULTI_ERROR;
+	if (*err_bits > 1) {
+		return ESMI_ERROR;
 	}
 	return ESMI_SUCCESS;
 }
@@ -1323,6 +1307,14 @@ static esmi_status_t show_core_clocks_all()
 	uint32_t cpus, threads;
 	uint32_t cclk;
 	int i;
+	int sockets;
+
+	ret = esmi_number_of_sockets_get(&sockets);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get number of sockets, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
 
 	ret = esmi_threads_per_core_get(&threads);
 	if (ret != ESMI_SUCCESS) {
@@ -1354,15 +1346,15 @@ static esmi_status_t show_core_clocks_all()
 	return ESMI_SUCCESS;
 }
 
-static void cpu_ver5_metrics()
+static void cpu_ver5_metrics(uint32_t *err_bits)
 {
 	esmi_status_t ret;
 
 	ret = show_core_clocks_all();
-	err_bits |= 1 << ret;
+	*err_bits |= 1 << ret;
 }
 
-esmi_status_t show_cpu_metrics(void)
+esmi_status_t show_cpu_metrics(uint32_t *err_bits)
 {
 	esmi_status_t ret;
 	uint32_t i, core_id, sockets;
@@ -1377,38 +1369,37 @@ esmi_status_t show_cpu_metrics(void)
 	}
 
 	ret = show_cpu_energy_all();
-	err_bits |= 1 << ret;
+	*err_bits |= 1 << ret;
 
 	ret = show_cpu_boostlimit_all();
-	err_bits |= 1 << ret;
+	*err_bits |= 1 << ret;
 
 	/* proto version specific cpu metrics are printed here */
 	if (show_addon_cpu_metrics)
-		show_addon_cpu_metrics();
+		show_addon_cpu_metrics(err_bits);
 
 	print_socket_footer(sockets);
-	if (err_bits > 1) {
-		return ESMI_MULTI_ERROR;
-	}
+	if (*err_bits > 1)
+		return ESMI_ERROR;
+
 	return ESMI_SUCCESS;
 }
 
 esmi_status_t show_smi_all_parameters(void)
 {
 	esmi_status_t ret;
-
-	err_bits_reset();
+	uint32_t err_bits = 0;
 
 	show_system_info();
 
-	show_socket_metrics();
+	show_socket_metrics(&err_bits);
 
-	show_cpu_metrics();
+	show_cpu_metrics(&err_bits);
 
 	printf("\n");
-	err_bits_print();
+	err_bits_print(err_bits);
 	if (err_bits > 1)
-		return ESMI_MULTI_ERROR;
+		return ESMI_ERROR;
 
 	return ESMI_SUCCESS;
 }
@@ -1704,13 +1695,13 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 	if(ret != ESMI_SUCCESS) {
 		printf(RED "\tESMI Not initialized, drivers not found.\n"
 		       "\tErr[%d]: %s\n" RESET, ret, esmi_get_err_msg(ret));
-		return ESMI_MULTI_ERROR;
+		return ESMI_ERROR;
 	}
 	ret = init_proto_version_func_pointers();
 	if(ret != ESMI_SUCCESS) {
 		printf(RED "\tError in initialising version sepcific info\n"
 		       "\tErr[%d]: %s\n" RESET, ret, esmi_get_err_msg(ret));
-		return ESMI_MULTI_ERROR;
+		return ESMI_ERROR;
 	}
 
 	if (argc <= 1) {
@@ -1746,7 +1737,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 			printf("Option '-%c' require a valid numeric value"
 					" as an argument\n\n", opt);
 			show_usage(argv[0]);
-			return ESMI_MULTI_ERROR;
+			return ESMI_ERROR;
 		}
 	}
 	if (opt == 'C' ||
@@ -1767,7 +1758,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 			printf(MAG "\nOption '-%c' require TWO arguments"
 			 " <index>  <set_value>\n\n" RESET, opt);
 			show_usage(argv[0]);
-			return ESMI_MULTI_ERROR;
+			return ESMI_ERROR;
 		}
 		if (opt != 'g' && opt != 'H' && opt != 'T') {
 			if (*argv[optind] == '-') {
@@ -1775,14 +1766,14 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 					printf(MAG "\nOption '-%c' require TWO arguments"
 					 " <index>  <set_value>\n\n" RESET, opt);
 					show_usage(argv[0]);
-					return ESMI_MULTI_ERROR;
+					return ESMI_ERROR;
 				}
 			}
 			if (is_string_number(argv[optind])) {
 				printf(MAG "Option '-%c' requires 2nd argument as valid"
 				       " numeric value\n\n" RESET, opt);
 				show_usage(argv[0]);
-				return ESMI_MULTI_ERROR;
+				return ESMI_ERROR;
 			}
 		} else {
 			if (*argv[optind] == '-') {
@@ -1790,7 +1781,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 				       " should be non negative\n\n"
 				       RESET, long_options[long_index].name);
 				show_usage(argv[0]);
-				return ESMI_MULTI_ERROR;
+				return ESMI_ERROR;
 			}
 			if (!strncmp(argv[optind], "0x", 2) || !strncmp(argv[optind], "0X", 2)) {
 				dimm_addr = strtoul(argv[optind++], &end, 16);
@@ -1799,7 +1790,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 					       " numeric value\n\n"
 					       RESET, long_options[long_index].name);
 					show_usage(argv[0]);
-					return ESMI_MULTI_ERROR;
+					return ESMI_ERROR;
 				}
 			} else {
 				if (is_string_number(argv[optind])) {
@@ -1807,7 +1798,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 					       " numeric value\n\n"
 					       RESET, long_options[long_index].name);
 					show_usage(argv[0]);
-					return ESMI_MULTI_ERROR;
+					return ESMI_ERROR;
 				}
 				dimm_addr = atoi(argv[optind++]);
 			}
@@ -1821,7 +1812,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 			printf("\nOption '-%c' requires FOUR arguments"
 			 " <socket> <nbioid> <min_value> <max_value>\n\n", opt);
 			show_usage(argv[0]);
-			return ESMI_MULTI_ERROR;
+			return ESMI_ERROR;
 		}
 
 		if (is_string_number(argv[optind]) || is_string_number(argv[optind + 1])
@@ -1829,7 +1820,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 			printf("Option '-%c' requires 2nd, 3rd, 4th argument as valid"
 					" numeric value\n\n", opt);
 			show_usage(argv[0]);
-			return ESMI_MULTI_ERROR;
+			return ESMI_ERROR;
 		}
 	}
 
@@ -1839,18 +1830,18 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 			printf("\nOption '-%c' requires two valid arguments"
 			 " <arg1> <arg2>\n\n", opt);
 			show_usage(argv[0]);
-			return ESMI_MULTI_ERROR;
+			return ESMI_ERROR;
 		}
 		if (opt == 'B') {
 			if (is_string_number(optarg) || !is_string_number(argv[optind])) {
 				printf("Please provide valid link names.\n");
-				return ESMI_MULTI_ERROR;
+				return ESMI_ERROR;
 			}
 		}
 		if (opt == 'i') {
 			if (!is_string_number(optarg) || !is_string_number(argv[optind])) {
 				printf("Please provide valid link names.\n");
-				return ESMI_MULTI_ERROR;
+				return ESMI_ERROR;
 			}
 		}
 	}
@@ -1862,14 +1853,14 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 			printf("\nOption '-%c' requires THREE arguments"
 			 " <socket> <min_value> <max_value>\n\n", opt);
 			show_usage(argv[0]);
-			return ESMI_MULTI_ERROR;
+			return ESMI_ERROR;
 		}
 
 		if (is_string_number(argv[optind]) || is_string_number(argv[optind + 1])) {
 			printf("Option '-%c' requires 2nd, 3rd, as valid"
 					" numeric value\n\n", opt);
 			show_usage(argv[0]);
-			return ESMI_MULTI_ERROR;
+			return ESMI_ERROR;
 		}
 	}
 
@@ -2044,7 +2035,7 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 			break;
 		case 'h' :
 			show_usage(argv[0]);
-			return ESMI_MULTI_ERROR;
+			return ESMI_ERROR;
 		case ':' :
 			/* missing option argument */
 			printf(RED "%s: option '-%c' requires an argument."
@@ -2058,11 +2049,11 @@ esmi_status_t parsesmi_args(int argc,char **argv)
 				printf("Unknown option character"
 				" `\\x%x'.\n", opt);
 			}
-			return ESMI_MULTI_ERROR;
+			return ESMI_ERROR;
 		default:
 			printf(MAG "Try `%s --help' for more information."
 						RESET "\n\n", argv[0]);
-			return ESMI_MULTI_ERROR;
+			return ESMI_ERROR;
 		} // end of Switch
 	}
 	if (optind < argc) {
