@@ -1333,7 +1333,7 @@ static esmi_status_t show_core_clocks_all()
 	printf("\n\nCPU core clock in MHz:");
 	for (i = 0; i < cpus; i++) {
 		cclk = 0;
-		ret = esmi_current_freq_limit_core_get(cpus, &cclk);
+		ret = esmi_current_freq_limit_core_get(i, &cclk);
 		if(!(i % 16)) {
 			printf("\ncpu [%3d] :", i);
 		}
