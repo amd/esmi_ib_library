@@ -1138,6 +1138,9 @@ esmi_status_t esmi_socket_lclk_dpm_level_get(uint8_t sock_ind, uint8_t nbio_id,
 	uint32_t dpm_val;
 	int ret;
 
+	if (psm->hsmp_proto_ver != HSMP_PROTO_VER5)
+		return ESMI_NO_HSMP_SUP;
+
 	CHECK_HSMP_GET_INPUT(dpm);
 
 	if (!psm->is_char_dev)
@@ -1407,7 +1410,7 @@ esmi_status_t esmi_current_freq_limit_core_get(uint32_t core_id, uint32_t *freq)
 	msg.msg_id	= CURRENT_ACTIVE_FREQ_LIMIT_CORE_TYPE;
 	msg.num_args	= 1;
 	msg.response_sz = 1;
-	msg.args[0]	= psm->map[core_id].apic_id;
+	msg.args[0]	= core_id;
 	msg.sock_ind	= psm->map[core_id].sock_id;
 	ret = hsmp_xfer(&msg, O_RDONLY);
 	if (!ret)
