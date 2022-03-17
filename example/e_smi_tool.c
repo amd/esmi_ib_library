@@ -1199,17 +1199,19 @@ esmi_status_t show_cpu_energy_all(void)
 
 	ret = esmi_all_energies_get(input);
 	if (ret != ESMI_SUCCESS) {
-		printf("\nFailed: to get CPU energies, Err[%d]: %s\n",
+		printf("\nFailed: to get CPU energies, Err[%d]: %s",
 			ret, esmi_get_err_msg(ret));
 		free(input);
 		return ret;
 	}
-	printf("\nCPU energies in Joules:");
+	printf("\n| CPU energies in Joules:\t\t\t\t\t\t\t\t\t\t\t|");
 	for (i = 0; i < cpus; i++) {
-		if(!(i % (4 * sys_info.sockets))) {
-			printf("\ncpu [%3d] :", i);
+		if(!(i % 8)) {
+			printf("\n| cpu [%3d] :", i);
 		}
 		printf(" %10.3lf", (double)input[i]/1000000);
+		if (i % 8 == 7)
+			printf("\t\t|");
 	}
 	free(input);
 
@@ -1225,18 +1227,20 @@ esmi_status_t show_cpu_boostlimit_all(void)
 
 	cpus = sys_info.cpus/sys_info.threads_per_core;
 
-	printf("\n\nCPU boostlimit in MHz:");
+	printf("\n| CPU boostlimit in MHz:\t\t\t\t\t\t\t\t\t\t\t|");
 	for (i = 0; i < cpus; i++) {
 		boostlimit = 0;
 		ret = esmi_core_boostlimit_get(i, &boostlimit);
-		if(!(i % (4 * sys_info.sockets))) {
-			printf("\ncpu [%3d] :", i);
+		if(!(i % 16)) {
+			printf("\n| cpu [%3d] :", i);
 		}
 		if (!ret) {
 			printf(" %-5u", boostlimit);
 		} else {
 			printf(" NA   ");
 		}
+		if (i % 16 == 15)
+			printf("   |");
 	}
 
 	return ESMI_SUCCESS;
@@ -1251,18 +1255,20 @@ static esmi_status_t show_core_clocks_all()
 
 	cpus = sys_info.cpus/sys_info.threads_per_core;
 
-	printf("\n\nCPU core clock in MHz:");
+	printf("\n| CPU core clock in MHz:\t\t\t\t\t\t\t\t\t\t\t|");
 	for (i = 0; i < cpus; i++) {
 		cclk = 0;
 		ret = esmi_current_freq_limit_core_get(i, &cclk);
-		if(!(i % (4 * sys_info.sockets))) {
-			printf("\ncpu [%3d] :", i);
+		if(!(i % 16)) {
+			printf("\n| cpu [%3d] :", i);
 		}
 		if (!ret) {
 			printf(" %-5u", cclk);
 		} else {
 			printf(" NA   ");
 		}
+		if (i % 16 == 15)
+			printf("   |");
 	}
 	return ESMI_SUCCESS;
 }
@@ -1282,9 +1288,16 @@ esmi_status_t show_cpu_metrics(uint32_t *err_bits)
 	uint64_t core_input = 0;
 	uint32_t boostlimit = 0;
 
+	printf("\n\n--------------------------------------------------------------------"
+		"---------------------------------------------");
 	ret = show_cpu_energy_all();
 	*err_bits |= 1 << ret;
 
+	printf("\n--------------------------------------------------------------------"
+		"---------------------------------------------\n");
+
+	printf("\n--------------------------------------------------------------------"
+		"---------------------------------------------");
 	ret = show_cpu_boostlimit_all();
 	*err_bits |= 1 << ret;
 
@@ -1292,7 +1305,9 @@ esmi_status_t show_cpu_metrics(uint32_t *err_bits)
 	if (sys_info.show_addon_cpu_metrics)
 		sys_info.show_addon_cpu_metrics(err_bits);
 
-	print_socket_footer();
+	printf("\n--------------------------------------------------------------------"
+		"---------------------------------------------");
+
 	if (*err_bits > 1)
 		return ESMI_ERROR;
 
