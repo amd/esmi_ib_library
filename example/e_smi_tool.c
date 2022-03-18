@@ -70,8 +70,8 @@ static struct epyc_sys_info {
 	uint32_t family;
 	uint32_t model;
 	void (*show_addon_cpu_metrics)(uint32_t *);
-	void (*show_addon_socket_metrics)(uint32_t *);
-	void (*show_addon_clock_metrics)(uint32_t *);
+	void (*show_addon_socket_metrics)(uint32_t *, char **);
+	void (*show_addon_clock_metrics)(uint32_t *, char **);
 } sys_info;
 
 void print_socket_footer()
@@ -302,47 +302,50 @@ esmi_status_t epyc_get_prochot_status(void)
 		return ESMI_ERROR;
 	return ESMI_SUCCESS;
 }
+static bool print_src = false;
 
-static void display_freq_limit_src_names(char **source_type, char *str2, int *len2)
+static void display_freq_limit_src_names(char **freq_src)
 {
-	uint8_t index = 0;
+	int j = 0;
+	int i;
 
-	for (index = 0; strcmp(source_type[index], "") != 0; index++) {
-		snprintf(str2 + *len2, SHOWLINESZ - *len2, " %-17s|\n", source_type[index]);
-		*len2 += strlen(source_type[index]);
+	for (i = 0; i < sys_info.sockets; i++) {
+		j = 0;
+		printf("*%d Frequency limit source names: \n", i);
+		while (freq_src[j + (i * ARRAY_SIZE(freqlimitsrcnames))]) {
+			printf(" %s\n", freq_src[j +(i * ARRAY_SIZE(freqlimitsrcnames))]);
+			j++;
+		}
+		if (j == 0)
+			printf(" %s\n", "Reserved");
+		printf("\n");
 	}
-	if (index == 0)
-		snprintf(str2 + *len2, SHOWLINESZ - *len2, " %-17s|", "Reserved");
+
 }
 
-static void get_sock_freq_limit(uint32_t *err_bits)
+static void get_sock_freq_limit(uint32_t *err_bits, char **freq_src)
 {
 	char str1[SHOWLINESZ];
 	char str2[SHOWLINESZ];
 	int len2, len1;
 	uint16_t limit;
-	uint8_t length = ARRAY_SIZE(freqlimitsrcnames);
-	char *src[length];
-	int ret, i;
+	int ret;
+	int i;
 	uint8_t index;
-
-	// Initalize to NULL string
-	for (index = 0; index < length; index++)
-		src[index] = "\0";
-	index = 0;
+	int size = ARRAY_SIZE(freqlimitsrcnames);
 
 	printf("\n| Current Active Freq limit\t |");
 	snprintf(str1, SHOWLINESZ, "\n| \t Freq limit (MHz) \t |");
 	snprintf(str2, SHOWLINESZ, "\n| \t Freq limit source \t |");
 
-	for (i = 0; i < sys_info.sockets; i++) {
+	for (i = 0; i < 2; i++) {
 		len1 = strlen(str1);
 		len2 = strlen(str2);
 		printf("                  |");
-		ret = esmi_socket_current_active_freq_limit_get(i, &limit, src);
+		ret = esmi_socket_current_active_freq_limit_get(i, &limit, freq_src + (i * size));
 		if (!ret) {
 			snprintf(str1 + len1, SHOWLINESZ - len1, " %-17u|", limit);
-			display_freq_limit_src_names(src, str2, &len2);
+			snprintf(str2 + len2, SHOWLINESZ - len2, " *%-16d|", i);
 		} else {
 			*err_bits |= 1 << ret;
 			snprintf(str1 + len1, SHOWLINESZ - len1, " NA (Err: %-2d)     |", ret);
@@ -351,6 +354,7 @@ static void get_sock_freq_limit(uint32_t *err_bits)
 	}
 	printf("%s", str1);
 	printf("%s", str2);
+	print_src = true;
 }
 
 static void get_sock_freq_range(uint32_t *err_bits)
@@ -392,6 +396,10 @@ esmi_status_t epyc_get_clock_freq(void)
 	char str[MCLKSZ] = {};
 	uint32_t len;
 	uint32_t err_bits = 0;
+	char *freq_src[ARRAY_SIZE(freqlimitsrcnames) * sys_info.sockets];
+
+	for (i = 0; i < (ARRAY_SIZE(freqlimitsrcnames) * sys_info.sockets); i++)
+		freq_src[i] = NULL;
 
 	print_socket_header();
 	printf("\n| fclk (Mhz)\t\t\t |");
@@ -421,11 +429,13 @@ esmi_status_t epyc_get_clock_freq(void)
 		}
 	}
 	if (sys_info.show_addon_clock_metrics)
-		sys_info.show_addon_clock_metrics(&err_bits);
+		sys_info.show_addon_clock_metrics(&err_bits, freq_src);
 
 	print_socket_footer();
 	printf("\n");
 	err_bits_print(err_bits);
+	if (print_src)
+		display_freq_limit_src_names(freq_src);
 	if (err_bits > 1)
 		return ESMI_ERROR;
 
@@ -854,7 +864,7 @@ static esmi_status_t epyc_get_io_bandwidth_info(uint32_t sock_id, char *link)
 	esmi_status_t ret;
 	uint32_t bw;
 	int index = -1;
-	struct link_id_bw_type io_link; 
+	struct link_id_bw_type io_link;
 
 	find_link_bwtype_index(link, NULL, &index, NULL);
 
@@ -877,7 +887,7 @@ static esmi_status_t epyc_get_io_bandwidth_info(uint32_t sock_id, char *link)
 
 static esmi_status_t epyc_get_xgmi_bandwidth_info(char *link, char *bw_type)
 {
-	struct link_id_bw_type xgmi_link; 
+	struct link_id_bw_type xgmi_link;
 	esmi_status_t ret;
 	uint32_t bw;
 	int id;
@@ -1010,7 +1020,7 @@ void show_smi_end_message(void)
 	printf("\n============================= End of EPYC SMI Log ============================\n");
 }
 
-static void no_addon_socket_metrics(uint32_t *err_bits)
+static void no_addon_socket_metrics(uint32_t *err_bits, char **freq_src)
 {
 	return;
 }
@@ -1020,18 +1030,18 @@ static void no_addon_cpu_metrics(uint32_t *err_bits)
 	return;
 }
 
-static void no_addon_clock_metrics(uint32_t *err_bits)
+static void no_addon_clock_metrics(uint32_t *err_bits, char **freq_src)
 {
 	return;
 }
 
-static void clock_ver5_metrics(uint32_t *err_bits)
+static void clock_ver5_metrics(uint32_t *err_bits, char **freq_src)
 {
-	get_sock_freq_limit(err_bits);
+	get_sock_freq_limit(err_bits, freq_src);
 	get_sock_freq_range(err_bits);
 }
 
-static void socket_ver4_metrics(uint32_t *err_bits)
+static void socket_ver4_metrics(uint32_t *err_bits, char **freq_src)
 {
 	esmi_status_t ret;
 	uint32_t tmon;
@@ -1050,14 +1060,14 @@ static void socket_ver4_metrics(uint32_t *err_bits)
 	}
 }
 
-static void socket_ver5_metrics(uint32_t *err_bits)
+static void socket_ver5_metrics(uint32_t *err_bits, char **freq_src)
 {
 	ddr_bw_get(err_bits);
-	get_sock_freq_limit(err_bits);
+	get_sock_freq_limit(err_bits, freq_src);
 	get_sock_freq_range(err_bits);
 }
 
-esmi_status_t show_socket_metrics(uint32_t *err_bits)
+esmi_status_t show_socket_metrics(uint32_t *err_bits, char **freq_src)
 {
 	esmi_status_t ret;
 	uint32_t i;
@@ -1122,7 +1132,7 @@ esmi_status_t show_socket_metrics(uint32_t *err_bits)
 	}
 	/* proto version specific socket metrics are printed here */
 	if (sys_info.show_addon_socket_metrics)
-		sys_info.show_addon_socket_metrics(err_bits);
+		sys_info.show_addon_socket_metrics(err_bits, freq_src);
 
 	print_socket_footer();
 	if (*err_bits > 1) {
@@ -1316,16 +1326,23 @@ esmi_status_t show_cpu_metrics(uint32_t *err_bits)
 
 esmi_status_t show_smi_all_parameters(void)
 {
+	char *freq_src[ARRAY_SIZE(freqlimitsrcnames) * sys_info.sockets];
 	esmi_status_t ret;
+	int i;
 	uint32_t err_bits = 0;
+
+	for (i = 0; i < (ARRAY_SIZE(freqlimitsrcnames) * sys_info.sockets); i++)
+		freq_src[i] = NULL;
 
 	show_system_info();
 
-	show_socket_metrics(&err_bits);
+	show_socket_metrics(&err_bits, freq_src);
 
 	show_cpu_metrics(&err_bits);
 
 	printf("\n");
+	if (print_src)
+		display_freq_limit_src_names(freq_src);
 	err_bits_print(err_bits);
 	if (err_bits > 1)
 		return ESMI_ERROR;
