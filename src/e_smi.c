@@ -1345,8 +1345,8 @@ esmi_status_t esmi_socket_current_active_freq_limit_get(uint32_t sock_ind, uint1
 	struct hsmp_message msg = { 0 };
 	uint8_t src_len;
 	uint16_t limit;
-	uint8_t index;
-	uint8_t ind;
+	uint8_t index = 0;
+	uint8_t ind = 0;
 	int ret;
 
 	if (psm->hsmp_proto_ver != HSMP_PROTO_VER5)
