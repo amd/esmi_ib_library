@@ -174,7 +174,7 @@ typedef enum {
 	ESMI_INITIALIZED = 0,	//!< ESMI initialized successfully
 	ESMI_NO_ENERGY_DRV,	//!< Energy driver not found.
 	ESMI_NO_HSMP_DRV,	//!< HSMP driver not found.
-	ESMI_NO_HSMP_SUP,	//!< HSMP feature not supported.
+	ESMI_NO_HSMP_SUP,	//!< HSMP not supported.
 	ESMI_NO_DRV,		//!< No Energy and HSMP driver present.
 	ESMI_FILE_NOT_FOUND,	//!< file or directory not found
 	ESMI_DEV_BUSY,          //!< Device or resource busy
@@ -198,7 +198,8 @@ typedef enum {
 	ESMI_NO_MEMORY,		//!< Not enough memory to allocate
 	ESMI_NOT_INITIALIZED,	//!< ESMI path not initialized
 	ESMI_INVALID_INPUT,	//!< Input value is invalid
-	ESMI_HSMP_TIMEOUT	//!< HSMP message is timedout
+	ESMI_HSMP_TIMEOUT,	//!< HSMP message is timedout
+	ESMI_NO_HSMP_MSG_SUP,	//!< HSMP message/feature not supported.
 } esmi_status_t;
 
 /**
