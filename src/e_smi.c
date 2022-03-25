@@ -72,6 +72,7 @@ struct system_metrics {
 	int32_t  hsmp_proto_ver;	// hsmp protocol version.
 	esmi_status_t init_status;	// esmi init status
 	esmi_status_t energy_status;	// energy driver status
+	esmi_status_t msr_status;	// MSR driver status
 	esmi_status_t hsmp_status;	// hsmp driver status
 	struct cpu_mapping *map;
 };
@@ -185,6 +186,8 @@ char * esmi_get_err_msg(esmi_status_t esmi_err)
 			return "Success";
 		case ESMI_NO_ENERGY_DRV:
 			return "Energy driver not present";
+		case ESMI_NO_MSR_DRV:
+			return "MSR driver not present";
 		case ESMI_NO_HSMP_DRV:
 			return "HSMP driver not present";
 		case ESMI_NO_DRV:
@@ -265,6 +268,11 @@ static esmi_status_t create_energy_monitor(void)
 		 HWMON_PATH, hwmon_name);
 
 	return ESMI_SUCCESS;
+}
+
+static esmi_status_t create_msr_monitor(void)
+{
+	return errno_to_esmi_status(find_msr(MSR_PATH));
 }
 
 /*
@@ -379,18 +387,22 @@ esmi_status_t esmi_init()
 
 	sm.init_status = ESMI_NOT_INITIALIZED;
 	sm.energy_status = ESMI_NOT_INITIALIZED;
+	sm.msr_status = ESMI_NOT_INITIALIZED;
 	sm.hsmp_status = ESMI_NOT_INITIALIZED;
 
 	ret = detect_packages(&sm);
 	if (ret != ESMI_SUCCESS) {
 		return ret;
 	}
-
-	ret = create_energy_monitor();
-	if (ret == ESMI_SUCCESS) {
-		sm.energy_status = ESMI_INITIALIZED;
+	if (sm.cpu_family == 0x19 && sm.cpu_model == 0x10) {
+		ret = create_msr_monitor();
+		if (ret == ESMI_SUCCESS)
+			sm.msr_status = ESMI_INITIALIZED;
+	} else {
+		ret = create_energy_monitor();
+		if (ret == ESMI_SUCCESS)
+			sm.energy_status = ESMI_INITIALIZED;
 	}
-
 	ret = create_hsmp_monitor(&sm);
 	if (ret == ESMI_SUCCESS) {
 		ret = create_cpu_mappings(&sm);
@@ -407,11 +419,10 @@ esmi_status_t esmi_init()
 		}
 	}
 
-	if (sm.energy_status & sm.hsmp_status) {
+	if (sm.energy_status && sm.msr_status && sm.hsmp_status)
 		sm.init_status = ESMI_NO_DRV;
-	} else {
+	else
 		sm.init_status = ESMI_INITIALIZED;
-	}
 	psm = &sm;
 
 	return sm.init_status;
@@ -492,7 +503,8 @@ esmi_status_t esmi_number_of_sockets_get(uint32_t *sockets)
 	}\
 	if (psm->init_status == ESMI_NOT_INITIALIZED) {\
 		return ESMI_NOT_INITIALIZED;\
-	} else if (psm->energy_status == ESMI_NOT_INITIALIZED) {\
+	} else if ((psm->energy_status == ESMI_NOT_INITIALIZED) && \
+			(psm->msr_status == ESMI_NOT_INITIALIZED)) {\
 		return ESMI_NO_ENERGY_DRV;\
 	}\
 	if (NULL == parg) {\
@@ -537,11 +549,15 @@ esmi_status_t esmi_core_energy_get(uint32_t core_ind, uint64_t *penergy)
 	}
 	core_ind %= psm->total_cores/psm->threads_per_core;
 
-	/*
-	 * The hwmon enumeration of energy%d_input entries starts
-	 * from 1.
-	 */
-	ret = read_energy(ENERGY_TYPE, core_ind + 1, penergy);
+	if (!psm->energy_status)
+		/*
+		 * The hwmon enumeration of energy%d_input entries starts
+		 * from 1.
+		 */
+		ret = read_energy_drv(core_ind + 1, penergy);
+
+	else
+		ret = read_msr_drv(core_ind, penergy, ENERGY_CORE_MSR);
 
 	return errno_to_esmi_status(ret);
 }
@@ -551,20 +567,27 @@ esmi_status_t esmi_core_energy_get(uint32_t core_ind, uint64_t *penergy)
  */
 esmi_status_t esmi_socket_energy_get(uint32_t sock_ind, uint64_t *penergy)
 {
-	int ret;
+	int ret, core_ind;
+	esmi_status_t status;
 
 	CHECK_ENERGY_GET_INPUT(penergy);
 	if (sock_ind >= psm->total_sockets) {
 		return ESMI_INVALID_INPUT;
 	}
 
-	/*
-	 * The hwmon enumeration of socket energy entries starts
-	 * from "total_cores/threads_per_core + sock_ind + 1".
-	 */
-	ret = read_energy(ENERGY_TYPE,
-		(psm->total_cores/psm->threads_per_core) + sock_ind + 1,
+	if (!psm->energy_status) {
+		/*
+		 * The hwmon enumeration of socket energy entries starts
+		 * from "total_cores/threads_per_core + sock_ind + 1".
+		 */
+		ret = read_energy_drv((psm->total_cores/psm->threads_per_core) + sock_ind + 1,
 			  penergy);
+	} else {
+		status = esmi_first_online_core_on_socket(sock_ind, &core_ind);
+		if (status != ESMI_SUCCESS)
+			return status;
+		ret = read_msr_drv(core_ind, penergy, ENERGY_PKG_MSR);
+	}
 
 	return errno_to_esmi_status(ret);
 }
@@ -580,7 +603,10 @@ esmi_status_t esmi_all_energies_get(uint64_t *penergy)
 	CHECK_ENERGY_GET_INPUT(penergy);
 	cpus = psm->total_cores / psm->threads_per_core;
 
-	ret = batch_read_energy(ENERGY_TYPE, penergy, cpus);
+	if (!psm->energy_status)
+		ret = batch_read_energy_drv(penergy, cpus);
+	else
+		ret = batch_read_msr_drv(penergy, cpus);
 
 	return errno_to_esmi_status(ret);
 }

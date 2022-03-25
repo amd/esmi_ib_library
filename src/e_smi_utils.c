@@ -42,7 +42,9 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <fcntl.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 
 #include <e_smi/e_smi_utils.h>
 
@@ -138,5 +140,22 @@ int readsys_str(char *filepath, char *pval, uint32_t len)
 		return errno;
 	}
 	fclose(fptr);
+	return 0;
+}
+
+int readmsr_u64(char *filepath, uint64_t *pval, uint64_t reg)
+{
+	int fd;
+
+	fd = open(filepath, O_RDONLY);
+	if (fd < 0)
+		return errno;
+
+	if (pread(fd, pval, sizeof(uint64_t), reg) < 0) {
+		close(fd);
+		return errno;
+	}
+	close(fd);
+
 	return 0;
 }

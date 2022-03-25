@@ -57,6 +57,16 @@
 #define FILESIZ		128 //!< size of filename
 
 /**
+ * @brief RAPL MSR registers used for total energy consumed.
+ */
+#define ENERGY_PWR_UNIT_MSR     0xC0010299
+#define ENERGY_CORE_MSR         0xC001029A
+#define ENERGY_PKG_MSR          0xC001029B
+
+#define AMD_ENERGY_UNIT_MASK    0x1F00
+#define AMD_ENERGY_UNIT_OFFSET  8
+
+/**
  * @brief Path used to get the total number of CPUs in the system.
  */
 #define CPU_COUNT_PATH "/sys/devices/system/cpu/present"
@@ -65,6 +75,11 @@
  * @brief Sysfs directory path for hwmon devices.
  */
 #define HWMON_PATH "/sys/class/hwmon"
+
+/**
+ * @brief energy monitor through MSR Driver.
+ */
+#define MSR_PATH "/dev/cpu"
 
 /**
  * @brief The core sysfs directory.
@@ -77,13 +92,17 @@
  */
 typedef enum {
 	ENERGY_TYPE,				//!< Core and Socket Energy coordinate
+	MSR_SAFE_TYPE,				//!< RAPL MSR Energy read coordinate
 	MONITOR_TYPE_MAX			//!< Max Monitor Type coordinate
 } monitor_types_t;
 
-int read_energy(monitor_types_t type, uint32_t sensor_id, uint64_t *val);
-int batch_read_energy(monitor_types_t type, uint64_t *pval, uint32_t entries);
+int read_energy_drv(uint32_t sensor_id, uint64_t *val);
+int read_msr_drv(uint32_t sensor_id, uint64_t *pval, uint64_t reg);
+int batch_read_energy_drv(uint64_t *pval, uint32_t cpus);
+int batch_read_msr_drv(uint64_t *pval, uint32_t cpus);
 
 int find_energy(char *devname, char *hwmon_name);
+int find_msr(const char *path);
 int hsmp_xfer(struct hsmp_message *msg, int mode);
 
 #endif  // INCLUDE_E_SMI_E_SMI_MONITOR_H_

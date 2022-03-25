@@ -40,6 +40,7 @@
  */
 #include <dirent.h>
 #include <errno.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -54,10 +55,15 @@
 
 char energymon_path[DRVPATHSIZ];
 
+static uint64_t energy_unit;
+
 /* NODE FILENAMES */
 static char energy_file[] = "energy#_input";
+static char msr_safe_file[] = "#/msr_safe";
 
-static char *filenames[MONITOR_TYPE_MAX] = { energy_file };
+static char *filenames[MONITOR_TYPE_MAX] = { energy_file,
+					     msr_safe_file
+};
 
 int find_energy(char *devname, char *hwmon_name)
 {
@@ -191,20 +197,49 @@ static void make_path(monitor_types_t type, char *driver_path,
 	replace_ch_to_num(file_path, FILEPATHSIZ, '#', sensor_id);
 }
 
-int read_energy(monitor_types_t type,
-		uint32_t sensor_id, uint64_t *pval)
+int find_msr(const char *path)
+{
+        int ret;
+        char file_path[FILEPATHSIZ];
+
+        make_path(MSR_SAFE_TYPE, MSR_PATH, 0, file_path);
+        ret = readmsr_u64(file_path, &energy_unit, ENERGY_PWR_UNIT_MSR);
+
+        if (ret)
+                return ret;
+
+	energy_unit = (energy_unit & AMD_ENERGY_UNIT_MASK) >> AMD_ENERGY_UNIT_OFFSET;
+
+        return ESMI_SUCCESS;
+}
+
+int read_energy_drv(uint32_t sensor_id, uint64_t *pval)
 {
 	char file_path[FILEPATHSIZ];
 
 	if (NULL == pval) {
 		return EFAULT;
 	}
-	make_path(type, energymon_path, sensor_id, file_path);
+	make_path(ENERGY_TYPE, energymon_path, sensor_id, file_path);
 
 	return readsys_u64(file_path, pval);
 }
 
-int batch_read_energy(monitor_types_t type, uint64_t *pval, uint32_t entries)
+int read_msr_drv(uint32_t sensor_id, uint64_t *pval, uint64_t reg)
+{
+        int ret;
+        char file_path[FILEPATHSIZ];
+
+        *pval = 0;
+
+        make_path(MSR_SAFE_TYPE, MSR_PATH, sensor_id, file_path);
+        ret = readmsr_u64(file_path, pval, reg);
+
+        *pval = *pval * pow(0.5, (double)energy_unit) * 1000000;
+        return ret;
+}
+
+int batch_read_energy_drv(uint64_t *pval, uint32_t cpus)
 {
 	char file_path[FILEPATHSIZ];
 	int i, ret, status = 0;
@@ -212,9 +247,9 @@ int batch_read_energy(monitor_types_t type, uint64_t *pval, uint32_t entries)
 	if (NULL == pval) {
 		return EFAULT;
 	}
-	memset(pval, 0, entries * sizeof(uint64_t));
-	for (i = 0; i < entries; i++) {
-		make_path(type, energymon_path, i + 1, file_path);
+	memset(pval, 0, cpus * sizeof(uint64_t));
+	for (i = 0; i < cpus; i++) {
+		make_path(ENERGY_TYPE, energymon_path, i + 1, file_path);
 		ret = readsys_u64(file_path, &pval[i]);
 		if (ret != 0 && ret != ENODEV) {
 			status = ret;
@@ -222,6 +257,23 @@ int batch_read_energy(monitor_types_t type, uint64_t *pval, uint32_t entries)
 	}
 
 	return status;
+}
+
+int batch_read_msr_drv(uint64_t *pval, uint32_t cpus)
+{
+	char file_path[FILEPATHSIZ];
+	int i, ret;
+
+	memset(pval, 0, cpus * sizeof(uint64_t));
+	for (i = 0; i < cpus; i++) {
+		make_path(MSR_SAFE_TYPE, MSR_PATH, i, file_path);
+		ret = readmsr_u64(file_path, &pval[i], ENERGY_CORE_MSR);
+		if (ret != 0 && ret != ENODEV)
+			return ret;
+
+		pval[i] = pval[i] * pow(0.5, (double)energy_unit) * 1000000;
+	}
+	return ret;
 }
 
 int hsmp_xfer(struct hsmp_message *msg, int mode)

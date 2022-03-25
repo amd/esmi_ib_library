@@ -173,6 +173,7 @@ typedef enum {
 	ESMI_SUCCESS = 0,	//!< Operation was successful
 	ESMI_INITIALIZED = 0,	//!< ESMI initialized successfully
 	ESMI_NO_ENERGY_DRV,	//!< Energy driver not found.
+	ESMI_NO_MSR_DRV,	//!< MSR driver not found.
 	ESMI_NO_HSMP_DRV,	//!< HSMP driver not found.
 	ESMI_NO_HSMP_SUP,	//!< HSMP not supported.
 	ESMI_NO_DRV,		//!< No Energy and HSMP driver present.
