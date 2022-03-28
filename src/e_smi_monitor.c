@@ -52,51 +52,12 @@
 #include <e_smi/e_smi_monitor.h>
 #include <e_smi/e_smi_utils.h>
 
+char energymon_path[DRVPATHSIZ];
+
 /* NODE FILENAMES */
 static char energy_file[] = "energy#_input";
-static char smu_fw_version_file[] = "smu_firmware_version_raw";
-static char hsmp_proto_ver_file[] = "hsmp_protocol_version";
-static char socket_power_file[] = "socket#/power";
-static char socket_power_limit_file[] = "socket#/power_limit";
-static char socket_power_limit_max_file[] = "socket#/power_limit_max";
-static char pkg_boostlimit_file[] = "boost_limit";
-static char core_boostlimit_file[] = "cpu#/boost_limit";
-static char socket_boostlimit_file[] = "socket#/boost_limit";
-static char prochot_status_file[] = "socket#/proc_hot";
-static char df_pstate_file[] = "socket#/fabric_pstate";
-static char fclk_memclk_file[] = "socket#/fabric_clocks_raw";
-static char cclk_limit_file[] = "socket#/cclk_limit";
-static char socket_c0_residency_file[] = "socket#/c0_residency";
-static char ddr_bw_file[] = "ddr_bandwidth_raw";
-static char socket_temp_mon_file[] = "socket#/temperature";
-static char xgmi_width_file[] = "xgmi_pstate";
-static char nbio_pstate_file[] = "nbio_pstate";
 
-static char *filenames[MONITOR_TYPE_MAX] = {energy_file,
-					    "",
-					    smu_fw_version_file,
-					    hsmp_proto_ver_file,
-					    socket_power_file,
-					    socket_power_limit_file,
-					    socket_power_limit_file,
-					    socket_power_limit_max_file,
-					    core_boostlimit_file,
-					    socket_boostlimit_file,
-					    core_boostlimit_file,
-					    prochot_status_file,
-					    xgmi_width_file,
-					    df_pstate_file,
-					    df_pstate_file,
-					    fclk_memclk_file,
-					    cclk_limit_file,
-					    socket_c0_residency_file,
-					    nbio_pstate_file,
-					    pkg_boostlimit_file,
-					    ddr_bw_file,
-					    socket_temp_mon_file,
-};
-
-char energymon_path[DRVPATHSIZ], hsmpmon_path[DRVPATHSIZ];
+static char *filenames[MONITOR_TYPE_MAX] = { energy_file };
 
 int find_energy(char *devname, char *hwmon_name)
 {

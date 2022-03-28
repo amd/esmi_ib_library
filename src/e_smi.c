@@ -52,7 +52,6 @@
 
 #include <e_smi/e_smi.h>
 #include <e_smi/e_smi_monitor.h>
-#include <e_smi/e_smi_utils.h>
 
 #define GEN5_RATE		2
 #define GEN5_RATE_MASK		0x3
@@ -96,7 +95,7 @@ static const char *proc_str = "processor";
 static const char *apic_str = "apicid";
 static const char *node_str = "physical id";
 
-extern char energymon_path[DRVPATHSIZ], hsmpmon_path[DRVPATHSIZ];
+extern char energymon_path[DRVPATHSIZ];
 
 /*
  * To Calculate maximum possible number of cores and sockets,
@@ -269,15 +268,12 @@ static esmi_status_t create_energy_monitor(void)
 }
 
 /*
- * Find the amd_hsmp driver is present and get the
- * path from driver initialzed sysfs path
+ * Check whether hsmp character device file exists
  */
 static esmi_status_t create_hsmp_monitor(struct system_metrics *sm)
 {
-	if (!access(HSMP_CHAR_DEVFILE_NAME, F_OK)) {
-		sm->is_char_dev = 1;
+	if (!access(HSMP_CHAR_DEVFILE_NAME, F_OK))
 		return ESMI_SUCCESS;
-	}
 
 	return ESMI_NO_HSMP_DRV;
 }
@@ -397,18 +393,18 @@ esmi_status_t esmi_init()
 
 	ret = create_hsmp_monitor(&sm);
 	if (ret == ESMI_SUCCESS) {
-			ret = create_cpu_mappings(&sm);
-			if (ret != ESMI_SUCCESS)
-				return ret;
+		ret = create_cpu_mappings(&sm);
+		if (ret != ESMI_SUCCESS)
+			return ret;
 
-			struct hsmp_message msg = { 0 };
-			msg.msg_id = HSMP_PROTO_VER_TYPE;
-			msg.response_sz = 1;
-			msg.sock_ind = 0;
-			if (!hsmp_xfer(&msg, O_RDONLY)) {
-				sm.hsmp_status = ESMI_INITIALIZED;
-				sm.hsmp_proto_ver = msg.args[0];
-			}
+		struct hsmp_message msg = { 0 };
+		msg.msg_id = HSMP_GET_PROTO_VER;
+		msg.response_sz = 1;
+		msg.sock_ind = 0;
+		if (!hsmp_xfer(&msg, O_RDONLY)) {
+			sm.hsmp_status = ESMI_INITIALIZED;
+			sm.hsmp_proto_ver = msg.args[0];
+		}
 	}
 
 	if (sm.energy_status & sm.hsmp_status) {
@@ -591,17 +587,17 @@ esmi_status_t esmi_all_energies_get(uint64_t *penergy)
 
 esmi_status_t esmi_smu_fw_version_get(struct smu_fw_version *smu_fw)
 {
+	struct hsmp_message msg = { 0 };
 	int ret;
 
 	CHECK_HSMP_GET_INPUT(smu_fw);
 
-		struct hsmp_message msg = { 0 };
-		msg.msg_id = SMU_FW_VERSION_TYPE;
-		msg.response_sz = 1;
-		msg.sock_ind = 0;
-		ret = hsmp_xfer(&msg, O_RDONLY);
-		if (!ret)
-			*(uint32_t *)smu_fw = msg.args[0];
+	msg.msg_id = HSMP_GET_SMU_VER;
+	msg.response_sz = 1;
+	msg.sock_ind = 0;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret)
+		*(uint32_t *)smu_fw = msg.args[0];
 
 	return errno_to_esmi_status(ret);
 }
@@ -614,6 +610,7 @@ esmi_status_t esmi_smu_fw_version_get(struct smu_fw_version *smu_fw)
  */
 esmi_status_t esmi_socket_power_get(uint32_t sock_ind, uint32_t *ppower)
 {
+	struct hsmp_message msg = { 0 };
 	int ret;
 
 	CHECK_HSMP_GET_INPUT(ppower);
@@ -622,13 +619,12 @@ esmi_status_t esmi_socket_power_get(uint32_t sock_ind, uint32_t *ppower)
 		return ESMI_INVALID_INPUT;
 	}
 
-		struct hsmp_message msg = { 0 };
-		msg.msg_id = SOCKET_POWER_TYPE;
-		msg.response_sz = 1;
-		msg.sock_ind = sock_ind;
-		ret = hsmp_xfer(&msg, O_RDONLY);
-		if (!ret)
-			*ppower = msg.args[0];
+	msg.msg_id = HSMP_GET_SOCKET_POWER;
+	msg.response_sz = 1;
+	msg.sock_ind = sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret)
+		*ppower = msg.args[0];
 
 	return errno_to_esmi_status(ret);
 }
@@ -639,6 +635,7 @@ esmi_status_t esmi_socket_power_get(uint32_t sock_ind, uint32_t *ppower)
  */
 esmi_status_t esmi_socket_power_cap_get(uint32_t sock_ind, uint32_t *pcap)
 {
+	struct hsmp_message msg = { 0 };
 	int ret;
 
 	CHECK_HSMP_GET_INPUT(pcap);
@@ -647,13 +644,12 @@ esmi_status_t esmi_socket_power_cap_get(uint32_t sock_ind, uint32_t *pcap)
 		return ESMI_INVALID_INPUT;
 	}
 
-		struct hsmp_message msg = { 0 };
-		msg.msg_id = R_SOCKET_POWER_LIMIT_TYPE;
-		msg.response_sz = 1;
-		msg.sock_ind = sock_ind;
-		ret = hsmp_xfer(&msg, O_RDONLY);
-		if (!ret)
-			*pcap = msg.args[0];
+	msg.msg_id = HSMP_GET_SOCKET_POWER_LIMIT;
+	msg.response_sz = 1;
+	msg.sock_ind = sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret)
+		*pcap = msg.args[0];
 
 	return errno_to_esmi_status(ret);
 }
@@ -664,6 +660,7 @@ esmi_status_t esmi_socket_power_cap_get(uint32_t sock_ind, uint32_t *pcap)
  */
 esmi_status_t esmi_socket_power_cap_max_get(uint32_t sock_ind, uint32_t *pmax)
 {
+		struct hsmp_message msg = { 0 };
 	int ret;
 
 	CHECK_HSMP_GET_INPUT(pmax);
@@ -672,13 +669,12 @@ esmi_status_t esmi_socket_power_cap_max_get(uint32_t sock_ind, uint32_t *pmax)
 		return ESMI_INVALID_INPUT;
 	}
 
-		struct hsmp_message msg = { 0 };
-		msg.msg_id = SOCKET_POWER_LIMIT_MAX_TYPE;
-		msg.response_sz = 1;
-		msg.sock_ind = sock_ind;
-		ret = hsmp_xfer(&msg, O_RDONLY);
-		if (!ret)
-			*pmax = msg.args[0];
+	msg.msg_id = HSMP_GET_SOCKET_POWER_LIMIT_MAX;
+	msg.response_sz = 1;
+	msg.sock_ind = sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret)
+		*pmax = msg.args[0];
 
 	return errno_to_esmi_status(ret);
 }
@@ -691,6 +687,7 @@ esmi_status_t esmi_socket_power_cap_max_get(uint32_t sock_ind, uint32_t *pmax)
  */
 esmi_status_t esmi_socket_power_cap_set(uint32_t sock_ind, uint32_t cap)
 {
+	struct hsmp_message msg = { 0 };
 	int ret;
 
 	CHECK_HSMP_INPUT();
@@ -700,12 +697,11 @@ esmi_status_t esmi_socket_power_cap_set(uint32_t sock_ind, uint32_t cap)
 		return ESMI_INVALID_INPUT;
 	}
 
-		struct hsmp_message msg = { 0 };
-		msg.msg_id = W_SOCKET_POWER_LIMIT_TYPE;
-		msg.num_args = 1;
-		msg.sock_ind = sock_ind;
-		msg.args[0] = cap;
-		ret = hsmp_xfer(&msg, O_WRONLY);
+	msg.msg_id = HSMP_SET_SOCKET_POWER_LIMIT;
+	msg.num_args = 1;
+	msg.sock_ind = sock_ind;
+	msg.args[0] = cap;
+	ret = hsmp_xfer(&msg, O_WRONLY);
 
 	return errno_to_esmi_status(ret);
 }
@@ -719,6 +715,7 @@ esmi_status_t esmi_socket_power_cap_set(uint32_t sock_ind, uint32_t cap)
 esmi_status_t esmi_core_boostlimit_get(uint32_t core_ind,
 				       uint32_t *pboostlimit)
 {
+	struct hsmp_message msg = { 0 };
 	int ret;
 
 	CHECK_HSMP_GET_INPUT(pboostlimit);
@@ -730,15 +727,14 @@ esmi_status_t esmi_core_boostlimit_get(uint32_t core_ind,
 	if (!psm->map)
 		return ESMI_IO_ERROR;
 
-		struct hsmp_message msg = { 0 };
-		msg.msg_id = R_CORE_BOOSTLIMIT_TYPE;
-		msg.num_args = 1;
-		msg.response_sz = 1;
-		msg.sock_ind = psm->map[core_ind].sock_id;
-		msg.args[0] = psm->map[core_ind].apic_id;
-		ret = hsmp_xfer(&msg, O_RDONLY);
-		if (!ret)
-			*pboostlimit = msg.args[0];
+	msg.msg_id = HSMP_GET_BOOST_LIMIT;
+	msg.num_args = 1;
+	msg.response_sz = 1;
+	msg.sock_ind = psm->map[core_ind].sock_id;
+	msg.args[0] = psm->map[core_ind].apic_id;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret)
+		*pboostlimit = msg.args[0];
 
 	return errno_to_esmi_status(ret);
 }
@@ -752,6 +748,7 @@ esmi_status_t esmi_core_boostlimit_get(uint32_t core_ind,
 esmi_status_t esmi_core_boostlimit_set(uint32_t core_ind,
 				       uint32_t boostlimit)
 {
+	struct hsmp_message msg = { 0 };
 	int ret;
 
 	CHECK_HSMP_INPUT();
@@ -764,12 +761,11 @@ esmi_status_t esmi_core_boostlimit_set(uint32_t core_ind,
 	if (!psm->map)
 		return ESMI_IO_ERROR;
 
-		struct hsmp_message msg = { 0 };
-		msg.msg_id = W_CORE_BOOSTLIMIT_TYPE;
-		msg.num_args = 1;
-		msg.sock_ind = psm->map[core_ind].sock_id;
-		msg.args[0] = (psm->map[core_ind].apic_id << 16) | boostlimit;
-		ret = hsmp_xfer(&msg, O_WRONLY);
+	msg.msg_id = HSMP_SET_BOOST_LIMIT;
+	msg.num_args = 1;
+	msg.sock_ind = psm->map[core_ind].sock_id;
+	msg.args[0] = (psm->map[core_ind].apic_id << 16) | boostlimit;
+	ret = hsmp_xfer(&msg, O_WRONLY);
 
 	return errno_to_esmi_status(ret);
 }
@@ -781,6 +777,7 @@ esmi_status_t esmi_core_boostlimit_set(uint32_t core_ind,
 esmi_status_t esmi_socket_boostlimit_set(uint32_t sock_ind,
 					 uint32_t boostlimit)
 {
+	struct hsmp_message msg = { 0 };
 	int ret;
 
 	CHECK_HSMP_INPUT();
@@ -790,18 +787,18 @@ esmi_status_t esmi_socket_boostlimit_set(uint32_t sock_ind,
 		return ESMI_INVALID_INPUT;
 	}
 
-		struct hsmp_message msg = { 0 };
-		msg.msg_id = SOCKET_BOOSTLIMIT_TYPE;
-		msg.num_args = 1;
-		msg.sock_ind = sock_ind;
-		msg.args[0] = boostlimit;
-		ret = hsmp_xfer(&msg, O_WRONLY);
+	msg.msg_id = HSMP_SET_BOOST_LIMIT_SOCKET;
+	msg.num_args = 1;
+	msg.sock_ind = sock_ind;
+	msg.args[0] = boostlimit;
+	ret = hsmp_xfer(&msg, O_WRONLY);
 
 	return errno_to_esmi_status(ret);
 }
 
 esmi_status_t esmi_prochot_status_get(uint32_t sock_ind, uint32_t *prochot)
 {
+	struct hsmp_message msg = { 0 };
 	char hot[9];
 	int ret;
 
@@ -811,13 +808,12 @@ esmi_status_t esmi_prochot_status_get(uint32_t sock_ind, uint32_t *prochot)
 		return ESMI_INVALID_INPUT;
 	}
 
-		struct hsmp_message msg = { 0 };
-		msg.msg_id = PROCHOT_STATUS_TYPE;
-		msg.response_sz = 1;
-		msg.sock_ind = sock_ind;
-		ret = hsmp_xfer(&msg, O_RDONLY);
-		if (!ret)
-			*prochot = msg.args[0];
+	msg.msg_id = HSMP_GET_PROC_HOT;
+	msg.response_sz = 1;
+	msg.sock_ind = sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret)
+		*prochot = msg.args[0];
 
 	return errno_to_esmi_status(ret);
 }
@@ -827,6 +823,7 @@ esmi_status_t esmi_prochot_status_get(uint32_t sock_ind, uint32_t *prochot)
  */
 esmi_status_t esmi_xgmi_width_set(uint8_t min, uint8_t max)
 {
+	struct hsmp_message msg = { 0 };
 	uint16_t width;
 	int drv_val;
 	int ret;
@@ -841,16 +838,15 @@ esmi_status_t esmi_xgmi_width_set(uint8_t min, uint8_t max)
 		return ESMI_INVALID_INPUT;
 
 	width = (min << 8) | max;
-		struct hsmp_message msg = { 0 };
-		for (i = 0; i < psm->total_sockets; i++) {
-			msg.msg_id = XGMI_WIDTH_TYPE;
-			msg.num_args = 1;
-			msg.args[0] = width;
-			msg.sock_ind = i;
-			ret = hsmp_xfer(&msg, O_WRONLY);
-			if (ret)
-				return errno_to_esmi_status(ret);
-		}
+	for (i = 0; i < psm->total_sockets; i++) {
+		msg.msg_id = HSMP_SET_XGMI_LINK_WIDTH;
+		msg.num_args = 1;
+		msg.args[0] = width;
+		msg.sock_ind = i;
+		ret = hsmp_xfer(&msg, O_WRONLY);
+		if (ret)
+			return errno_to_esmi_status(ret);
+	}
 
 	return errno_to_esmi_status(ret);
 }
@@ -858,6 +854,7 @@ esmi_status_t esmi_xgmi_width_set(uint8_t min, uint8_t max)
 /* enable APB, no arguments */
 esmi_status_t esmi_apb_enable(uint32_t sock_ind)
 {
+	struct hsmp_message msg = { 0 };
 	int ret;
 
 	CHECK_HSMP_INPUT();
@@ -870,10 +867,9 @@ esmi_status_t esmi_apb_enable(uint32_t sock_ind)
 	 * asserted, the lowest DF P-state (highest value) is enforced
 	 * regardless of the APBEnable/APBDisable
 	 */
-		struct hsmp_message msg = { 0 };
-		msg.msg_id = EN_DF_PSTATE_TYPE;
-		msg.sock_ind = sock_ind;
-		ret = hsmp_xfer(&msg, O_WRONLY);
+	msg.msg_id = HSMP_SET_AUTO_DF_PSTATE;
+	msg.sock_ind = sock_ind;
+	ret = hsmp_xfer(&msg, O_WRONLY);
 
 	return errno_to_esmi_status(ret);
 }
@@ -881,6 +877,7 @@ esmi_status_t esmi_apb_enable(uint32_t sock_ind)
 /* disable APB, user can set 0 ~ 3 */
 esmi_status_t esmi_apb_disable(uint32_t sock_ind, uint8_t pstate)
 {
+	struct hsmp_message msg = { 0 };
 	int ret;
 
 	CHECK_HSMP_INPUT();
@@ -891,12 +888,11 @@ esmi_status_t esmi_apb_disable(uint32_t sock_ind, uint8_t pstate)
 	if (pstate > 3)
 		return ESMI_INVALID_INPUT;
 
-		struct hsmp_message msg = { 0 };
-		msg.msg_id = DIS_DF_PSTATE_TYPE;
-		msg.num_args = 1;
-		msg.sock_ind = sock_ind;
-		msg.args[0] = pstate;
-		ret = hsmp_xfer(&msg, O_WRONLY);
+	msg.msg_id = HSMP_SET_DF_PSTATE;
+	msg.num_args = 1;
+	msg.sock_ind = sock_ind;
+	msg.args[0] = pstate;
+	ret = hsmp_xfer(&msg, O_WRONLY);
 
 	return errno_to_esmi_status(ret);
 }
@@ -904,6 +900,7 @@ esmi_status_t esmi_apb_disable(uint32_t sock_ind, uint8_t pstate)
 esmi_status_t esmi_fclk_mclk_get(uint32_t sock_ind,
 				 uint32_t *fclk, uint32_t *mclk)
 {
+	struct hsmp_message msg = { 0 };
 	int ret;
 	uint64_t clk;
 
@@ -914,21 +911,21 @@ esmi_status_t esmi_fclk_mclk_get(uint32_t sock_ind,
 	if (sock_ind >= psm->total_sockets)
 		return ESMI_INVALID_INPUT;
 
-		struct hsmp_message msg = { 0 };
-		msg.msg_id = FCLK_MEMCLK_TYPE;
-		msg.response_sz = 2;
-		msg.sock_ind = sock_ind;
-		ret = hsmp_xfer(&msg, O_RDONLY);
-		if (!ret) {
-			*fclk = msg.args[0];
-			*mclk = msg.args[1];
-		}
+	msg.msg_id = HSMP_GET_FCLK_MCLK;
+	msg.response_sz = 2;
+	msg.sock_ind = sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret) {
+		*fclk = msg.args[0];
+		*mclk = msg.args[1];
+	}
 
 	return errno_to_esmi_status(ret);
 }
 
 esmi_status_t esmi_cclk_limit_get(uint32_t sock_ind, uint32_t *cclk)
 {
+	struct hsmp_message msg = { 0 };
 	int ret;
 
 	CHECK_HSMP_GET_INPUT(cclk);
@@ -936,13 +933,12 @@ esmi_status_t esmi_cclk_limit_get(uint32_t sock_ind, uint32_t *cclk)
 	if (sock_ind >= psm->total_sockets)
 		return ESMI_INVALID_INPUT;
 
-		struct hsmp_message msg = { 0 };
-		msg.msg_id = CCLK_LIMIT_TYPE;
-		msg.response_sz = 1;
-		msg.sock_ind = sock_ind;
-		ret = hsmp_xfer(&msg, O_RDONLY);
-		if (!ret)
-			*cclk = msg.args[0];
+	msg.msg_id = HSMP_GET_CCLK_THROTTLE_LIMIT;
+	msg.response_sz = 1;
+	msg.sock_ind = sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret)
+		*cclk = msg.args[0];
 
 	return errno_to_esmi_status(ret);
 }
@@ -956,6 +952,7 @@ esmi_status_t esmi_cclk_limit_get(uint32_t sock_ind, uint32_t *cclk)
 esmi_status_t esmi_socket_c0_residency_get(uint32_t sock_ind,
 					   uint32_t *pc0_residency)
 {
+	struct hsmp_message msg = { 0 };
 	int ret;
 
 	CHECK_HSMP_GET_INPUT(pc0_residency);
@@ -963,13 +960,12 @@ esmi_status_t esmi_socket_c0_residency_get(uint32_t sock_ind,
 		return ESMI_INVALID_INPUT;
 	}
 
-		struct hsmp_message msg = { 0 };
-		msg.msg_id = SOCKET_C0_RESIDENCY_TYPE;
-		msg.response_sz = 1;
-		msg.sock_ind = sock_ind;
-		ret = hsmp_xfer(&msg, O_RDONLY);
-		if (!ret)
-			*pc0_residency = msg.args[0];
+	msg.msg_id = HSMP_GET_C0_PERCENT;
+	msg.response_sz = 1;
+	msg.sock_ind = sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret)
+		*pc0_residency = msg.args[0];
 
 	return errno_to_esmi_status(ret);
 }
@@ -992,7 +988,7 @@ esmi_status_t esmi_socket_lclk_dpm_level_set(uint32_t sock_ind, uint8_t nbio_id,
 
 	dpm_val = (nbio_id << 16) | (max << 8) | min;
 
-	msg.msg_id = W_LCLKDPM_LEVEL_TYPE;
+	msg.msg_id = HSMP_SET_NBIO_DPM_LEVEL;
 	msg.num_args = 1;
 	msg.sock_ind = sock_ind;
 	msg.args[0] = dpm_val;
@@ -1019,7 +1015,7 @@ esmi_status_t esmi_socket_lclk_dpm_level_get(uint8_t sock_ind, uint8_t nbio_id,
 	if (nbio_id > 3)
 		return ESMI_INVALID_INPUT;
 
-	msg.msg_id	= R_LCLKDPM_LEVEL_TYPE;
+	msg.msg_id	= HSMP_GET_NBIO_DPM_LEVEL;
 	msg.num_args	= 1;
 	msg.response_sz	= 1;
 	msg.sock_ind	= sock_ind;
@@ -1035,6 +1031,7 @@ esmi_status_t esmi_socket_lclk_dpm_level_get(uint8_t sock_ind, uint8_t nbio_id,
 
 esmi_status_t esmi_ddr_bw_get(struct ddr_bw_metrics *ddr_bw)
 {
+	struct hsmp_message msg = { 0 };
 	uint32_t bw;
 	int ret;
 
@@ -1044,14 +1041,13 @@ esmi_status_t esmi_ddr_bw_get(struct ddr_bw_metrics *ddr_bw)
 		return ESMI_NO_HSMP_MSG_SUP;
 	}
 
-		struct hsmp_message msg = { 0 };
-		msg.msg_id = DDR_BW_TYPE;
-		msg.response_sz = 1;
-		msg.sock_ind = 0;
-		ret = hsmp_xfer(&msg, O_RDONLY);
-		if (ret)
-			return errno_to_esmi_status(ret);
-		bw = msg.args[0];
+	msg.msg_id = HSMP_GET_DDR_BANDWIDTH;
+	msg.response_sz = 1;
+	msg.sock_ind = 0;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (ret)
+		return errno_to_esmi_status(ret);
+	bw = msg.args[0];
 
 	ddr_bw->max_bw = bw >> 20;
 	ddr_bw->utilized_bw = (bw >> 8) & 0xFFF;
@@ -1062,6 +1058,8 @@ esmi_status_t esmi_ddr_bw_get(struct ddr_bw_metrics *ddr_bw)
 
 esmi_status_t esmi_socket_temperature_get(uint32_t sock_ind, uint32_t *ptmon)
 {
+	struct hsmp_message msg = { 0 };
+	uint32_t int_part, fract_part;
 	esmi_status_t ret;
 
 	if (psm->hsmp_proto_ver != HSMP_PROTO_VER4)
@@ -1073,19 +1071,16 @@ esmi_status_t esmi_socket_temperature_get(uint32_t sock_ind, uint32_t *ptmon)
 
 	CHECK_HSMP_GET_INPUT(ptmon);
 
-		struct hsmp_message msg = { 0 };
-		uint32_t int_part, fract_part;
-
-		msg.msg_id = SOCKET_TEMP_MONITOR_TYPE;
-		msg.response_sz = 1;
-		msg.sock_ind = sock_ind;
-		ret = hsmp_xfer(&msg, O_RDONLY);
-		if (!ret) {
-			/* convert temperature to milli degree celsius */
-			int_part = ((msg.args[0] >> 8) & 0xFF) * 1000;
-			fract_part = ((msg.args[0] >> 5) & 0x7) * 125;
-			*ptmon = int_part + fract_part;
-		}
+	msg.msg_id = HSMP_GET_TEMP_MONITOR;
+	msg.response_sz = 1;
+	msg.sock_ind = sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret) {
+		/* convert temperature to milli degree celsius */
+		int_part = ((msg.args[0] >> 8) & 0xFF) * 1000;
+		fract_part = ((msg.args[0] >> 5) & 0x7) * 125;
+		*ptmon = int_part + fract_part;
+	}
 
 	return errno_to_esmi_status(ret);
 }
@@ -1104,7 +1099,7 @@ esmi_status_t esmi_dimm_temp_range_and_refresh_rate_get(uint8_t sock_ind, uint8_
 
 	CHECK_HSMP_GET_INPUT(rate);
 
-	msg.msg_id	= DIMM_TEMP_RANGE_REFRESH_RATE_TYPE;
+	msg.msg_id	= HSMP_GET_DIMM_TEMP_RANGE;
 	msg.response_sz	= 1;
 	msg.num_args	= 1;
 	msg.args[0]	= dimm_addr;
@@ -1132,7 +1127,7 @@ esmi_status_t esmi_dimm_power_consumption_get(uint8_t sock_ind, uint8_t dimm_add
 
 	CHECK_HSMP_GET_INPUT(dimm_pow);
 
-	msg.msg_id	= DIMM_POWER_CONSUMPTION_TYPE;
+	msg.msg_id	= HSMP_GET_DIMM_POWER;
 	msg.response_sz	= 1;
 	msg.num_args	= 1;
 	msg.args[0]	= dimm_addr;
@@ -1171,7 +1166,7 @@ esmi_status_t esmi_dimm_thermal_sensor_get(uint8_t sock_ind, uint8_t dimm_addr,
 
 	CHECK_HSMP_GET_INPUT(dimm_temp);
 
-	msg.msg_id	= DIMM_THERMAL_SENSOR_TYPE;
+	msg.msg_id	= HSMP_GET_DIMM_THERMAL;
 	msg.response_sz = 1;
 	msg.num_args 	= 1;
 	msg.args[0] 	= dimm_addr;
@@ -1211,7 +1206,7 @@ esmi_status_t esmi_socket_current_active_freq_limit_get(uint32_t sock_ind, uint1
 	/* frequency limit source names array length */
 	src_len = ARRAY_SIZE(freqlimitsrcnames);
 
-	msg.msg_id	= CURRENT_ACTIVE_FREQ_LIMIT_SOCKET_TYPE;
+	msg.msg_id	= HSMP_GET_SOCKET_FREQ_LIMIT;
 	msg.response_sz = 1;
 	msg.sock_ind 	= sock_ind;
 	ret = hsmp_xfer(&msg, O_RDONLY);
@@ -1249,7 +1244,7 @@ esmi_status_t esmi_current_freq_limit_core_get(uint32_t core_id, uint32_t *freq)
 	if (!psm->map)
 		return ESMI_IO_ERROR;
 
-	msg.msg_id	= CURRENT_ACTIVE_FREQ_LIMIT_CORE_TYPE;
+	msg.msg_id	= HSMP_GET_CCLK_CORE_LIMIT;
 	msg.num_args	= 1;
 	msg.response_sz = 1;
 	msg.args[0]	= core_id;
@@ -1274,7 +1269,7 @@ esmi_status_t esmi_pwr_svi_telemetry_all_rails_get(uint32_t sock_ind, uint32_t *
 	if (sock_ind >= psm->total_sockets)
 		return ESMI_INVALID_INPUT;
 
-	msg.msg_id	= PWR_SVI_TELEMTRY_SOCKET_TYPE;
+	msg.msg_id	= HSMP_GET_RAILS_SVI;
 	msg.response_sz	= 1;
 	msg.sock_ind	= sock_ind;
 	ret = hsmp_xfer(&msg, O_RDONLY);
@@ -1300,7 +1295,7 @@ esmi_status_t esmi_socket_freq_range_get(uint8_t sock_ind, uint16_t *fmax, uint1
 	if (sock_ind >= psm->total_sockets)
 		return ESMI_INVALID_INPUT;
 
-	msg.msg_id	= SOCKET_FREQ_RANGE_TYPE;
+	msg.msg_id	= HSMP_GET_SOCKET_FMAX_FMIN;
 	msg.response_sz	= 1;
 	msg.sock_ind	= sock_ind;
 	ret = hsmp_xfer(&msg, O_RDONLY);
@@ -1373,7 +1368,7 @@ esmi_status_t esmi_current_io_bandwidth_get(uint8_t sock_ind, struct link_id_bw_
 	if (validate_link_id(link.link_id))
 		return ESMI_INVALID_INPUT;
 
-	msg.msg_id	= CURRENT_IO_BANDWIDTH_TYPE;
+	msg.msg_id	= HSMP_GET_IOLINK_BANDWITH;
 	msg.response_sz = 1;
 	msg.num_args	= 1;
 	msg.args[0]	= link.bw_type | link.link_id << 8;
@@ -1401,7 +1396,7 @@ esmi_status_t esmi_current_xgmi_bw_get(struct link_id_bw_type link,
 	if (validate_bw_type(link.bw_type))
 		return ESMI_INVALID_INPUT;
 
-	msg.msg_id	= CURRENT_XGMI_BANDWIDTH_TYPE;
+	msg.msg_id	= HSMP_GET_XGMI_BANDWITH;
 	msg.response_sz = 1;
 	msg.num_args	= 1;
 	msg.args[0]	= link.bw_type | link.link_id << 8;
@@ -1439,7 +1434,7 @@ esmi_status_t esmi_gmi3_link_width_range_set(uint8_t sock_ind, uint8_t min_link_
 	if (validate_max_min_values(max_link_width, min_link_width, FULL_WIDTH))
 		return ret;
 
-	msg.msg_id	= GMI3_LINK_WIDTH_RANGE_TYPE;
+	msg.msg_id	= HSMP_SET_GMI3_WIDTH;
 	msg.num_args	= 1;
 	msg.sock_ind	= sock_ind;
 	msg.args[0]	= (min_link_width << 8) | max_link_width;
@@ -1464,7 +1459,7 @@ esmi_status_t esmi_pcie_link_rate_set(uint8_t sock_ind, uint8_t rate_ctrl, uint8
 	if (rate_ctrl > GEN5_RATE)
 		return ESMI_INVALID_INPUT;
 
-	msg.msg_id	= PCIE_GEN5_RATE_CTL_TYPE;
+	msg.msg_id	= HSMP_SET_PCI_RATE;
 	msg.num_args	= 1;
 	msg.response_sz	= 1;
 	msg.sock_ind	= sock_ind;
@@ -1504,7 +1499,7 @@ esmi_status_t esmi_pwr_efficiency_mode_set(uint8_t sock_ind, uint8_t mode)
 	if (validate_pwr_efficiency_mode(mode))
 		return ESMI_INVALID_INPUT;
 
-	msg.msg_id	= POWER_EFFICIENCY_MODE_TYPE;
+	msg.msg_id	= HSMP_SET_POWER_MODE;
 	msg.num_args	= 1;
 	msg.sock_ind	= sock_ind;
 	msg.args[0]	= mode;
@@ -1530,7 +1525,7 @@ esmi_status_t esmi_df_pstate_range_set(uint8_t sock_ind, uint8_t max_pstate,
 	if (max_pstate > min_pstate || min_pstate > MAX_DF_PSTATE_LIMIT)
 		return ESMI_INVALID_INPUT;
 
-	msg.msg_id	= DIS_DF_PSTATE_TYPE;
+	msg.msg_id	= HSMP_SET_PSTATE_MAX_MIN;
 	msg.num_args	= 1;
 	msg.sock_ind	= sock_ind;
 	msg.args[0]	= (min_pstate << 8) || max_pstate;
@@ -1541,6 +1536,7 @@ esmi_status_t esmi_df_pstate_range_set(uint8_t sock_ind, uint8_t max_pstate,
 
 esmi_status_t esmi_hsmp_proto_ver_get(uint32_t *proto_ver)
 {
+	struct hsmp_message msg = { 0 };
 	int ret;
 
 	CHECK_HSMP_GET_INPUT(proto_ver);
@@ -1549,13 +1545,13 @@ esmi_status_t esmi_hsmp_proto_ver_get(uint32_t *proto_ver)
 		*proto_ver = psm->hsmp_proto_ver;
 		return errno_to_esmi_status(0);
 	}
-		struct hsmp_message msg = { 0 };
-		msg.msg_id = HSMP_PROTO_VER_TYPE;
-		msg.response_sz = 1;
-		msg.sock_ind = 0;
-		ret = hsmp_xfer(&msg, O_RDONLY);
-		if (!ret)
-			*proto_ver = msg.args[0];
+
+	msg.msg_id = HSMP_GET_PROTO_VER;
+	msg.response_sz = 1;
+	msg.sock_ind = 0;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret)
+		*proto_ver = msg.args[0];
 
 	return errno_to_esmi_status(ret);
 }

@@ -73,46 +73,10 @@
 
 /**
  * MONITOR TYPES
- * @brief This enum gives information to identify whether the monitor type is
- * from Energy/HWMON or HSMP.
+ * @brief This enum gives information to identify different energy monitor types
  */
 typedef enum {
 	ENERGY_TYPE,				//!< Core and Socket Energy coordinate
-	HSMP_TEST_TYPE,
-	SMU_FW_VERSION_TYPE,			//!< SMU firmware version coordinate
-	HSMP_PROTO_VER_TYPE,			//!< HSMP interface version coordinate
-	SOCKET_POWER_TYPE,			//!< Socket Power coordinate
-	W_SOCKET_POWER_LIMIT_TYPE,		//!< Write socket Power Limit coordinate
-	R_SOCKET_POWER_LIMIT_TYPE,		//!< Read socket Power Limit coordinate
-	SOCKET_POWER_LIMIT_MAX_TYPE,		//!< Socket PowerLimit Max coordinate
-	W_CORE_BOOSTLIMIT_TYPE,			//!< Write core Boostlimit coordinate
-	SOCKET_BOOSTLIMIT_TYPE,			//!< Socket Boostlimit coordinate
-	R_CORE_BOOSTLIMIT_TYPE,			//!< Read core Boostlimit coordinate
-	PROCHOT_STATUS_TYPE,			//!< HSMP prochot status coordinate
-	XGMI_WIDTH_TYPE,			//!< HSMP xgmi width coordinate
-	DIS_DF_PSTATE_TYPE,			//!< HSMP disable DF P-state coordinate
-	EN_DF_PSTATE_TYPE,			//!< HSMP enable DF P-state coordinate
-	FCLK_MEMCLK_TYPE,			//!< Current fclk, memclk coordinate
-	CCLK_LIMIT_TYPE,			//!< Core clock limit coordinate
-	SOCKET_C0_RESIDENCY_TYPE,		//!< Socket c0 residency coordinate
-	W_LCLKDPM_LEVEL_TYPE,			//!< Set socket nbio pstate
-	R_LCLKDPM_LEVEL_TYPE,			//!< Get LCLK frequency encoding
-	DDR_BW_TYPE,				//!< DDR bandwidth coordinate
-	SOCKET_TEMP_MONITOR_TYPE,		//!< Socket temperature monitor coordinate
-	DIMM_TEMP_RANGE_REFRESH_RATE_TYPE,	//!< Dimm temp range and refresh rate
-	DIMM_POWER_CONSUMPTION_TYPE,		//!< Dimm temp range and refresh rate
-	DIMM_THERMAL_SENSOR_TYPE,		//!< Dimm thermal sensor
-	CURRENT_ACTIVE_FREQ_LIMIT_SOCKET_TYPE,	//!< Socket frequency limit
-	CURRENT_ACTIVE_FREQ_LIMIT_CORE_TYPE,	//!< Cclk limit set per core
-	PWR_SVI_TELEMTRY_SOCKET_TYPE,		//!< SVI based power telemetry
-	SOCKET_FREQ_RANGE_TYPE,			//!< Socket frequeny range fmax and fmin
-	CURRENT_IO_BANDWIDTH_TYPE,		//!< Bandwidth on IO link
-	CURRENT_XGMI_BANDWIDTH_TYPE,		//!< Bandwidth on XGMI link
-	GMI3_LINK_WIDTH_RANGE_TYPE,		//!< GMI3 link width setting
-	PCIE_GEN5_RATE_CTL_TYPE,		//!< PCIe gen5 rate control
-	POWER_EFFICIENCY_MODE_TYPE,		//!< Power profile setting
-	DF_PSTATE_RANGE_TYPE,			//!< DF pstate range setting
-	PKG_BOOSTLIMIT_TYPE,			//!< TODO:Needs to be removed once sysfs is removed
 	MONITOR_TYPE_MAX			//!< Max Monitor Type coordinate
 } monitor_types_t;
 
