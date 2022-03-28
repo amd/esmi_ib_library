@@ -671,31 +671,6 @@ static esmi_status_t epyc_setsocketperf(uint32_t sock_id, uint32_t boostlimit)
 	return ESMI_SUCCESS;
 }
 
-static esmi_status_t epyc_setpkgperf(uint32_t boostlimit)
-{
-	esmi_status_t ret;
-	uint32_t blimit = 0;
-
-	ret = esmi_package_boostlimit_set(boostlimit);
-	if (ret != ESMI_SUCCESS) {
-		printf("Failed: to set package boostlimit to %u MHz, "
-			"Err[%d]: %s\n", boostlimit, ret,
-			esmi_get_err_msg(ret));
-		return ret;
-	}
-	ret = esmi_core_boostlimit_get(0, &blimit);
-	if (ret == ESMI_SUCCESS) {
-		if (blimit < boostlimit) {
-			printf("Set to max boost limit: %u MHz\n", blimit);
-		} else if (blimit > boostlimit) {
-			printf("Set to min boost limit: %u MHz\n", blimit);
-		}
-	}
-	printf("Package boostlimit set to %u MHz successfully\n", blimit);
-
-	return ESMI_SUCCESS;
-}
-
 static esmi_status_t epyc_get_sockc0_residency(uint32_t sock_id)
 {
 	esmi_status_t ret;
@@ -1377,8 +1352,6 @@ static char* const feat_ver2_set[] = {
 	" for a given core (MHz)",
 	"  --setsockbl [SOCKET] [BOOSTLIMIT]\t\t\tSet Boost"
 	" limit for a given Socket (MHz)",
-	"  --setpkgbl [BOOSTLIMIT]\t\t\t\tSet Boost limit"
-	" for all sockets in a package (MHz)",
 	"  --apbdisable [SOCKET] [PSTATE]\t\t\tSet Data Fabric"
 	" Pstate for a given socket, PSTATE = 0 to 3",
 	"  --apbenable [SOCKET]\t\t\t\t\tEnable the Data Fabric performance"
@@ -1623,7 +1596,6 @@ static esmi_status_t parsesmi_args(int argc,char **argv)
 		{"setpowerlimit",	required_argument,	0,	'C'},
 		{"setcorebl",		required_argument,	0,	'a'},
 		{"setsockbl",		required_argument,	0,	'b'},
-		{"setpkgbl",		required_argument,	0,	'c'},
 		{"showsockc0resi",	required_argument,	0,	'r'},
 		{"showddrbw",		no_argument,		0,	'd'},
 		{"showsockettemp",	no_argument,		0,      't'},
@@ -1933,11 +1905,6 @@ static esmi_status_t parsesmi_args(int argc,char **argv)
 			sock_id = atoi(optarg);
 			boostlimit = atoi(argv[optind++]);
 			ret = epyc_setsocketperf(sock_id, boostlimit);
-			break;
-		case 'c' :
-			/* Set the boostlimit value for a given package */
-			boostlimit = atoi(optarg);
-			ret = epyc_setpkgperf(boostlimit);
 			break;
 		case 'r' :
 			/* Get the Power values for a given socket */
