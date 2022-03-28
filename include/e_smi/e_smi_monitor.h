@@ -119,14 +119,7 @@ typedef enum {
 int read_energy(monitor_types_t type, uint32_t sensor_id, uint64_t *val);
 int batch_read_energy(monitor_types_t type, uint64_t *pval, uint32_t entries);
 
-int hsmp_read64(monitor_types_t type, uint32_t sensor_id, uint64_t *pval);
-int hsmp_read32(monitor_types_t type, uint32_t sensor_id, uint32_t *val);
-int hsmp_readstr(monitor_types_t type, uint32_t sensor_id, char *val, uint32_t len);
-int hsmp_write_s32(monitor_types_t type, uint32_t sensor_id, int32_t val);
-int hsmp_write32(monitor_types_t type, uint32_t sensor_id, uint32_t val);
-
 int find_energy(char *devname, char *hwmon_name);
-int find_hsmp(const char *path);
 int hsmp_xfer(struct hsmp_message *msg, int mode);
 
 #endif  // INCLUDE_E_SMI_E_SMI_MONITOR_H_

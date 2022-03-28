@@ -137,28 +137,6 @@ int find_energy(char *devname, char *hwmon_name)
 	return ENOENT;
 }
 
-int find_hsmp(const char *path)
-{
-	DIR *pdir;
-	struct dirent *pdentry;
-
-	if (NULL == path) {
-		return EFAULT;
-	}
-	pdir = opendir(path);
-	if (NULL == pdir) {
-		return errno;
-	}
-	while ((pdentry = readdir(pdir))) {
-		if (strcmp(pdentry->d_name, HSMP_DEV_NAME) == 0) {
-			closedir(pdir);
-			return ESMI_SUCCESS;
-		}
-	}
-	closedir(pdir);
-	return ENOENT;
-}
-
 /*
  * This function does not validate the arguments, does not return
  * errors. Always, used with known values.
@@ -283,60 +261,6 @@ int batch_read_energy(monitor_types_t type, uint64_t *pval, uint32_t entries)
 	}
 
 	return status;
-}
-
-int hsmp_read64(monitor_types_t type, uint32_t sensor_id, uint64_t *pval)
-{
-	char file_path[FILEPATHSIZ];
-
-	if (NULL == pval) {
-		return EFAULT;
-	}
-	make_path(type, hsmpmon_path, sensor_id, file_path);
-
-	return readsys_u64(file_path, pval);
-}
-
-int hsmp_read32(monitor_types_t type, uint32_t sensor_id, uint32_t *pval)
-{
-	char file_path[FILEPATHSIZ];
-
-	if (NULL == pval) {
-		return EFAULT;
-	}
-	make_path(type, hsmpmon_path, sensor_id, file_path);
-
-	return readsys_u32(file_path, pval);
-}
-
-int hsmp_readstr(monitor_types_t type, uint32_t sensor_id, char *pval, uint32_t len)
-{
-	char file_path[FILEPATHSIZ];
-
-	if (NULL == pval) {
-		return EFAULT;
-	}
-	make_path(type, hsmpmon_path, sensor_id, file_path);
-
-	return readsys_str(file_path, pval, len);
-}
-
-int hsmp_write_s32(monitor_types_t type, uint32_t sensor_id, int32_t val)
-{
-	char file_path[FILEPATHSIZ];
-
-	make_path(type, hsmpmon_path, sensor_id, file_path);
-
-	return writesys_s32(file_path, val);
-}
-
-int hsmp_write32(monitor_types_t type, uint32_t sensor_id, uint32_t val)
-{
-	char file_path[FILEPATHSIZ];
-
-	make_path(type, hsmpmon_path, sensor_id, file_path);
-
-	return writesys_u32(file_path, val);
 }
 
 int hsmp_xfer(struct hsmp_message *msg, int mode)

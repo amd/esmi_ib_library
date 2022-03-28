@@ -44,7 +44,6 @@
 #include <stdbool.h>
 
 #define ENERGY_DEV_NAME	"amd_energy"	//!< Supported Energy driver name
-#define HSMP_DEV_NAME	"amd_hsmp"	//!< Supported HSMP driver name
 
 #define HSMP_CHAR_DEVFILE_NAME	"/dev/hsmp" //!< HSMP device path
 
