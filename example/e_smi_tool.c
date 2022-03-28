@@ -1170,6 +1170,8 @@ static esmi_status_t cache_system_info(void)
 			ret, esmi_get_err_msg(ret));
 		return ret;
 	}
+
+	return ESMI_SUCCESS;
 }
 
 static void show_system_info(void)
@@ -1453,12 +1455,82 @@ static int is_string_number(char *str)
 	return 0;
 }
 
+/* copy the common and energy feature into features array */
+static void add_comm_and_energy_feat(void)
+{
+	int offset = 0;
+
+	memcpy(features, feat_comm, (ARRAY_SIZE(feat_comm) * sizeof(char *)));
+	offset += ARRAY_SIZE(feat_comm);
+	memcpy(features + offset, feat_energy, (ARRAY_SIZE(feat_energy) * sizeof(char *)));
+}
+
+/* copy the hsmp proto ver2 specific features into features array */
+static void add_hsmp_ver2_feat(void)
+{
+	int offset = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_energy);
+
+	memcpy(features + offset, feat_ver2_get, (ARRAY_SIZE(feat_ver2_get) * sizeof(char *)));
+	offset += ARRAY_SIZE(feat_ver2_get);
+	memcpy(features + offset, blankline, sizeof(char *));
+	offset += 1;
+	memcpy(features + offset, feat_ver2_set, (ARRAY_SIZE(feat_ver2_set) * sizeof(char *)));
+
+	/* proto version 2 is the baseline for HSMP fetaures, so there is no addon */
+	sys_info.show_addon_cpu_metrics = no_addon_cpu_metrics;
+	sys_info.show_addon_socket_metrics = no_addon_socket_metrics;
+	sys_info.show_addon_clock_metrics = no_addon_clock_metrics;
+}
+
+/* copy the hsmp proto ver4 specific features into features array */
+static void add_hsmp_ver4_feat(void)
+{
+	int offset = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_energy);
+
+	memcpy(features + offset, feat_ver2_get, (ARRAY_SIZE(feat_ver2_get) * sizeof(char *)));
+	offset += ARRAY_SIZE(feat_ver2_get);
+	memcpy(features + offset, feat_ver3, (ARRAY_SIZE(feat_ver3) * sizeof(char *)));
+	offset += ARRAY_SIZE(feat_ver3);
+	memcpy(features + offset, feat_ver4, (ARRAY_SIZE(feat_ver4) * sizeof(char *)));
+	offset += ARRAY_SIZE(feat_ver4);
+	memcpy(features + offset, blankline, sizeof(char *));
+	offset += 1;
+	memcpy(features + offset, feat_ver2_set, (ARRAY_SIZE(feat_ver2_set) * sizeof(char *)));
+
+	/* proto version 4 has extra socket metrics, cpu metrics are same as ver2 */
+	sys_info.show_addon_cpu_metrics = no_addon_cpu_metrics;
+	sys_info.show_addon_socket_metrics = socket_ver4_metrics;
+	sys_info.show_addon_clock_metrics = no_addon_clock_metrics;
+}
+
+/* copy the hsmp proto ver5 specific features into features array */
+static void add_hsmp_ver5_feat(void)
+{
+	int offset = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_energy);
+
+	memcpy(features + offset, feat_ver2_get, (ARRAY_SIZE(feat_ver2_get) * sizeof(char *)));
+	offset += ARRAY_SIZE(feat_ver2_get);
+	memcpy(features + offset, feat_ver3, (ARRAY_SIZE(feat_ver3) * sizeof(char *)));
+	offset += ARRAY_SIZE(feat_ver3);
+	memcpy(features + offset, feat_ver5_get, (ARRAY_SIZE(feat_ver5_get) * sizeof(char *)));
+	offset += ARRAY_SIZE(feat_ver5_get);
+	memcpy(features + offset, blankline, sizeof(char *));
+	offset += 1;
+	memcpy(features + offset, feat_ver2_set, (ARRAY_SIZE(feat_ver2_set) * sizeof(char *)));
+	offset += ARRAY_SIZE(feat_ver2_set);
+	memcpy(features + offset, feat_ver5_set, (ARRAY_SIZE(feat_ver5_set) * sizeof(char *)));
+
+	/* proto version 5 has extra socket metrics as well as extra cpu metrics */
+	sys_info.show_addon_cpu_metrics = cpu_ver5_metrics;
+	sys_info.show_addon_socket_metrics = socket_ver5_metrics;
+	sys_info.show_addon_clock_metrics = clock_ver5_metrics;
+}
+
 static esmi_status_t init_proto_version_func_pointers()
 {
 	uint32_t proto_ver;
 	esmi_status_t ret;
 	int size;
-	int offset = 0;
 
 	ret = esmi_hsmp_proto_ver_get(&proto_ver);
 	if (ret) {
@@ -1469,67 +1541,34 @@ static esmi_status_t init_proto_version_func_pointers()
 		features = malloc((size + 1) * sizeof(char *));
 		if (!features)
 			return ESMI_NO_MEMORY;
-		memcpy(features, feat_comm, (ARRAY_SIZE(feat_comm) * sizeof(char *)));
-		offset += ARRAY_SIZE(feat_comm);
-		memcpy(features + offset, feat_energy, (ARRAY_SIZE(feat_energy) * sizeof(char *)));
+		add_comm_and_energy_feat();
+		/* Indicate the array end with NULL pointer */
 		features[size] = NULL;
 		return ESMI_SUCCESS;
 	}
 
 	switch (proto_ver) {
 	case 2:
-		/* proto version 2 is the baseline for HSMP fetaures, so there is no addon */
-		sys_info.show_addon_cpu_metrics = no_addon_cpu_metrics;
-		sys_info.show_addon_socket_metrics = no_addon_socket_metrics;
-		sys_info.show_addon_clock_metrics = no_addon_clock_metrics;
 		size = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_energy) +
 		       ARRAY_SIZE(feat_ver2_get) + ARRAY_SIZE(feat_ver2_set);
 		features = malloc((size + 1) * sizeof(char *));
 		if (!features)
 			return ESMI_NO_MEMORY;
-		memcpy(features, feat_comm, (ARRAY_SIZE(feat_comm) * sizeof(char *)));
-		offset += ARRAY_SIZE(feat_comm);
-		memcpy(features + offset, feat_energy, (ARRAY_SIZE(feat_energy) * sizeof(char *)));
-		offset += ARRAY_SIZE(feat_energy);
-		memcpy(features + offset, feat_ver2_get, (ARRAY_SIZE(feat_ver2_get) * sizeof(char *)));
-		offset += ARRAY_SIZE(feat_ver2_get);
-		memcpy(features + offset, blankline, sizeof(char *));
-		offset += 1;
-		memcpy(features + offset, feat_ver2_set, (ARRAY_SIZE(feat_ver2_set) * sizeof(char *)));
-		features[size] = NULL;
+		add_comm_and_energy_feat();
+		add_hsmp_ver2_feat();
 		break;
 	case 4:
-		/* proto version 4 has extra socket metrics, cpu metrics are same as ver2 */
-		sys_info.show_addon_cpu_metrics = no_addon_cpu_metrics;
-		sys_info.show_addon_socket_metrics = socket_ver4_metrics;
-		sys_info.show_addon_clock_metrics = no_addon_clock_metrics;
 		size = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_ver2_get) +
 		       ARRAY_SIZE(feat_ver2_set) + ARRAY_SIZE(feat_ver4) +
 		       ARRAY_SIZE(feat_energy) + ARRAY_SIZE(feat_ver3);
 		features = malloc((size + 1) * sizeof(char *));
 		if (!features)
 			return ESMI_NO_MEMORY;
-		memcpy(features, feat_comm, (ARRAY_SIZE(feat_comm) * sizeof(char *)));
-		offset += ARRAY_SIZE(feat_comm);
-		memcpy(features + offset, feat_energy, (ARRAY_SIZE(feat_energy) * sizeof(char *)));
-		offset += ARRAY_SIZE(feat_energy);
-		memcpy(features + offset, feat_ver2_get, (ARRAY_SIZE(feat_ver2_get) * sizeof(char *)));
-		offset += ARRAY_SIZE(feat_ver2_get);
-		memcpy(features + offset, feat_ver3, (ARRAY_SIZE(feat_ver3) * sizeof(char *)));
-		offset += ARRAY_SIZE(feat_ver3);
-		memcpy(features + offset, feat_ver4, (ARRAY_SIZE(feat_ver4) * sizeof(char *)));
-		offset += ARRAY_SIZE(feat_ver4);
-		memcpy(features + offset, blankline, sizeof(char *));
-		offset += 1;
-		memcpy(features + offset, feat_ver2_set, (ARRAY_SIZE(feat_ver2_set) * sizeof(char *)));
-		features[size] = NULL;
+		add_comm_and_energy_feat();
+		add_hsmp_ver4_feat();
 		break;
 	case 5:
 	default:
-		/* proto version 5 has extra socket metrics as well as extra cpu metrics */
-		sys_info.show_addon_cpu_metrics = cpu_ver5_metrics;
-		sys_info.show_addon_socket_metrics = socket_ver5_metrics;
-		sys_info.show_addon_clock_metrics = clock_ver5_metrics;
 		size = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_ver2_get) +
 		       ARRAY_SIZE(feat_ver2_set) + ARRAY_SIZE(feat_ver5_get) +
 		       ARRAY_SIZE(feat_ver5_set) + ARRAY_SIZE(feat_ver3) +
@@ -1537,24 +1576,13 @@ static esmi_status_t init_proto_version_func_pointers()
 		features = malloc((size + 1) * sizeof(char *));
 		if (!features)
 			return ESMI_NO_MEMORY;
-		memcpy(features, feat_comm, (ARRAY_SIZE(feat_comm) * sizeof(char *)));
-		offset += ARRAY_SIZE(feat_comm);
-		memcpy(features + offset, feat_energy, (ARRAY_SIZE(feat_energy) * sizeof(char *)));
-		offset += ARRAY_SIZE(feat_energy);
-		memcpy(features + offset, feat_ver2_get, (ARRAY_SIZE(feat_ver2_get) * sizeof(char *)));
-		offset += ARRAY_SIZE(feat_ver2_get);
-		memcpy(features + offset, feat_ver3, (ARRAY_SIZE(feat_ver3) * sizeof(char *)));
-		offset += ARRAY_SIZE(feat_ver3);
-		memcpy(features + offset, feat_ver5_get, (ARRAY_SIZE(feat_ver5_get) * sizeof(char *)));
-		offset += ARRAY_SIZE(feat_ver5_get);
-		memcpy(features + offset, blankline, sizeof(char *));
-		offset += 1;
-		memcpy(features + offset, feat_ver2_set, (ARRAY_SIZE(feat_ver2_set) * sizeof(char *)));
-		offset += ARRAY_SIZE(feat_ver2_set);
-		memcpy(features + offset, feat_ver5_set, (ARRAY_SIZE(feat_ver5_set) * sizeof(char *)));
-		features[size] = NULL;
+		add_comm_and_energy_feat();
+		add_hsmp_ver5_feat();
 		break;
 	}
+
+	/* Indicate the array end with NULL pointer */
+	features[size] = NULL;
 
 	return ESMI_SUCCESS;
 }
