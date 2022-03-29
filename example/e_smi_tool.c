@@ -341,7 +341,7 @@ static void get_sock_freq_limit(uint32_t *err_bits, char **freq_src)
 		ret = esmi_socket_current_active_freq_limit_get(i, &limit, freq_src + (i * size));
 		if (!ret) {
 			snprintf(str1 + len1, SHOWLINESZ - len1, " %-17u|", limit);
-			snprintf(str2 + len2, SHOWLINESZ - len2, " *%-16d|", i);
+			snprintf(str2 + len2, SHOWLINESZ - len2, " Refer below[*%d]  |", i);
 		} else {
 			*err_bits |= 1 << ret;
 			snprintf(str1 + len1, SHOWLINESZ - len1, " NA (Err: %-2d)     |", ret);
@@ -1259,8 +1259,12 @@ static void cpu_ver5_metrics(uint32_t *err_bits)
 {
 	esmi_status_t ret;
 
+	printf("\n--------------------------------------------------------------------"
+		"---------------------------------------------");
 	ret = show_core_clocks_all();
 	*err_bits |= 1 << ret;
+	printf("\n--------------------------------------------------------------------"
+		"---------------------------------------------");
 }
 
 static esmi_status_t show_cpu_metrics(uint32_t *err_bits)
@@ -1283,12 +1287,12 @@ static esmi_status_t show_cpu_metrics(uint32_t *err_bits)
 	ret = show_cpu_boostlimit_all();
 	*err_bits |= 1 << ret;
 
+	printf("\n--------------------------------------------------------------------"
+		"---------------------------------------------\n");
+
 	/* proto version specific cpu metrics are printed here */
 	if (sys_info.show_addon_cpu_metrics)
 		sys_info.show_addon_cpu_metrics(err_bits);
-
-	printf("\n--------------------------------------------------------------------"
-		"---------------------------------------------");
 
 	if (*err_bits > 1)
 		return ESMI_ERROR;
