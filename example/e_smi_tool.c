@@ -59,10 +59,6 @@
 /* To handle multiple errors while reporting summary */
 #define ESMI_ERROR	-1
 
-esmi_status_t show_smi_all_parameters(void);
-void show_smi_message(void);
-void show_smi_end_message(void);
-
 static struct epyc_sys_info {
 	uint32_t sockets;
 	uint32_t cpus;
@@ -74,7 +70,7 @@ static struct epyc_sys_info {
 	void (*show_addon_clock_metrics)(uint32_t *, char **);
 } sys_info;
 
-void print_socket_footer()
+static void print_socket_footer()
 {
 	int i;
 
@@ -84,7 +80,7 @@ void print_socket_footer()
 	}
 }
 
-void print_socket_header()
+static void print_socket_header()
 {
 	int i;
 
@@ -107,7 +103,7 @@ static void err_bits_print(uint32_t err_bits)
 	}
 }
 
-esmi_status_t epyc_get_coreenergy(uint32_t core_id)
+static esmi_status_t epyc_get_coreenergy(uint32_t core_id)
 {
 	esmi_status_t ret;
 	uint64_t core_input = 0;
@@ -126,7 +122,7 @@ esmi_status_t epyc_get_coreenergy(uint32_t core_id)
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t epyc_get_sockenergy(void)
+static esmi_status_t epyc_get_sockenergy(void)
 {
 	esmi_status_t ret;
 	uint32_t i;
@@ -191,7 +187,7 @@ static void ddr_bw_get(uint32_t *err_bits)
 	printf("%s", pct_str);
 }
 
-esmi_status_t epyc_get_ddr_bw(void)
+static esmi_status_t epyc_get_ddr_bw(void)
 {
 	esmi_status_t ret;
 	uint32_t i;
@@ -213,7 +209,7 @@ esmi_status_t epyc_get_ddr_bw(void)
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t epyc_get_temperature(void)
+static esmi_status_t epyc_get_temperature(void)
 {
 	esmi_status_t ret;
 	uint32_t i;
@@ -238,7 +234,7 @@ esmi_status_t epyc_get_temperature(void)
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t epyc_get_smu_fw_version(void)
+static esmi_status_t epyc_get_smu_fw_version(void)
 {
 	struct smu_fw_version smu_fw;
 	esmi_status_t ret;
@@ -258,7 +254,7 @@ esmi_status_t epyc_get_smu_fw_version(void)
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t epyc_get_hsmp_proto_version(void)
+static esmi_status_t epyc_get_hsmp_proto_version(void)
 {
 	uint32_t hsmp_proto_ver;
 	esmi_status_t ret;
@@ -276,7 +272,7 @@ esmi_status_t epyc_get_hsmp_proto_version(void)
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t epyc_get_prochot_status(void)
+static esmi_status_t epyc_get_prochot_status(void)
 {
 	esmi_status_t ret;
 	uint32_t i;
@@ -387,13 +383,12 @@ static void get_sock_freq_range(uint32_t *err_bits)
 	printf("%s", str2);
 }
 
-#define MCLKSZ 256
-esmi_status_t epyc_get_clock_freq(void)
+static esmi_status_t epyc_get_clock_freq(void)
 {
 	esmi_status_t ret;
 	uint32_t i;
 	uint32_t fclk, mclk, cclk;
-	char str[MCLKSZ] = {};
+	char str[SHOWLINESZ] = {};
 	uint32_t len;
 	uint32_t err_bits = 0;
 	char *freq_src[ARRAY_SIZE(freqlimitsrcnames) * sys_info.sockets];
@@ -403,17 +398,17 @@ esmi_status_t epyc_get_clock_freq(void)
 
 	print_socket_header();
 	printf("\n| fclk (Mhz)\t\t\t |");
-	snprintf(str, MCLKSZ, "\n| mclk (Mhz)\t\t\t |");
+	snprintf(str, SHOWLINESZ, "\n| mclk (Mhz)\t\t\t |");
 	for (i = 0; i < sys_info.sockets; i++) {
 		len = strlen(str);
 		ret = esmi_fclk_mclk_get(i, &fclk, &mclk);
 		if (!ret) {
 			printf(" %-17d|", fclk);
-			snprintf(str + len, MCLKSZ - len, " %-17d|", mclk);
+			snprintf(str + len, SHOWLINESZ - len, " %-17d|", mclk);
 		} else {
 			err_bits |= 1 << ret;
 			printf(" NA (Err: %-2d)     |", ret);
-			snprintf(str + len, MCLKSZ - len, " NA (Err: %-2d)     |", ret);
+			snprintf(str + len, SHOWLINESZ - len, " NA (Err: %-2d)     |", ret);
 		}
 	}
 	printf("%s", str);
@@ -442,7 +437,7 @@ esmi_status_t epyc_get_clock_freq(void)
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t epyc_apb_enable(uint32_t sock_id)
+static esmi_status_t epyc_apb_enable(uint32_t sock_id)
 {
 	esmi_status_t ret;
 
@@ -457,7 +452,7 @@ esmi_status_t epyc_apb_enable(uint32_t sock_id)
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t epyc_set_df_pstate(uint32_t sock_id, int32_t pstate)
+static esmi_status_t epyc_set_df_pstate(uint32_t sock_id, int32_t pstate)
 {
 	esmi_status_t ret;
 
@@ -477,7 +472,7 @@ esmi_status_t epyc_set_df_pstate(uint32_t sock_id, int32_t pstate)
 /* 0, 1, 2 values correspond to 2, 8, 16 xgmi lanes respectively */
 static uint8_t xgmi_links[] = {2, 8, 16};
 
-esmi_status_t epyc_set_xgmi_width(uint8_t min, uint8_t max)
+static esmi_status_t epyc_set_xgmi_width(uint8_t min, uint8_t max)
 {
 	esmi_status_t ret;
 
@@ -496,7 +491,7 @@ esmi_status_t epyc_set_xgmi_width(uint8_t min, uint8_t max)
 /* PCIe link frequency(LCLK) in MHz for different dpm level values */
 static uint32_t lclk_freq[] = {300, 400, 593, 770};
 
-esmi_status_t epyc_set_lclk_dpm_level(uint8_t sock_id, uint8_t nbio_id, uint8_t min, uint8_t max)
+static esmi_status_t epyc_set_lclk_dpm_level(uint8_t sock_id, uint8_t nbio_id, uint8_t min, uint8_t max)
 {
 	esmi_status_t ret;
 
@@ -512,7 +507,7 @@ esmi_status_t epyc_set_lclk_dpm_level(uint8_t sock_id, uint8_t nbio_id, uint8_t 
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t epyc_get_lclk_dpm_level(uint32_t sock_id, uint8_t nbio_id)
+static esmi_status_t epyc_get_lclk_dpm_level(uint32_t sock_id, uint8_t nbio_id)
 {
 	struct dpm_level nbio;
 	esmi_status_t ret;
@@ -533,7 +528,7 @@ esmi_status_t epyc_get_lclk_dpm_level(uint32_t sock_id, uint8_t nbio_id)
 	return ret;
 }
 
-esmi_status_t epyc_get_socketpower(void)
+static esmi_status_t epyc_get_socketpower(void)
 {
 	esmi_status_t ret;
 	uint32_t i;
@@ -581,7 +576,7 @@ esmi_status_t epyc_get_socketpower(void)
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t epyc_get_coreperf(uint32_t core_id)
+static esmi_status_t epyc_get_coreperf(uint32_t core_id)
 {
 	esmi_status_t ret;
 	uint32_t boostlimit = 0;
@@ -599,7 +594,7 @@ esmi_status_t epyc_get_coreperf(uint32_t core_id)
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t epyc_setpowerlimit(uint32_t sock_id, uint32_t power)
+static esmi_status_t epyc_setpowerlimit(uint32_t sock_id, uint32_t power)
 {
 	esmi_status_t ret;
 	uint32_t max_power = 0;
@@ -623,7 +618,7 @@ esmi_status_t epyc_setpowerlimit(uint32_t sock_id, uint32_t power)
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t epyc_setcoreperf(uint32_t core_id, uint32_t boostlimit)
+static esmi_status_t epyc_setcoreperf(uint32_t core_id, uint32_t boostlimit)
 {
 	esmi_status_t ret;
 	uint32_t blimit = 0;
@@ -647,7 +642,7 @@ esmi_status_t epyc_setcoreperf(uint32_t core_id, uint32_t boostlimit)
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t epyc_setsocketperf(uint32_t sock_id, uint32_t boostlimit)
+static esmi_status_t epyc_setsocketperf(uint32_t sock_id, uint32_t boostlimit)
 {
 	esmi_status_t ret;
 	uint32_t blimit = 0, online_core;
@@ -676,7 +671,7 @@ esmi_status_t epyc_setsocketperf(uint32_t sock_id, uint32_t boostlimit)
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t epyc_setpkgperf(uint32_t boostlimit)
+static esmi_status_t epyc_setpkgperf(uint32_t boostlimit)
 {
 	esmi_status_t ret;
 	uint32_t blimit = 0;
@@ -701,7 +696,7 @@ esmi_status_t epyc_setpkgperf(uint32_t boostlimit)
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t epyc_get_sockc0_residency(uint32_t sock_id)
+static esmi_status_t epyc_get_sockc0_residency(uint32_t sock_id)
 {
 	esmi_status_t ret;
 	uint32_t residency = 0;
@@ -1010,12 +1005,12 @@ static esmi_status_t epyc_set_gmi3_link_width(uint8_t sock_id, uint8_t min, uint
 	return ret;
 }
 
-void show_smi_message(void)
+static void show_smi_message(void)
 {
 	printf("\n====================== EPYC System Management Interface ======================\n\n");
 }
 
-void show_smi_end_message(void)
+static void show_smi_end_message(void)
 {
 	printf("\n============================= End of EPYC SMI Log ============================\n");
 }
@@ -1067,7 +1062,7 @@ static void socket_ver5_metrics(uint32_t *err_bits, char **freq_src)
 	get_sock_freq_range(err_bits);
 }
 
-esmi_status_t show_socket_metrics(uint32_t *err_bits, char **freq_src)
+static esmi_status_t show_socket_metrics(uint32_t *err_bits, char **freq_src)
 {
 	esmi_status_t ret;
 	uint32_t i;
@@ -1141,7 +1136,7 @@ esmi_status_t show_socket_metrics(uint32_t *err_bits, char **freq_src)
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t cache_system_info(void)
+static esmi_status_t cache_system_info(void)
 {
 	esmi_status_t ret;
 
@@ -1192,7 +1187,7 @@ static void show_system_info(void)
 	printf("--------------------------------------\n");
 }
 
-esmi_status_t show_cpu_energy_all(void)
+static esmi_status_t show_cpu_energy_all(void)
 {
 	int i;
 	uint64_t *input;
@@ -1228,7 +1223,7 @@ esmi_status_t show_cpu_energy_all(void)
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t show_cpu_boostlimit_all(void)
+static esmi_status_t show_cpu_boostlimit_all(void)
 {
 	int i;
 	uint32_t boostlimit;
@@ -1291,7 +1286,7 @@ static void cpu_ver5_metrics(uint32_t *err_bits)
 	*err_bits |= 1 << ret;
 }
 
-esmi_status_t show_cpu_metrics(uint32_t *err_bits)
+static esmi_status_t show_cpu_metrics(uint32_t *err_bits)
 {
 	esmi_status_t ret;
 	uint32_t i, core_id;
@@ -1324,7 +1319,7 @@ esmi_status_t show_cpu_metrics(uint32_t *err_bits)
 	return ESMI_SUCCESS;
 }
 
-esmi_status_t show_smi_all_parameters(void)
+static esmi_status_t show_smi_all_parameters(void)
 {
 	char *freq_src[ARRAY_SIZE(freqlimitsrcnames) * sys_info.sockets];
 	esmi_status_t ret;
@@ -1569,7 +1564,7 @@ Parse command line parameters and set data for program.
 @param argc number of command line parameters
 @param argv list of command line parameters
 */
-esmi_status_t parsesmi_args(int argc,char **argv)
+static esmi_status_t parsesmi_args(int argc,char **argv)
 {
 	esmi_status_t ret;
 	int i;
