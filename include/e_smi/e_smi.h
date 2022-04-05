@@ -794,6 +794,10 @@ esmi_status_t esmi_dimm_thermal_sensor_get(uint8_t sock_ind, uint8_t dimm_addr,
 
 /**
  *  @brief Set xgmi width for a multi socket system
+ *  values range from 0 to 2
+ *  0 => 4 lanes on family 19h model 10h and 2 lanes on other models
+ *  1 => 8 lanes
+ *  2 => 16 lanes
  *
  *  @details This function will set the xgmi width @p min and @p max for all
  *  the sockets in the system
