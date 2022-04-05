@@ -666,21 +666,6 @@ esmi_status_t esmi_core_boostlimit_set(uint32_t cpu_ind, uint32_t boostlimit);
 esmi_status_t esmi_socket_boostlimit_set(uint32_t socket_idx,
 					 uint32_t boostlimit);
 
-/**
- *  @brief Set the boostlimit value for the package (whole system).
- *
- *  @details This function will set the boostlimit to the provided value @p
- *  boostlimit for the whole package.
- *
- *  @param[in] boostlimit a uint32_t that indicates the desired boostlimit
- *  value of the package.
- *
- *  @retval ::ESMI_SUCCESS is returned upon successful call.
- *  @retval None-zero is returned upon failure.
- *
- */
-esmi_status_t esmi_package_boostlimit_set(uint32_t boostlimit);
-
 /** @} */  // end of PerfCont
 
 /*****************************************************************************/
