@@ -956,7 +956,7 @@ esmi_status_t esmi_pcie_link_rate_set(uint8_t sock_ind, uint8_t rate_ctrl, uint8
  *  @brief Set data fabric pstate range.
  *
  *  @details This function will set the max and min pstates for the data fabric.
- *  Acceptable values for the P-state are 0(highest) - 4 (lowest) with
+ *  Acceptable values for the P-state are 0(highest) - 3 (lowest) with
  *  max <= min.
  *
  *  @param[in] sock_ind a socket index.
