@@ -469,9 +469,6 @@ static esmi_status_t epyc_set_df_pstate(uint32_t sock_id, int32_t pstate)
 	return ESMI_SUCCESS;
 }
 
-/* 0, 1, 2 values correspond to 2, 8, 16 xgmi lanes respectively */
-static uint8_t xgmi_links[] = {2, 8, 16};
-
 static esmi_status_t epyc_set_xgmi_width(uint8_t min, uint8_t max)
 {
 	esmi_status_t ret;
@@ -482,8 +479,7 @@ static esmi_status_t epyc_set_xgmi_width(uint8_t min, uint8_t max)
 			ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("xGMI link width set to %u-%u range successfully\n",
-		xgmi_links[min], xgmi_links[max]);
+	printf("xGMI link width (min:%d max:%d) is set successfully\n", min, max);
 
 	return ESMI_SUCCESS;
 }
