@@ -1391,7 +1391,7 @@ static char* const feat_ver5_set[] = {
 	"  --setpowerefficiencymode [SOCKET] [MODE]\t\tSet power efficiency mode"
 	" for a given socket MODE = 0, 1, 2 ",
 	"  --setdfpstaterange [SOCKET] [MAX] [MIN]\t\tSet df pstate range"
-	" for a given socket MIN = MAX = 0 to 4 with MIN > MAX",
+	" for a given socket MIN = MAX = 0 to 3 with MIN > MAX",
 	"  --setgmi3linkwidth [SOCKET] [MIN] [MAX]\t\tSet gmi3 link width"
 	" for a given socket MIN = MAX = 0 to 2 with MAX > MIN",
 };
