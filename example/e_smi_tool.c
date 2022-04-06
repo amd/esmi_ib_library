@@ -334,7 +334,7 @@ static void get_sock_freq_limit(uint32_t *err_bits, char **freq_src)
 	snprintf(str1, SHOWLINESZ, "\n| \t Freq limit (MHz) \t |");
 	snprintf(str2, SHOWLINESZ, "\n| \t Freq limit source \t |");
 
-	for (i = 0; i < 2; i++) {
+	for (i = 0; i < sys_info.sockets; i++) {
 		len1 = strlen(str1);
 		len2 = strlen(str2);
 		printf("                  |");
