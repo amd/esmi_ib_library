@@ -626,14 +626,17 @@ static esmi_status_t epyc_setcoreperf(uint32_t core_id, uint32_t boostlimit)
 		return ret;
 	}
 	ret = esmi_core_boostlimit_get(core_id, &blimit);
-	if (ret == ESMI_SUCCESS) {
-		if (blimit < boostlimit) {
-			printf("Set to max boost limit: %u MHz\n", blimit);
-		} else if (blimit > boostlimit) {
-			printf("Set to min boost limit: %u MHz\n", blimit);
-		}
+	if (ret != ESMI_SUCCESS) {
+		printf("Core[%d] boostlimit set successfully, but failed to get the value\n",
+			core_id);
+		return ret;
 	}
-	printf("Core[%d] boostlimit set to %u MHz successfully\n", core_id, blimit);
+	if (blimit < boostlimit)
+		printf("Core[%d] boostlimit set to max boost limit: %u MHz\n", core_id, blimit);
+	else if (blimit > boostlimit)
+		printf("Core[%d] boostlimit set to min boost limit: %u MHz\n", core_id, blimit);
+	else
+		printf("Core[%d] boostlimit set to %u MHz successfully\n", core_id, blimit);
 
 	return ESMI_SUCCESS;
 }
@@ -655,14 +658,17 @@ static esmi_status_t epyc_setsocketperf(uint32_t sock_id, uint32_t boostlimit)
 		return ret;
 	}
 	ret = esmi_core_boostlimit_get(online_core, &blimit);
-	if (ret == ESMI_SUCCESS) {
-		if (blimit < boostlimit) {
-			printf("Set to max boost limit: %u MHz\n", blimit);
-		} else if (blimit > boostlimit) {
-			printf("Set to min boost limit: %u MHz\n", blimit);
-		}
+	if (ret != ESMI_SUCCESS) {
+		printf("Socket[%d] boostlimit set successfully, but failed to get the value\n",
+			sock_id);
+		return ret;
 	}
-	printf("Socket[%d] boostlimit set to %u MHz successfully\n", sock_id, blimit);
+	if (blimit < boostlimit)
+		printf("Socket[%d] boostlimit set to max boost limit: %u MHz\n", sock_id, blimit);
+	else if (blimit > boostlimit)
+		printf("Socket[%d] boostlimit set to min boost limit: %u MHz\n", sock_id, blimit);
+	else
+		printf("Socket[%d] boostlimit set to %u MHz successfully\n", sock_id, blimit);
 
 	return ESMI_SUCCESS;
 }
