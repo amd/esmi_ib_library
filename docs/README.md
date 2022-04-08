@@ -16,7 +16,7 @@ The source code for E-SMI library is available on [Github](https://github.com/am
 ## Directory stucture of the source
 Once the E-SMI library source has been cloned to a local Linux machine, the directory structure of source is as below:
 * `$ docs/` Contains Doxygen configuration files and Library descriptions
-* `$ example/` Contains e-smi tool, based on the E-SMI library
+* `$ tools/` Contains e-smi tool, based on the E-SMI library
 * `$ include/` Contains the header files used by the E-SMI library
 * `$ src/` Contains library E-SMI source
 

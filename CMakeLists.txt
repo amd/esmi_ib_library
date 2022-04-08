@@ -121,18 +121,14 @@ set(SMI_SRC_LIST ${SMI_SRC_LIST} "${SRC_DIR}/e_smi.c")
 set(SMI_SRC_LIST ${SMI_SRC_LIST} "${SRC_DIR}/e_smi_monitor.c")
 set(SMI_SRC_LIST ${SMI_SRC_LIST} "${SRC_DIR}/e_smi_utils.c")
 
-set(SMI_EXAMPLE_EXE "e_smi_example")
 set(SMI_TOOL "e_smi_tool")
 
-add_executable(${SMI_EXAMPLE_EXE} "example/e_smi_example.c")
-add_executable(${SMI_TOOL} "example/e_smi_tool.c")
+add_executable(${SMI_TOOL} "tools/e_smi_tool.c")
 
 ## If the tool to be linked with Static library
 if ("${ENABLE_STATIC_LIB}" STREQUAL 1)
-    target_link_libraries(${SMI_EXAMPLE_EXE} ${E_SMI_STATIC})
     target_link_libraries(${SMI_TOOL} ${E_SMI_STATIC})
 else ()
-    target_link_libraries(${SMI_EXAMPLE_EXE} ${E_SMI_TARGET})
     target_link_libraries(${SMI_TOOL} ${E_SMI_TARGET})
 endif ()
 
