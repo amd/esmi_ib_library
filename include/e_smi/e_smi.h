@@ -637,6 +637,13 @@ esmi_status_t esmi_socket_c0_residency_get(uint32_t socket_idx,
  *  @details This function will set the boostlimit to the provided value @p
  *  boostlimit for a given cpu @p cpu_ind.
  *
+ *  Note: Even though set boost limit provides ability to limit frequency on a core basis,
+ *  if all the cores of a CCX are not programmed for the same boost limit frequency,
+ *  then the lower-frequency cores are limited to a frequency resolution that can be as
+ *  low as 20% of the requested frequency.
+ *  If the specified boost limit frequency of a core
+ *  is not supported, then the processor selects the next lower supported frequency.
+ *
  *  @param[in] cpu_ind a cpu index is a given core to set the boostlimit
  *
  *  @param[in] boostlimit a uint32_t that indicates the desired boostlimit
@@ -816,7 +823,7 @@ esmi_status_t esmi_xgmi_width_set(uint8_t min, uint8_t max);
 
 /*****************************************************************************/
 /** @defgroup GMI3WidthCont GMI3 width control
- *  This function provides a way to control global memory interconnect bandwidth.
+ *  This function provides a way to control global memory interconnect link width.
  *  @{
  */
 
@@ -974,7 +981,7 @@ esmi_status_t esmi_df_pstate_range_set(uint8_t sock_ind, uint8_t max_pstate, uin
 /** @} */  // end of PStateCont
 
 /*****************************************************************************/
-/** @defgroup BwQuer Bandwidth Query
+/** @defgroup BwQuer Bandwidth Monitor
  *  This function provides the IO and xGMI bandiwtdh.
  *  @{
  */
