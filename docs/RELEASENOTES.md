@@ -7,10 +7,11 @@ The EPYC™ System Management Interface In-band Library, or E-SMI library, is a 
 
 # Changes Notes
 
-## Highlights of release beta v2.0
+## Highlights of release v2.0
 
-* Supports new HSMP protocol version 5 messages, defined for Genoa SP5
-    * esmi_tool is modified to support platform specific features
+* Supports new HSMP protocol version 5 messages, defined for Family 19h Model 10h - SP5
+    * New APIs are added for platform features
+    * esmi_tool is update with platform specific features
 
 
 ## Highlights of release v1.5

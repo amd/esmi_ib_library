@@ -45,7 +45,7 @@
 // This file is generated on build.
 
 #define e_smi_VERSION_MAJOR 1
-#define e_smi_VERSION_MINOR 0
+#define e_smi_VERSION_MINOR 5
 #define e_smi_VERSION_PATCH 0
 #define e_smi_VERSION_BUILD "0"
 

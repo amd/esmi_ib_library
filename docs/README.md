@@ -51,12 +51,12 @@ The RPM and DEB packages can be created with the following steps (continued from
 The E-SMI Library depends on the following device drivers from Linux to manage the system management features.
 
 ## Monitoring energy counters
-The Energy counters reported by the RAPL MSRs, the AMD Energy driver exposes the per core and per socket counters via the HWMON sys entries. The AMD Energy driver is upstreamed and is available as part of Linux v5.8+. The kernel config symbol SENSORS_AMD_ENERGY needs to be selected, can be built and inserted as a module.
+The Energy counters reported by the RAPL MSRs, the AMD Energy driver can report per core and per socket counters via the HWMON sys entries. The AMD Energy driver is an out of kernel module hosted https://github.com/amd/amd_energy. The kernel config symbol SENSORS_AMD_ENERGY needs to be selected, can be built and inserted as a module.
 
 ## Monitoring and managing power metrics, boostlimits and other system management features
-The power metrics, boostlimits and other features are managed by the SMU firmware and exposed via PCI config space. AMD provides Linux kernel module exposing this information to the user-space via sys entries.
+The power metrics, boostlimits and other features are managed by the SMU firmware and exposed via PCI config space. AMD provides Linux kernel module exposing this information to the user-space via ioctl interface.
 
-* amd_hsmp driver is accepted upstream under drivers/platform/x86 is availble https://git.kernel.org/pub/scm/linux/kernel/git/pdx86/platform-drivers-x86.git/commit/?h=for-next&id=91f410aa679a035e7abdff47daca4418c384c770
+* amd_hsmp driver is accepted in upstream kernel under pd/x86
   * Please build the library against uapi header asm/amd_hsmp.h
 
 * PCIe interface needs to be enabled in the BIOS. On the reference BIOS, the CBS option may be found in the following path
@@ -67,6 +67,7 @@ The power metrics, boostlimits and other features are managed by the SMU firmwar
 
 ## Supported hardware
 AMD Zen3 based CPU Family `19h` Models `0h-Fh` and `30h-3Fh`.
+AMD Zen4 based CPU Family `19h` Models `10h-1Fh`.
 
 ## Additional required software for building
 In order to build the E-SMI library, the following components are required. Note that the software versions listed are what is being used in development. Earlier versions are not guaranteed to work:
