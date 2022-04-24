@@ -77,7 +77,7 @@ struct system_metrics {
 	struct cpu_mapping *map;
 };
 
-static const struct system_metrics *psm;
+static const struct system_metrics *psm = NULL;
 
 struct cpu_mapping {
 	int proc_id;
@@ -430,9 +430,10 @@ esmi_status_t esmi_init()
 
 void esmi_exit(void)
 {
-	if (psm->map)
+	if (psm && psm->map) {
 		free(psm->map);
-	psm = NULL;
+		psm = NULL;
+	}
 
 	return;
 }
