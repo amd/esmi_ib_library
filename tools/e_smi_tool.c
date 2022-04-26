@@ -839,7 +839,11 @@ static esmi_status_t epyc_get_io_bandwidth_info(uint32_t sock_id, char *link)
 	struct link_id_bw_type io_link;
 
 	find_link_bwtype_index(link, NULL, &index, NULL);
-
+	if (index == -1) {
+		printf("Please provide valid link name.\n");
+		printf(MAG "Try --help for more information.\n" RESET);
+		return ESMI_ERROR;
+	}
 	io_link.link_id =  1 << index;
 	/* Aggregate bw = 1 */
 	io_link.bw_type = 1 ;
@@ -863,9 +867,14 @@ static esmi_status_t epyc_get_xgmi_bandwidth_info(char *link, char *bw_type)
 	esmi_status_t ret;
 	uint32_t bw;
 	int id;
-	int link_ind, bw_ind;
+	int link_ind = -1, bw_ind = -1;
 
 	find_link_bwtype_index(link, bw_type, &link_ind, &bw_ind);
+	if (link_ind == -1 || bw_ind == -1) {
+		printf("Please provide valid link name.\n");
+		printf(MAG "Try --help for more information.\n" RESET);
+		return ESMI_ERROR;
+	}
 
 	xgmi_link.link_id = 1 << link_ind;
 	xgmi_link.bw_type = 1 << bw_ind;
