@@ -53,9 +53,11 @@
 #include <e_smi/e_smi.h>
 #include <e_smi/e_smi_monitor.h>
 
+/* Platform specific definitions for F19h M10h */
+/* TODO: Need to maintain platform definitions outside the code */
 #define GEN5_RATE		2
 #define GEN5_RATE_MASK		0x3
-#define MAX_DF_PSTATE_LIMIT	4
+#define MAX_DF_PSTATE_LIMIT	2
 #define FULL_WIDTH		2
 #define TWO_BYTE_MASK           0xFFFF
 
