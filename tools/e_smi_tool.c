@@ -484,9 +484,6 @@ static esmi_status_t epyc_set_xgmi_width(uint8_t min, uint8_t max)
 	return ESMI_SUCCESS;
 }
 
-/* PCIe link frequency(LCLK) in MHz for different dpm level values */
-static uint32_t lclk_freq[] = {300, 400, 593, 770};
-
 static esmi_status_t epyc_set_lclk_dpm_level(uint8_t sock_id, uint8_t nbio_id, uint8_t min, uint8_t max)
 {
 	esmi_status_t ret;
@@ -497,8 +494,8 @@ static esmi_status_t epyc_set_lclk_dpm_level(uint8_t sock_id, uint8_t nbio_id, u
 			sock_id, nbio_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("Socket[%d] nbio[%d] LCLK frequency set to %u-%u MHz range successfully\n",
-		sock_id, nbio_id, lclk_freq[min], lclk_freq[max]);
+	printf("Socket[%d] nbio[%d] LCLK frequency set successfully\n",
+		sock_id, nbio_id);
 
 	return ESMI_SUCCESS;
 }
@@ -917,12 +914,6 @@ static esmi_status_t epyc_set_pciegen5_rate_ctl(uint8_t sock_id, uint8_t rate_ct
 	return ret;
 }
 
-static char *mode_strings[] = {
-	"High performance mode",
-	"Power efficiency mode",
-	"IO performance mode"
-};
-
 static esmi_status_t epyc_set_power_efficiency_mode(uint32_t sock_id, uint8_t mode)
 {
 	esmi_status_t ret;
@@ -934,22 +925,6 @@ static esmi_status_t epyc_set_power_efficiency_mode(uint32_t sock_id, uint8_t mo
 		return ret;
 	}
 	printf("Power efficiency profile policy is set to %d successfully\n", mode);
-	switch (mode) {
-		case 1:
-			printf("\nThis is a high performance mode,This mode favours core"
-			       " performance.\nDefault df pstate and DLWM algorithms are"
-			       " active in this mode\n");
-			break;
-		case 2:
-			printf("\nCaution : This is a power efficiency mode,"
-			       "\nSetting the power efficiency mode inturn impacts DF pstate,\n"
-			       "core boost limits, core performance etc internally\n");
-			break;
-		case 4:
-			printf("\nThis is a IO performance mode, This mode can result in"
-			       "\nlower core performance in some case, to increase the IO throughput\n");
-			break;
-	}
 
 	return ret;
 }
@@ -985,8 +960,7 @@ static esmi_status_t epyc_set_gmi3_link_width(uint8_t sock_id, uint8_t min, uint
 			sock_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("Gmi3 link width is set to %s to %s width range successfully\n",
-	       width_string[min], width_string[max]);
+	printf("Gmi3 link width range is set successfully\n");
 
 	return ret;
 }
@@ -1340,7 +1314,7 @@ static esmi_status_t show_smi_all_parameters(void)
 static char* const feat_comm[] = {
 	"Output Option<s>:",
 	"  -h, --help\t\t\t\t\t\tShow this help message",
-	"  -A, --showall\t\t\t\t\t\tGet all esmi parameter Values\n",
+	"  -A, --showall\t\t\t\t\t\tGet all esmi parameter values\n",
 };
 
 static char* const feat_energy[] = {
@@ -1350,13 +1324,13 @@ static char* const feat_energy[] = {
 };
 
 static char* const feat_ver2_get[] = {
-	"  --showsockpower\t\t\t\t\tGet power metrics for all sockets (mWatts)",
+	"  --showsockpower\t\t\t\t\tGet power metrics for all sockets (Watts)",
 	"  --showcorebl [CORE]\t\t\t\t\tGet Boostlimit for a given CPU (MHz)",
 	"  --showsockc0res [SOCKET]\t\t\t\tGet c0_residency for a given socket (%%)",
 	"  --showsmufwver\t\t\t\t\tShow SMU FW Version",
 	"  --showhsmpprotover\t\t\t\t\tShow HSMP Protocol Version",
-	"  --showprochotstatus\t\t\t\t\tShow HSMP PROCHOT status (in/active)",
-	"  --showclocks\t\t\t\t\t\tShow (CPU, Mem & Fabric) clock frequencies (MHz)",
+	"  --showprochotstatus\t\t\t\t\tShow HSMP PROCHOT status for all sockets",
+	"  --showclocks\t\t\t\t\t\tShow (CPU, Mem & Fabric) clock frequencies (MHz) for all sockets",
 };
 
 static char* const feat_ver2_set[] = {
@@ -1368,14 +1342,13 @@ static char* const feat_ver2_set[] = {
 	"  --setsockbl [SOCKET] [BOOSTLIMIT]\t\t\tSet Boost"
 	" limit for a given Socket (MHz)",
 	"  --apbdisable [SOCKET] [PSTATE]\t\t\tSet Data Fabric"
-	" Pstate for a given socket, PSTATE = 0 to 3",
+	" Pstate for a given socket",
 	"  --apbenable [SOCKET]\t\t\t\t\tEnable the Data Fabric performance"
 	" boost algorithm for a given socket",
 	"  --setxgmiwidth [MIN] [MAX]\t\t\t\tSet xgmi link width"
-	" in a multi socket system, MIN = MAX = 0 to 2",
+	" in a multi socket system",
 	"  --setlclkdpmlevel [SOCKET] [NBIOID] [MIN] [MAX]\tSet lclk dpm level"
-	" for a given nbio, given socket "
-	" \n\t\t\t\t\t\t\tMIN = MAX = 0-1 for v5, 0-3 for v4, NBIOID = 0-3 ",
+	" for a given nbio in a given socket",
 };
 
 static char* const feat_ver3[] = {
@@ -1383,32 +1356,35 @@ static char* const feat_ver3[] = {
 };
 
 static char* const feat_ver4[] = {
-	"  --showsockettemp\t\t\t\t\tShow Temperature monitor of socket (°C)",
+	"  --showsockettemp\t\t\t\t\tShow Temperature monitor for all sockets (°C)",
 };
 
 static char* const feat_ver5_get[] = {
 	"  --showdimmtemprange [SOCKET] [DIMM_ADDR]\t\tShow dimm temperature range and"
-	" refresh rate",
-	"  --showdimmthermal [SOCKET] [DIMM_ADDR]\t\tShow dimm thermal values",
-	"  --showdimmpower [SOCKET] [DIMM_ADDR]\t\t\tShow dimm power consumption",
+	" refresh rate for a given socket and dimm address",
+	"  --showdimmthermal [SOCKET] [DIMM_ADDR]\t\tShow dimm thermal values for a given socket"
+	" and dimm address",
+	"  --showdimmpower [SOCKET] [DIMM_ADDR]\t\t\tShow dimm power consumption for a given socket"
+	" and dimm address",
 	"  --showcoreclock [CORE]\t\t\t\tShow core clock frequency (MHz) for a given core",
-	"  --showsvipower \t\t\t\t\tShow svi based power telemetry of all rails",
-	"  --showxgmibandwidth [LINKNAME] [BWTYPE]\t\tShow xGMI bandwidth for LINKNAME = P0-P3/G0-G3"
-	" and BWTYPE = AGG_BW/RD_BW/WR_BW",
-	"  --showiobandwidth [SOCKET] [LINKNAME]\t\t\tShow IO bandwidth for LINKNAME = P0-P3/G0-G3",
-	"  --showlclkdpmlevel [SOCKET] [NBIOID]\t\t\tShow lclk dpm level"
-	" for a given nbio, given socket"
+	"  --showsvipower \t\t\t\t\tShow svi based power telemetry of all rails for all sockets",
+	"  --showxgmibandwidth [LINKNAME] [BWTYPE]\t\tShow xGMI bandwidth for a given socket,"
+	" linkname and bwtype",
+	"  --showiobandwidth [SOCKET] [LINKNAME]\t\t\tShow IO bandwidth for a given socket,"
+	" linkname and bwtype",
+	"  --showlclkdpmlevel [SOCKET] [NBIOID]\t\t\tShow lclk dpm level for a given nbio"
+	" in a given socket"
 };
 
 static char* const feat_ver5_set[] = {
 	"  --setpcielinkratecontrol [SOCKET] [CTL]\t\tSet rate control for pcie link"
-	" for a given socket CTL = 0, 1, 2 ",
+	" for a given socket",
 	"  --setpowerefficiencymode [SOCKET] [MODE]\t\tSet power efficiency mode"
-	" for a given socket MODE = 0, 1, 2 ",
+	" for a given socket",
 	"  --setdfpstaterange [SOCKET] [MAX] [MIN]\t\tSet df pstate range"
-	" for a given socket MIN = MAX = 0 to 3 with MIN > MAX",
+	" for a given socket",
 	"  --setgmi3linkwidth [SOCKET] [MIN] [MAX]\t\tSet gmi3 link width"
-	" for a given socket MIN = MAX = 0 to 2 with MAX > MIN",
+	" for a given socket",
 };
 
 static char* const blankline[] = {""};
