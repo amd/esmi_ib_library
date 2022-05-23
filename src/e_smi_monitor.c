@@ -67,6 +67,8 @@ static char *filenames[MONITOR_TYPE_MAX] = { energy_file,
 
 int find_energy(char *devname, char *hwmon_name)
 {
+	char *c;
+	int i = 0;
 	DIR *pdir;
 	struct dirent *pdentry;
 	char name[FILESIZ];
@@ -89,9 +91,11 @@ int find_energy(char *devname, char *hwmon_name)
 		if (NULL == fptr) {
 			continue;
 		} else {
-			if (fscanf(fptr, "%s", name) < 0) {
+			if (fgets(name, FILESIZ, fptr) == NULL) {
 				name[0] = '\0';
 			}
+			if ((c = strchr(name, '\n')) != NULL )
+				*c = '\0';
 			fclose(fptr);
 			if (strcmp(name, devname) == 0) {
 				strcpy(hwmon_name, pdentry->d_name);

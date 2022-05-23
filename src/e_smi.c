@@ -116,13 +116,13 @@ static int read_index(char *filepath)
 		return -1;
 	}
 
-	if (fscanf(fp, "%s", buf) < 0) {
+	if (fgets(buf, FILESIZ, fp) == NULL) {
 		buf[0] = '\0';
 		fclose(fp);
 		return -1;
 	}
 
-	for (i = 0, j = 0; buf[i] != '\0'; i++) {
+	for (i = 0, j = 0; ((buf[i] != '\0') && (buf[i] != '\n')); i++) {
                 if (buf[i] < '0' || buf[i] > '9') {
                         j = i + 1;
                 }
@@ -302,12 +302,17 @@ static esmi_status_t create_cpu_mappings(struct system_metrics *sm)
 		return ESMI_NO_MEMORY;
 
 	sm->map = malloc(sm->total_cores * sizeof(struct cpu_mapping));
-	if (!sm->map)
+	if (!sm->map) {
+		free(str);
 		return ESMI_NO_MEMORY;
+	}
 
 	fp = fopen(CPU_INFO_PATH, "r");
-	if (!fp)
+	if (!fp) {
+		free(str);
+		free(sm->map);
 		return ESMI_FILE_ERROR;
+	}
 
 	while (getline(&str, &size, fp) != -1) {
 		if (tok = strtok(str, delim1)) {
@@ -1460,7 +1465,8 @@ esmi_status_t esmi_gmi3_link_width_range_set(uint8_t sock_ind, uint8_t min_link_
 	if (sock_ind >= psm->total_sockets)
 		return ESMI_INVALID_INPUT;
 
-	if (validate_max_min_values(max_link_width, min_link_width, FULL_WIDTH))
+	ret = validate_max_min_values(max_link_width, min_link_width, FULL_WIDTH);
+	if (ret)
 		return ret;
 
 	msg.msg_id	= HSMP_SET_GMI3_WIDTH;
