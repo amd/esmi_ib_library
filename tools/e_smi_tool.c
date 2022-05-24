@@ -993,12 +993,12 @@ static esmi_status_t epyc_set_gmi3_link_width(uint8_t sock_id, uint8_t min, uint
 
 static void show_smi_message(void)
 {
-	printf("\n====================== EPYC System Management Interface ======================\n\n");
+	printf("\n============================= E-SMI ===================================\n\n");
 }
 
 static void show_smi_end_message(void)
 {
-	printf("\n============================= End of EPYC SMI Log ============================\n");
+	printf("\n============================= End of E-SMI ============================\n");
 }
 
 static void no_addon_socket_metrics(uint32_t *err_bits, char **freq_src)
