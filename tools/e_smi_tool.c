@@ -1538,7 +1538,8 @@ static esmi_status_t init_proto_version_func_pointers()
 	switch (proto_ver) {
 	case 2:
 		size = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_energy) +
-		       ARRAY_SIZE(feat_ver2_get) + ARRAY_SIZE(feat_ver2_set);
+		       ARRAY_SIZE(feat_ver2_get) + ARRAY_SIZE(feat_ver2_set) +
+		       ARRAY_SIZE(blankline);
 		features = malloc((size + 1) * sizeof(char *));
 		if (!features)
 			return ESMI_NO_MEMORY;
@@ -1548,7 +1549,7 @@ static esmi_status_t init_proto_version_func_pointers()
 	case 4:
 		size = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_ver2_get) +
 		       ARRAY_SIZE(feat_ver2_set) + ARRAY_SIZE(feat_ver4) +
-		       ARRAY_SIZE(feat_energy) + ARRAY_SIZE(feat_ver3);
+		       ARRAY_SIZE(feat_energy) + ARRAY_SIZE(feat_ver3) + ARRAY_SIZE(blankline);
 		features = malloc((size + 1) * sizeof(char *));
 		if (!features)
 			return ESMI_NO_MEMORY;
@@ -1560,7 +1561,7 @@ static esmi_status_t init_proto_version_func_pointers()
 		size = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_ver2_get) +
 		       ARRAY_SIZE(feat_ver2_set) + ARRAY_SIZE(feat_ver5_get) +
 		       ARRAY_SIZE(feat_ver5_set) + ARRAY_SIZE(feat_ver3) +
-		       ARRAY_SIZE(feat_energy);
+		       ARRAY_SIZE(feat_energy) + ARRAY_SIZE(blankline);
 		features = malloc((size + 1) * sizeof(char *));
 		if (!features)
 			return ESMI_NO_MEMORY;
