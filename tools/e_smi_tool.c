@@ -1187,7 +1187,7 @@ static esmi_status_t show_cpu_energy_all(void)
 	input = (uint64_t *) calloc(cpus, sizeof(uint64_t));
 	if (NULL == input) {
 		printf("Memory allocation failed all energy entries\n");
-		return ret;
+		return ESMI_ERROR;
 	}
 
 	ret = esmi_all_energies_get(input);
@@ -1582,7 +1582,7 @@ Parse command line parameters and set data for program.
 */
 static esmi_status_t parsesmi_args(int argc,char **argv)
 {
-	esmi_status_t ret;
+	esmi_status_t ret = ESMI_ERROR;
 	int i;
 	int opt = 0; /* option character */
 	uint32_t core_id = 0, sock_id = 0;
@@ -2018,7 +2018,7 @@ static esmi_status_t parsesmi_args(int argc,char **argv)
 			break;
 		case 'h' :
 			show_usage(argv[0]);
-			return ESMI_ERROR;
+			break;
 		case ':' :
 			/* missing option argument */
 			printf(RED "%s: option '-%c' requires an argument."
@@ -2032,11 +2032,11 @@ static esmi_status_t parsesmi_args(int argc,char **argv)
 				printf("Unknown option character"
 				" `\\x%x'.\n", opt);
 			}
-			return ESMI_ERROR;
+			break;
 		default:
 			printf(MAG "Try `%s --help' for more information."
 						RESET "\n\n", argv[0]);
-			return ESMI_ERROR;
+			break;
 		} // end of Switch
 	}
 	if (optind < argc) {
