@@ -1281,7 +1281,7 @@ esmi_status_t esmi_current_freq_limit_core_get(uint32_t core_id, uint32_t *freq)
 	msg.msg_id	= HSMP_GET_CCLK_CORE_LIMIT;
 	msg.num_args	= 1;
 	msg.response_sz = 1;
-	msg.args[0]	= core_id;
+	msg.args[0]	= psm->map[core_id].apic_id;
 	msg.sock_ind	= psm->map[core_id].sock_id;
 	ret = hsmp_xfer(&msg, O_RDONLY);
 	if (!ret)
