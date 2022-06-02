@@ -88,8 +88,6 @@ struct cpu_mapping {
 };
 
 #define CPU_INFO_LINE_SIZE	1024
-#define APICID_BIT		1
-#define PHYSICALID_BIT		2
 #define CPU_INFO_PATH		"/proc/cpuinfo"
 
 static char *delim1 = ":";
@@ -288,14 +286,27 @@ static esmi_status_t create_hsmp_monitor(struct system_metrics *sm)
 	return ESMI_NO_HSMP_DRV;
 }
 
+static void parse_lines(char **str, FILE *fp, uint32_t *val, const char *cmp_str)
+{
+	size_t size = CPU_INFO_LINE_SIZE;
+	char *tok;
+
+	while (getline(str, &size, fp) != -1) {
+		if ((tok = strtok(*str, delim1)) && (!strncmp(tok, cmp_str, strlen(cmp_str)))) {
+			tok  = strtok(NULL, delim2);
+			*val = atoi(tok);
+			break;
+		}
+	}
+}
+
 static esmi_status_t create_cpu_mappings(struct system_metrics *sm)
 {
-	int flag = (APICID_BIT | PHYSICALID_BIT);
 	size_t size = CPU_INFO_LINE_SIZE;
-	int i = -1;
-	char *tok;
+	int i = 0;
 	char *str;
 	FILE *fp;
+	char *tok;
 
 	str = malloc(CPU_INFO_LINE_SIZE);
 	if (!str)
@@ -313,30 +324,13 @@ static esmi_status_t create_cpu_mappings(struct system_metrics *sm)
 		free(sm->map);
 		return ESMI_FILE_ERROR;
 	}
-
 	while (getline(&str, &size, fp) != -1) {
-		if (tok = strtok(str, delim1)) {
-			if (flag != (APICID_BIT | PHYSICALID_BIT)) {
-				if(!strncmp(tok, node_str, strlen(node_str))) {
-					tok  = strtok(NULL, delim2);
-					sm->map[i].sock_id = atoi(tok);
-					flag |= PHYSICALID_BIT;
-					continue;
-				}
-				if(!strncmp(tok, apic_str, strlen(apic_str))) {
-					tok  = strtok(NULL, delim2);
-					sm->map[i].apic_id = atoi(tok);
-					flag |= APICID_BIT;
-				}
-
-			} else {
-				if(!strncmp(tok, proc_str, strlen(proc_str))) {
-					i++;
-					tok  = strtok(NULL, delim2);
-					sm->map[i].proc_id = atoi(tok);
-					flag = 0;
-				}
-			}
+		if ((tok = strtok(str, delim1)) && (!strncmp(tok, proc_str, strlen(proc_str)))) {
+			tok  = strtok(NULL, delim2);
+			sm->map[i].proc_id = atoi(tok);
+			parse_lines(&str, fp, &sm->map[i].sock_id, node_str);
+			parse_lines(&str, fp, &sm->map[i].apic_id, apic_str);
+			i++;
 		}
 	}
 
