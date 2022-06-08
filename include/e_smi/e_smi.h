@@ -215,12 +215,12 @@ enum hsmp_proto_versions {
 
 /****************************************************************************/
 /** @defgroup InitShut Initialization and Shutdown
- *  This function validates the dependencies exists and initializes the library.
+ *  This function validates the dependencies that exist and initializes the library.
  *  @{
 */
 
 /**
- *  @brief Initialize the library, validate the dependencies exists
+ *  @brief Initialize the library, validates the dependencies
  *
  *  @details Search the available dependency entries and initialize
  *  the library accordingly.
@@ -232,7 +232,7 @@ enum hsmp_proto_versions {
 esmi_status_t esmi_init(void);
 
 /**
- *  @brief Clean up allocation during init.
+ *  @brief Clean up any allocation done during init.
  */
 void esmi_exit(void);
 
@@ -312,6 +312,7 @@ esmi_status_t esmi_all_energies_get(uint64_t *penergy);
  *  @brief Get the SMU Firmware Version
  *
  *  @details This function will return the SMU FW version at @p smu_fw
+ *  Supported on all hsmp protocol versions
  *
  *  @param[inout] smu_fw Input buffer to return the smu firmware version.
  *
@@ -327,6 +328,7 @@ esmi_status_t esmi_smu_fw_version_get(struct smu_fw_version *smu_fw);
  *
  *  @details Given a socket index @p socket_idx and this function will get
  *  PROCHOT at @p prochot.
+ *  Supported on all hsmp protocol versions
  *
  *  @param[in] socket_idx a socket index
  *
@@ -345,6 +347,7 @@ esmi_status_t esmi_prochot_status_get(uint32_t socket_idx, uint32_t *prochot);
  *  @details Given a socket index @p socket_idx and a pointer to a uint32_t
  *  @p fclk and @p mclk, this function will get the data fabric clock and
  *  memory clock.
+ *  Supported on all hsmp protocol versions
  *
  *  @param[in] socket_idx a socket index
  *
@@ -365,6 +368,7 @@ esmi_status_t esmi_fclk_mclk_get(uint32_t socket_idx,
  *
  *  @details Given a socket index @p socket_idx and a pointer to a uint32_t
  *  @p cclk, this function will get the core clock throttle limit.
+ *  Supported on all hsmp protocol versions
  *
  *  @param[in] socket_idx a socket index
  *
@@ -381,6 +385,7 @@ esmi_status_t esmi_cclk_limit_get(uint32_t socket_idx, uint32_t *cclk);
  *  @brief Get the HSMP interface (protocol) version.
  *
  *  @details This function will get the HSMP interface version at @p proto_ver
+ *  Supported on all hsmp protocol versions
  *
  *  @param[inout] proto_ver Input buffer to return the hsmp protocol version.
  *
@@ -394,6 +399,7 @@ esmi_status_t esmi_hsmp_proto_ver_get(uint32_t *proto_ver);
  *  @brief Get the current active frequency limit of the socket.
  *
  *  @details This function will get the socket frequency and source of this limit
+ *  Supported on all hsmp protocol versions
  *
  *  @param[in] sock_ind A socket index.
  *
@@ -413,6 +419,7 @@ esmi_status_t esmi_socket_current_active_freq_limit_get(uint32_t sock_ind,
  *
  *  @details This function returns the socket frequency range, fmax
  *  and fmin.
+ *  Supported only on hsmp protocol version-5
  *
  *  @param[in] sock_ind Socket index.
  *
@@ -430,6 +437,7 @@ esmi_status_t esmi_socket_freq_range_get(uint8_t sock_ind, uint16_t *fmax, uint1
  *  @brief Get the current active frequency limit of the core.
  *
  *  @details This function returns the core frequency limit for the specified core.
+ *  Supported only on hsmp protocol version-5
  *
  *  @param[in] core_id Core index.
  *
@@ -456,6 +464,7 @@ esmi_status_t esmi_current_freq_limit_core_get(uint32_t core_id, uint32_t *freq)
  *  @details Given a socket index @p socket_idx and a pointer to a uint32_t
  *  @p ppower, this function will get the current power consumption
  *  (in milliwatts) to the uint32_t pointed to by @p ppower.
+ *  Supported on all hsmp protocol versions
  *
  *  @param[in] socket_idx a socket index
  *
@@ -474,6 +483,7 @@ esmi_status_t esmi_socket_power_get(uint32_t socket_idx, uint32_t *ppower);
  *  @details This function will return the valid power cap @p pcap for a given
  *  socket @p socket_idx, this value will be used by the system to limit
  *  the power usage.
+ *  Supported on all hsmp protocol versions
  *
  *  @param[in] socket_idx a socket index
  *
@@ -491,6 +501,7 @@ esmi_status_t esmi_socket_power_cap_get(uint32_t socket_idx, uint32_t *pcap);
  *
  *  @details This function will return the maximum possible valid power cap
  *  @p pmax from a @p socket_idx.
+ *  Supported on all hsmp protocol versions
  *
  *  @param[in] socket_idx a socket index
  *
@@ -508,6 +519,7 @@ esmi_status_t esmi_socket_power_cap_max_get(uint32_t socket_idx,
  *  @brief Get the SVI based power telemetry for all rails.
  *
  *  @details This function returns the SVI based power telemetry for all rails.
+ *  Supported only on hsmp protocol version-5
  *
  *  @param[in] sock_ind Socket index.
  *
@@ -537,8 +549,10 @@ esmi_status_t esmi_pwr_svi_telemetry_all_rails_get(uint32_t sock_ind, uint32_t *
  *
  *  Note: The power limit specified will be clipped to the maximum cTDP range for
  *  the processor. There is a limit on the minimum power that the processor can
- *  operate at, no further power socket reduction occurs if the limit is set
- *  below that minimum.
+ *  operate at, no further socket power reduction occurs if the limit is set
+ *  below that minimum and also there are independent registers through HSMP and APML
+ *  whichever is the most constraining between the two is enforced.
+ *  Supported on all hsmp protocol versions.
  *
  *  @param[in] socket_idx a socket index
  *
@@ -555,6 +569,7 @@ esmi_status_t esmi_socket_power_cap_set(uint32_t socket_idx, uint32_t pcap);
  *  @brief Set the power efficiency profile policy
  *
  *  @details This function will set the power efficiency mode.
+ *  Supported only on hsmp protocol version-5
  *
  *  Power efficiency modes are:
  *
@@ -563,7 +578,7 @@ esmi_status_t esmi_socket_power_cap_set(uint32_t socket_idx, uint32_t pcap);
  *  default df pstate and DLWM algorithms are active.
  *
  *  1 = Power efficient mode: This mode limits the boost frequency available to
- *  the cores and restricts the DF P-States. This mode also monitors the system load to 
+ *  the cores and restricts the DF P-States. This mode also monitors the system load to
  *  dynamically adjust performance for maximum power efficiency.
  *
  *  2 = IO performance mode: This mode sets up data fabric to maximize IO performance.
@@ -591,8 +606,12 @@ esmi_status_t esmi_pwr_efficiency_mode_set(uint8_t sock_ind, uint8_t mode);
 /**
  *  @brief Get the boostlimit value for a given core
  *
- *  @details This function will return the core's current boost limit
- *  @p pboostlimit for a particular @p cpu_ind
+ *  @details This function provides the frequency currently enforced through
+ *  esmi_core_boostlimit_set() and esmi_socket_boostlimit_set() APIs
+ *  for a particular @p cpu_ind.
+ *  Supported on all hsmp protocol versions.
+ *  Please note: there are independent registers through HSMP and APML.
+ *  This message provides boost limit associated with HSMP only.
  *
  *  @param[in] cpu_ind a cpu index
  *
@@ -610,6 +629,7 @@ esmi_status_t esmi_core_boostlimit_get(uint32_t cpu_ind,
  *
  *  @details This function will return the socket's current c0_residency
  *  @p pc0_residency for a particular @p socket_idx
+ *  Supported on all hsmp protocol versions
  *
  *  @param[in] socket_idx a socket index provided.
  *
@@ -643,6 +663,11 @@ esmi_status_t esmi_socket_c0_residency_get(uint32_t socket_idx,
  *  low as 20% of the requested frequency.
  *  If the specified boost limit frequency of a core
  *  is not supported, then the processor selects the next lower supported frequency.
+ *  For processor with SMT enabled, writes to different APIC ids that map to the same
+ *  physical core overwrite the previous write to that core.
+ *  There are independent registers through HSMP and APML
+ *  whichever is the most constraining between the two is enforced.
+ *  Supported on all hsmp protocol versions
  *
  *  @param[in] cpu_ind a cpu index is a given core to set the boostlimit
  *
@@ -660,6 +685,9 @@ esmi_status_t esmi_core_boostlimit_set(uint32_t cpu_ind, uint32_t boostlimit);
  *
  *  @details This function will set the boostlimit to the provided value @p
  *  boostlimit for a given socket @p socket_idx.
+ *  There are independent registers through HSMP and APML
+ *  whichever is the most constraining between the two is enforced.
+ *  Supported on all hsmp protocol versions
  *
  *  @param[in] socket_idx a socket index to set boostlimit.
  *
@@ -686,6 +714,7 @@ esmi_status_t esmi_socket_boostlimit_set(uint32_t socket_idx,
  *  @brief Get the Theoretical maximum DDR Bandwidth in GB/s,
  *  Current utilized DDR Bandwidth in GB/s and Current utilized
  *  DDR Bandwidth as a percentage of theoretical maximum in a system.
+ *  Supported only on hsmp protocol version >= 3
  *
  *  @details This function will return the DDR Bandwidth metrics @p ddr_bw
  *
@@ -711,6 +740,7 @@ esmi_status_t esmi_ddr_bw_get(struct ddr_bw_metrics *ddr_bw);
  *
  *  @details This function will return the socket's current temperature
  *  in milli degree celsius @p ptmon for a particular @p sock_ind.
+ *  Supported only on hsmp protocol version-4
  *
  *  @param[in] sock_ind a socket index provided.
  *
@@ -736,6 +766,7 @@ esmi_status_t esmi_socket_temperature_get(uint32_t sock_ind, uint32_t *ptmon);
  *
  *  @details This function returns the per DIMM temperature range and
  *  refresh rate from the MR4 register.
+ *  Supported only on hsmp protocol version-5
  *
  *  @param[in] sock_ind Socket index through which the DIMM can be accessed
  *
@@ -755,6 +786,7 @@ esmi_status_t esmi_dimm_temp_range_and_refresh_rate_get(uint8_t sock_ind, uint8_
  *  @brief Get dimm power consumption and update rate
  *
  *  @details This function returns the DIMM power and update rate
+ *  Supported only on hsmp protocol version-5
  *
  *  @param[in] sock_ind Socket index through which the DIMM can be accessed.
  *
@@ -775,6 +807,7 @@ esmi_status_t esmi_dimm_power_consumption_get(uint8_t sock_ind, uint8_t dimm_add
  *
  *  @details This function will return the DIMM thermal sensor(2 sensors per DIMM)
  *  and update rate
+ *  Supported only on hsmp protocol version-5
  *
  *  @param[in] sock_ind Socket index through which the DIMM can be accessed.
  *
@@ -795,16 +828,22 @@ esmi_status_t esmi_dimm_thermal_sensor_get(uint8_t sock_ind, uint8_t dimm_addr,
 
 /*****************************************************************************/
 /** @defgroup xGMIBwCont xGMI bandwidth control
- *  This function provides a way to control xgmi bandwidth connected in 2P systems.
+ *  This function provides a way to control width of the xgmi links connected in
+ *  multisocket systems.
  *  @{
  */
 
 /**
- *  @brief Set xgmi width for a multi socket system
- *  values range from 0 to 2
- *  0 => 4 lanes on family 19h model 10h and 2 lanes on other models
- *  1 => 8 lanes
- *  2 => 16 lanes
+ *  @brief Set xgmi width for a multi socket system.
+ *  values range from 0 to 2.
+ *
+ *  0 => 4 lanes on family 19h model 10h and 2 lanes on other models.
+ *
+ *  1 => 8 lanes.
+ *
+ *  2 => 16 lanes.
+ *
+ *  Supported on all hsmp protocol versions.
  *
  *  @details This function will set the xgmi width @p min and @p max for all
  *  the sockets in the system
@@ -832,9 +871,14 @@ esmi_status_t esmi_xgmi_width_set(uint8_t min, uint8_t max);
  *
  *  @details This function will set the global memory interconnect width.
  *  Values can be 0, 1 or 2.
- *  0 = Quarter width
- *  1 = Half width
- *  2 = Full width
+ *
+ *  0 => Quarter width
+ *
+ *  1 => Half width
+ *
+ *  2 => Full width
+ *
+ *  Supported only on hsmp protocol version-5
  *
  *  @param[in] sock_ind Socket index.
  *
@@ -867,6 +911,7 @@ esmi_status_t esmi_gmi3_link_width_range_set(uint8_t sock_ind, uint8_t min_link_
  *  DF P-State through a CBS option at boottime.
  *  APBDisable may also be used to disable this algorithm and force a fixed
  *  DF P-State.
+ *  Supported on all hsmp protocol versions
  *
  *  NOTE: While the socket is in PC6 or if PROCHOT_L is asserted, the lowest
  *  DF P-State (highest value) is enforced regardless of the APBEnable/APBDisable
@@ -885,6 +930,9 @@ esmi_status_t esmi_apb_enable(uint32_t sock_ind);
  *
  *  @details This function will set the desired P-state at @p pstate.
  *  Acceptable values for the P-state are 0(highest) - 2 (lowest)
+ *  If the PC6 or PROCHOT_L is asserted, then the lowest DF pstate is
+ *  enforced regardless of the APBenable/APBdiable states.
+ *  Supported on all hsmp protocol versions.
  *
  *  @param[in] sock_ind a socket index
  *
@@ -902,12 +950,13 @@ esmi_status_t esmi_apb_disable(uint32_t sock_ind, uint8_t pstate);
  *  @details This function will set the lclk dpm level / nbio pstate
  *  for the specified @p nbio_id in a specified socket @p sock_ind with provided
  *  values @p min and @p max.
+ *  Supported on hsmp protocol version >= 2
  *
  *  @param[in] sock_ind socket index.
  *
  *  @param[in] nbio_id northbridge number varies from 0 to 3.
  *
- *  @param[in] min pstate minimum value, varies from 0 to 3 with min <= max
+ *  @param[in] min pstate minimum value, varies from 0(lowest) to 3(highest) with min <= max
  *
  *  @param[in] max pstate maximum value, varies from 0 to 3.
  *
@@ -922,7 +971,11 @@ esmi_status_t esmi_socket_lclk_dpm_level_set(uint32_t sock_ind, uint8_t nbio_id,
  *  @brief Get lclk dpm level
  *
  *  @details This function will get the lclk dpm level.
- *  DPM lelvel is an encoding to represent PCIe link frequency
+ *  DPM level is an encoding to represent PCIe link frequency.
+ *  DPM levels can be set from APML also. This API gives current levels which may
+ *  have been set from either APML or HSMP.
+ *
+ *  Supported in hsmp protocol version-5.
  *
  *  @param[in] sock_ind Socket index
  *
@@ -942,10 +995,14 @@ esmi_status_t esmi_socket_lclk_dpm_level_get(uint8_t sock_ind, uint8_t nbio_id,
  *
  *  @details This function will set the pcie link rate to gen4/5 or
  *  auto detection based on bandwidth utilisation.
- *  Value are:
- *  0 = auto detect bandwidth utilisation and set link rate
- *  1 = Limit at gen4 rate
- *  2 = Limit at gen5 rate
+ *  Values are:
+ *  0 => auto detect bandwidth utilisation and set link rate
+ *
+ *  1 => Limit at gen4 rate
+ *
+ *  2 => Limit at gen5 rate
+ *
+ *  Supported only on hsmp protocol version-5
  *
  *  @param[in] sock_ind Socket index.
  *
@@ -965,6 +1022,9 @@ esmi_status_t esmi_pcie_link_rate_set(uint8_t sock_ind, uint8_t rate_ctrl, uint8
  *  @details This function will set the max and min pstates for the data fabric.
  *  Acceptable values for the P-state are 0(highest) - 2 (lowest) with
  *  max <= min.
+ *  DF pstate range can be set from both HSMP and APML, the most
+ *  recent of the two is enforced.
+ *  Supported only on hsmp protocol version-5
  *
  *  @param[in] sock_ind a socket index.
  *
@@ -990,6 +1050,7 @@ esmi_status_t esmi_df_pstate_range_set(uint8_t sock_ind, uint8_t max_pstate, uin
  *  @brief Get IO bandwidth on IO link.
  *
  *  @details This function returns the IO Aggregate bandwidth for the given link id.
+ *  Supported only on hsmp protocol version-5
  *
  *  @param[in] sock_ind Socket index.
  *
@@ -1008,8 +1069,9 @@ esmi_status_t esmi_current_io_bandwidth_get(uint8_t sock_ind, struct link_id_bw_
 /**
  *  @brief Get xGMI bandwidth.
  *
- *  @details This function will get the xGMI Aggregate bandwidth for the specified link
- *  in a multi socket system.
+ *  @details This function will read xGMI bandwidth in Mbps for the specified link
+ *  and bandwidth type in a multi socket system.
+ *  Supported only on hsmp protocol version-5
  *
  *  @param[in] link  structure containing link_id(Link encoding values of given link) and bwtype
  *  info.
