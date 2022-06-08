@@ -543,7 +543,7 @@ esmi_status_t esmi_number_of_sockets_get(uint32_t *sockets)
  */
 esmi_status_t esmi_core_energy_get(uint32_t core_ind, uint64_t *penergy)
 {
-	int ret;
+	esmi_status_t ret;
 
 	CHECK_ENERGY_GET_INPUT(penergy);
 	if (core_ind >= psm->total_cores) {
@@ -569,8 +569,9 @@ esmi_status_t esmi_core_energy_get(uint32_t core_ind, uint64_t *penergy)
  */
 esmi_status_t esmi_socket_energy_get(uint32_t sock_ind, uint64_t *penergy)
 {
-	int ret, core_ind;
 	esmi_status_t status;
+	esmi_status_t ret;
+	int core_ind;
 
 	CHECK_ENERGY_GET_INPUT(penergy);
 	if (sock_ind >= psm->total_sockets) {
@@ -599,7 +600,7 @@ esmi_status_t esmi_socket_energy_get(uint32_t sock_ind, uint64_t *penergy)
  */
 esmi_status_t esmi_all_energies_get(uint64_t *penergy)
 {
-	int ret;
+	esmi_status_t ret;
 	uint32_t cpus;
 
 	CHECK_ENERGY_GET_INPUT(penergy);
@@ -616,7 +617,7 @@ esmi_status_t esmi_all_energies_get(uint64_t *penergy)
 esmi_status_t esmi_smu_fw_version_get(struct smu_fw_version *smu_fw)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	CHECK_HSMP_GET_INPUT(smu_fw);
 
@@ -639,7 +640,7 @@ esmi_status_t esmi_smu_fw_version_get(struct smu_fw_version *smu_fw)
 esmi_status_t esmi_socket_power_get(uint32_t sock_ind, uint32_t *ppower)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	CHECK_HSMP_GET_INPUT(ppower);
 
@@ -664,7 +665,7 @@ esmi_status_t esmi_socket_power_get(uint32_t sock_ind, uint32_t *ppower)
 esmi_status_t esmi_socket_power_cap_get(uint32_t sock_ind, uint32_t *pcap)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	CHECK_HSMP_GET_INPUT(pcap);
 
@@ -688,8 +689,8 @@ esmi_status_t esmi_socket_power_cap_get(uint32_t sock_ind, uint32_t *pcap)
  */
 esmi_status_t esmi_socket_power_cap_max_get(uint32_t sock_ind, uint32_t *pmax)
 {
-		struct hsmp_message msg = { 0 };
-	int ret;
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
 
 	CHECK_HSMP_GET_INPUT(pmax);
 
@@ -716,7 +717,7 @@ esmi_status_t esmi_socket_power_cap_max_get(uint32_t sock_ind, uint32_t *pmax)
 esmi_status_t esmi_socket_power_cap_set(uint32_t sock_ind, uint32_t cap)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	CHECK_HSMP_INPUT();
 
@@ -744,7 +745,7 @@ esmi_status_t esmi_core_boostlimit_get(uint32_t core_ind,
 				       uint32_t *pboostlimit)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	CHECK_HSMP_GET_INPUT(pboostlimit);
 
@@ -777,7 +778,7 @@ esmi_status_t esmi_core_boostlimit_set(uint32_t core_ind,
 				       uint32_t boostlimit)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	CHECK_HSMP_INPUT();
 
@@ -806,7 +807,7 @@ esmi_status_t esmi_socket_boostlimit_set(uint32_t sock_ind,
 					 uint32_t boostlimit)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	CHECK_HSMP_INPUT();
 
@@ -827,8 +828,8 @@ esmi_status_t esmi_socket_boostlimit_set(uint32_t sock_ind,
 esmi_status_t esmi_prochot_status_get(uint32_t sock_ind, uint32_t *prochot)
 {
 	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
 	char hot[9];
-	int ret;
 
 	CHECK_HSMP_GET_INPUT(prochot);
 
@@ -852,9 +853,9 @@ esmi_status_t esmi_prochot_status_get(uint32_t sock_ind, uint32_t *prochot)
 esmi_status_t esmi_xgmi_width_set(uint8_t min, uint8_t max)
 {
 	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
 	uint16_t width;
 	int drv_val;
-	int ret;
 	int i;
 
 	CHECK_HSMP_INPUT();
@@ -883,7 +884,7 @@ esmi_status_t esmi_xgmi_width_set(uint8_t min, uint8_t max)
 esmi_status_t esmi_apb_enable(uint32_t sock_ind)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	CHECK_HSMP_INPUT();
 
@@ -906,7 +907,7 @@ esmi_status_t esmi_apb_enable(uint32_t sock_ind)
 esmi_status_t esmi_apb_disable(uint32_t sock_ind, uint8_t pstate)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	CHECK_HSMP_INPUT();
 
@@ -929,7 +930,7 @@ esmi_status_t esmi_fclk_mclk_get(uint32_t sock_ind,
 				 uint32_t *fclk, uint32_t *mclk)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 	uint64_t clk;
 
 	CHECK_HSMP_INPUT();
@@ -954,7 +955,7 @@ esmi_status_t esmi_fclk_mclk_get(uint32_t sock_ind,
 esmi_status_t esmi_cclk_limit_get(uint32_t sock_ind, uint32_t *cclk)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	CHECK_HSMP_GET_INPUT(cclk);
 
@@ -981,7 +982,7 @@ esmi_status_t esmi_socket_c0_residency_get(uint32_t sock_ind,
 					   uint32_t *pc0_residency)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	CHECK_HSMP_GET_INPUT(pc0_residency);
 	if (sock_ind >= psm->total_sockets) {
@@ -1002,8 +1003,8 @@ esmi_status_t esmi_socket_lclk_dpm_level_set(uint32_t sock_ind, uint8_t nbio_id,
 					     uint8_t min, uint8_t max)
 {
 	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
 	uint32_t dpm_val;
-	int ret;
 
 	CHECK_HSMP_INPUT();
 
@@ -1029,8 +1030,8 @@ esmi_status_t esmi_socket_lclk_dpm_level_get(uint8_t sock_ind, uint8_t nbio_id,
 					     struct dpm_level *dpm)
 {
 	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
 	uint32_t dpm_val;
-	int ret;
 
 	if (psm->hsmp_proto_ver < HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_MSG_SUP;
@@ -1060,8 +1061,8 @@ esmi_status_t esmi_socket_lclk_dpm_level_get(uint8_t sock_ind, uint8_t nbio_id,
 esmi_status_t esmi_ddr_bw_get(struct ddr_bw_metrics *ddr_bw)
 {
 	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
 	uint32_t bw;
-	int ret;
 
 	CHECK_HSMP_GET_INPUT(ddr_bw);
 
@@ -1214,11 +1215,11 @@ esmi_status_t esmi_socket_current_active_freq_limit_get(uint32_t sock_ind, uint1
 							char **src_type)
 {
 	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
 	uint8_t src_len;
 	uint16_t limit;
 	uint8_t index = 0;
 	uint8_t ind = 0;
-	int ret;
 
 	if (psm->hsmp_proto_ver < HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_MSG_SUP;
@@ -1259,7 +1260,7 @@ esmi_status_t esmi_socket_current_active_freq_limit_get(uint32_t sock_ind, uint1
 esmi_status_t esmi_current_freq_limit_core_get(uint32_t core_id, uint32_t *freq)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	if (psm->hsmp_proto_ver < HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_MSG_SUP;
@@ -1287,7 +1288,7 @@ esmi_status_t esmi_current_freq_limit_core_get(uint32_t core_id, uint32_t *freq)
 esmi_status_t esmi_pwr_svi_telemetry_all_rails_get(uint32_t sock_ind, uint32_t *power)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	if (psm->hsmp_proto_ver < HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_MSG_SUP;
@@ -1310,7 +1311,7 @@ esmi_status_t esmi_pwr_svi_telemetry_all_rails_get(uint32_t sock_ind, uint32_t *
 esmi_status_t esmi_socket_freq_range_get(uint8_t sock_ind, uint16_t *fmax, uint16_t *fmin)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	if (psm->hsmp_proto_ver < HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_MSG_SUP;
@@ -1379,7 +1380,7 @@ esmi_status_t esmi_current_io_bandwidth_get(uint8_t sock_ind, struct link_id_bw_
 					    uint32_t *io_bw)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	if (psm->hsmp_proto_ver < HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_MSG_SUP;
@@ -1412,7 +1413,7 @@ esmi_status_t esmi_current_xgmi_bw_get(struct link_id_bw_type link,
 				       uint32_t *xgmi_bw)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	if (psm->hsmp_proto_ver < HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_MSG_SUP;
@@ -1449,7 +1450,7 @@ esmi_status_t esmi_gmi3_link_width_range_set(uint8_t sock_ind, uint8_t min_link_
 					     uint8_t max_link_width)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	if (psm->hsmp_proto_ver < HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_MSG_SUP;
@@ -1475,7 +1476,7 @@ esmi_status_t esmi_gmi3_link_width_range_set(uint8_t sock_ind, uint8_t min_link_
 esmi_status_t esmi_pcie_link_rate_set(uint8_t sock_ind, uint8_t rate_ctrl, uint8_t *prev_mode)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	if (psm->hsmp_proto_ver < HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_MSG_SUP;
@@ -1515,7 +1516,7 @@ static esmi_status_t validate_pwr_efficiency_mode(uint8_t mode)
 esmi_status_t esmi_pwr_efficiency_mode_set(uint8_t sock_ind, uint8_t mode)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	if (psm->hsmp_proto_ver < HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_MSG_SUP;
@@ -1541,7 +1542,7 @@ esmi_status_t esmi_df_pstate_range_set(uint8_t sock_ind, uint8_t max_pstate,
 				       uint8_t min_pstate)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	if (psm->hsmp_proto_ver < HSMP_PROTO_VER5)
 		return ESMI_NO_HSMP_MSG_SUP;
@@ -1566,7 +1567,7 @@ esmi_status_t esmi_df_pstate_range_set(uint8_t sock_ind, uint8_t max_pstate,
 esmi_status_t esmi_hsmp_proto_ver_get(uint32_t *proto_ver)
 {
 	struct hsmp_message msg = { 0 };
-	int ret;
+	esmi_status_t ret;
 
 	CHECK_HSMP_GET_INPUT(proto_ver);
 
