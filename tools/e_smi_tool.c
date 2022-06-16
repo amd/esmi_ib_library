@@ -56,8 +56,11 @@
 #define ARGS_MAX 64
 #define SHOWLINESZ 256
 
-/* To handle multiple errors while reporting summary */
-#define ESMI_ERROR	-1
+/*
+ * To handle multiple errors while reporting tool summary.
+ * 1234 is just chosen to make this value different than other error codes
+ */
+#define ESMI_MULTI_ERROR	1234
 
 static struct epyc_sys_info {
 	uint32_t sockets;
@@ -122,7 +125,7 @@ static esmi_status_t epyc_get_coreenergy(uint32_t core_id)
 	return ESMI_SUCCESS;
 }
 
-static esmi_status_t epyc_get_sockenergy(void)
+static int epyc_get_sockenergy(void)
 {
 	esmi_status_t ret;
 	uint32_t i;
@@ -145,7 +148,7 @@ static esmi_status_t epyc_get_sockenergy(void)
 	err_bits_print(err_bits);
 
 	if (err_bits > 1)
-		return ESMI_ERROR;
+		return ESMI_MULTI_ERROR;
 
 	return ESMI_SUCCESS;
 }
@@ -187,9 +190,8 @@ static void ddr_bw_get(uint32_t *err_bits)
 	printf("%s", pct_str);
 }
 
-static esmi_status_t epyc_get_ddr_bw(void)
+static int epyc_get_ddr_bw(void)
 {
-	esmi_status_t ret;
 	uint32_t i;
 	struct ddr_bw_metrics ddr;
 	char bw_str[SHOWLINESZ] = {};
@@ -204,12 +206,12 @@ static esmi_status_t epyc_get_ddr_bw(void)
 	print_socket_footer();
 	err_bits_print(err_bits);
 	if (err_bits > 1)
-		return ESMI_ERROR;
+		return ESMI_MULTI_ERROR;
 
 	return ESMI_SUCCESS;
 }
 
-static esmi_status_t epyc_get_temperature(void)
+static int epyc_get_temperature(void)
 {
 	esmi_status_t ret;
 	uint32_t i;
@@ -230,7 +232,7 @@ static esmi_status_t epyc_get_temperature(void)
 	print_socket_footer();
 	err_bits_print(err_bits);
 	if (err_bits > 1)
-		return ESMI_ERROR;
+		return ESMI_MULTI_ERROR;
 	return ESMI_SUCCESS;
 }
 
@@ -272,7 +274,7 @@ static esmi_status_t epyc_get_hsmp_proto_version(void)
 	return ESMI_SUCCESS;
 }
 
-static esmi_status_t epyc_get_prochot_status(void)
+static int epyc_get_prochot_status(void)
 {
 	esmi_status_t ret;
 	uint32_t i;
@@ -295,7 +297,7 @@ static esmi_status_t epyc_get_prochot_status(void)
 	printf("\n");
 	err_bits_print(err_bits);
 	if (err_bits > 1)
-		return ESMI_ERROR;
+		return ESMI_MULTI_ERROR;
 	return ESMI_SUCCESS;
 }
 static bool print_src = false;
@@ -383,7 +385,7 @@ static void get_sock_freq_range(uint32_t *err_bits)
 	printf("%s", str2);
 }
 
-static esmi_status_t epyc_get_clock_freq(void)
+static int epyc_get_clock_freq(void)
 {
 	esmi_status_t ret;
 	uint32_t i;
@@ -432,7 +434,7 @@ static esmi_status_t epyc_get_clock_freq(void)
 	if (print_src)
 		display_freq_limit_src_names(freq_src);
 	if (err_bits > 1)
-		return ESMI_ERROR;
+		return ESMI_MULTI_ERROR;
 
 	return ESMI_SUCCESS;
 }
@@ -521,7 +523,7 @@ static esmi_status_t epyc_get_lclk_dpm_level(uint32_t sock_id, uint8_t nbio_id)
 	return ret;
 }
 
-static esmi_status_t epyc_get_socketpower(void)
+static int epyc_get_socketpower(void)
 {
 	esmi_status_t ret;
 	uint32_t i;
@@ -565,7 +567,7 @@ static esmi_status_t epyc_get_socketpower(void)
 	printf("\n");
 	err_bits_print(err_bits);
 	if (err_bits > 1)
-		return ESMI_ERROR;
+		return ESMI_MULTI_ERROR;
 	return ESMI_SUCCESS;
 }
 
@@ -776,7 +778,7 @@ static esmi_status_t epyc_get_core_clock(uint32_t core_id)
 	return ret;
 }
 
-static esmi_status_t epyc_get_power_telemetry()
+static int epyc_get_power_telemetry()
 {
 	esmi_status_t ret;
 	uint32_t power;
@@ -798,7 +800,7 @@ static esmi_status_t epyc_get_power_telemetry()
 	print_socket_footer();
 	err_bits_print(err_bits);
 	if (err_bits > 1)
-		return ESMI_ERROR;
+		return ESMI_MULTI_ERROR;
 
 	return ESMI_SUCCESS;
 }
@@ -839,7 +841,7 @@ static esmi_status_t epyc_get_io_bandwidth_info(uint32_t sock_id, char *link)
 	if (index == -1) {
 		printf("Please provide valid link name.\n");
 		printf(MAG "Try --help for more information.\n" RESET);
-		return ESMI_ERROR;
+		return ESMI_INVALID_INPUT;
 	}
 	io_link.link_id =  1 << index;
 	/* Aggregate bw = 1 */
@@ -870,7 +872,7 @@ static esmi_status_t epyc_get_xgmi_bandwidth_info(char *link, char *bw_type)
 	if (link_ind == -1 || bw_ind == -1) {
 		printf("Please provide valid link name.\n");
 		printf(MAG "Try --help for more information.\n" RESET);
-		return ESMI_ERROR;
+		return ESMI_INVALID_INPUT;
 	}
 
 	xgmi_link.link_id = 1 << link_ind;
@@ -1022,7 +1024,7 @@ static void socket_ver5_metrics(uint32_t *err_bits, char **freq_src)
 	get_sock_freq_range(err_bits);
 }
 
-static esmi_status_t show_socket_metrics(uint32_t *err_bits, char **freq_src)
+static int show_socket_metrics(uint32_t *err_bits, char **freq_src)
 {
 	esmi_status_t ret;
 	uint32_t i;
@@ -1090,9 +1092,8 @@ static esmi_status_t show_socket_metrics(uint32_t *err_bits, char **freq_src)
 		sys_info.show_addon_socket_metrics(err_bits, freq_src);
 
 	print_socket_footer();
-	if (*err_bits > 1) {
-		return ESMI_ERROR;
-	}
+	if (*err_bits > 1)
+		return ESMI_MULTI_ERROR;
 	return ESMI_SUCCESS;
 }
 
@@ -1161,7 +1162,7 @@ static esmi_status_t show_cpu_energy_all(void)
 	input = (uint64_t *) calloc(cpus, sizeof(uint64_t));
 	if (NULL == input) {
 		printf("Memory allocation failed all energy entries\n");
-		return ESMI_ERROR;
+		return ESMI_NO_MEMORY;
 	}
 
 	ret = esmi_all_energies_get(input);
@@ -1252,7 +1253,7 @@ static void cpu_ver5_metrics(uint32_t *err_bits)
 		"---------------------------------------------");
 }
 
-static esmi_status_t show_cpu_metrics(uint32_t *err_bits)
+static int show_cpu_metrics(uint32_t *err_bits)
 {
 	esmi_status_t ret;
 	uint32_t i, core_id;
@@ -1280,12 +1281,12 @@ static esmi_status_t show_cpu_metrics(uint32_t *err_bits)
 		sys_info.show_addon_cpu_metrics(err_bits);
 
 	if (*err_bits > 1)
-		return ESMI_ERROR;
+		return ESMI_MULTI_ERROR;
 
 	return ESMI_SUCCESS;
 }
 
-static esmi_status_t show_smi_all_parameters(void)
+static int show_smi_all_parameters(void)
 {
 	char *freq_src[ARRAY_SIZE(freqlimitsrcnames) * sys_info.sockets];
 	esmi_status_t ret;
@@ -1306,7 +1307,7 @@ static esmi_status_t show_smi_all_parameters(void)
 		display_freq_limit_src_names(freq_src);
 	err_bits_print(err_bits);
 	if (err_bits > 1)
-		return ESMI_ERROR;
+		return ESMI_MULTI_ERROR;
 
 	return ESMI_SUCCESS;
 }
@@ -1557,9 +1558,9 @@ Parse command line parameters and set data for program.
 @param argc number of command line parameters
 @param argv list of command line parameters
 */
-static esmi_status_t parsesmi_args(int argc,char **argv)
+static int parsesmi_args(int argc,char **argv)
 {
-	esmi_status_t ret = ESMI_ERROR;
+	int ret = ESMI_INVALID_INPUT;
 	int i;
 	int opt = 0; /* option character */
 	uint32_t core_id = 0, sock_id = 0;
@@ -1652,21 +1653,21 @@ static esmi_status_t parsesmi_args(int argc,char **argv)
 	if(ret != ESMI_SUCCESS) {
 		printf(RED "\tESMI Not initialized, drivers not found.\n"
 		       "\tErr[%d]: %s\n" RESET, ret, esmi_get_err_msg(ret));
-		return ESMI_ERROR;
+		return ret;
 	}
 
 	ret = cache_system_info();
 	if(ret != ESMI_SUCCESS) {
 		printf(RED "\tError in reading system info.\n"
 		       "\tErr[%d]: %s\n" RESET, ret, esmi_get_err_msg(ret));
-		return ESMI_ERROR;
+		return ret;
 	}
 
 	ret = init_proto_version_func_pointers();
 	if (ret != ESMI_SUCCESS) {
 		printf(RED "\tError in allocating memory \n"
 		       "\tErr[%d]: %s\n" RESET, ret, esmi_get_err_msg(ret));
-		return ESMI_ERROR;
+		return ret;
 	}
 
 	if (argc <= 1) {
@@ -1702,7 +1703,7 @@ static esmi_status_t parsesmi_args(int argc,char **argv)
 			printf("Option '-%c' require a valid numeric value"
 					" as an argument\n\n", opt);
 			show_usage(argv[0]);
-			return ESMI_ERROR;
+			return ESMI_INVALID_INPUT;
 		}
 	}
 	if (opt == 'C' ||
@@ -1723,7 +1724,7 @@ static esmi_status_t parsesmi_args(int argc,char **argv)
 			printf(MAG "\nOption '-%c' require TWO arguments"
 			 " <index>  <set_value>\n\n" RESET, opt);
 			show_usage(argv[0]);
-			return ESMI_ERROR;
+			return ESMI_INVALID_INPUT;
 		}
 		if (opt != 'g' && opt != 'H' && opt != 'T') {
 			if (*argv[optind] == '-') {
@@ -1731,14 +1732,14 @@ static esmi_status_t parsesmi_args(int argc,char **argv)
 					printf(MAG "\nOption '-%c' require TWO arguments"
 					 " <index>  <set_value>\n\n" RESET, opt);
 					show_usage(argv[0]);
-					return ESMI_ERROR;
+					return ESMI_INVALID_INPUT;
 				}
 			}
 			if (is_string_number(argv[optind])) {
 				printf(MAG "Option '-%c' requires 2nd argument as valid"
 				       " numeric value\n\n" RESET, opt);
 				show_usage(argv[0]);
-				return ESMI_ERROR;
+				return ESMI_INVALID_INPUT;
 			}
 		} else {
 			if (*argv[optind] == '-') {
@@ -1746,7 +1747,7 @@ static esmi_status_t parsesmi_args(int argc,char **argv)
 				       " should be non negative\n\n"
 				       RESET, long_options[long_index].name);
 				show_usage(argv[0]);
-				return ESMI_ERROR;
+				return ESMI_INVALID_INPUT;
 			}
 			if (!strncmp(argv[optind], "0x", 2) || !strncmp(argv[optind], "0X", 2)) {
 				dimm_addr = strtoul(argv[optind++], &end, 16);
@@ -1755,7 +1756,7 @@ static esmi_status_t parsesmi_args(int argc,char **argv)
 					       " numeric value\n\n"
 					       RESET, long_options[long_index].name);
 					show_usage(argv[0]);
-					return ESMI_ERROR;
+					return ESMI_INVALID_INPUT;
 				}
 			} else {
 				if (is_string_number(argv[optind])) {
@@ -1763,7 +1764,7 @@ static esmi_status_t parsesmi_args(int argc,char **argv)
 					       " numeric value\n\n"
 					       RESET, long_options[long_index].name);
 					show_usage(argv[0]);
-					return ESMI_ERROR;
+					return ESMI_INVALID_INPUT;
 				}
 				dimm_addr = atoi(argv[optind++]);
 			}
@@ -1777,7 +1778,7 @@ static esmi_status_t parsesmi_args(int argc,char **argv)
 			printf("\nOption '-%c' requires FOUR arguments"
 			 " <socket> <nbioid> <min_value> <max_value>\n\n", opt);
 			show_usage(argv[0]);
-			return ESMI_ERROR;
+			return ESMI_INVALID_INPUT;
 		}
 
 		if (is_string_number(argv[optind]) || is_string_number(argv[optind + 1])
@@ -1785,7 +1786,7 @@ static esmi_status_t parsesmi_args(int argc,char **argv)
 			printf("Option '-%c' requires 2nd, 3rd, 4th argument as valid"
 					" numeric value\n\n", opt);
 			show_usage(argv[0]);
-			return ESMI_ERROR;
+			return ESMI_INVALID_INPUT;
 		}
 	}
 
@@ -1795,18 +1796,18 @@ static esmi_status_t parsesmi_args(int argc,char **argv)
 			printf("\nOption '-%c' requires two valid arguments"
 			 " <arg1> <arg2>\n\n", opt);
 			show_usage(argv[0]);
-			return ESMI_ERROR;
+			return ESMI_INVALID_INPUT;
 		}
 		if (opt == 'B') {
 			if (is_string_number(optarg) || !is_string_number(argv[optind])) {
 				printf("Please provide valid link names.\n");
-				return ESMI_ERROR;
+				return ESMI_INVALID_INPUT;
 			}
 		}
 		if (opt == 'i') {
 			if (!is_string_number(optarg) || !is_string_number(argv[optind])) {
 				printf("Please provide valid link names.\n");
-				return ESMI_ERROR;
+				return ESMI_INVALID_INPUT;
 			}
 		}
 	}
@@ -1818,14 +1819,14 @@ static esmi_status_t parsesmi_args(int argc,char **argv)
 			printf("\nOption '-%c' requires THREE arguments"
 			 " <socket> <min_value> <max_value>\n\n", opt);
 			show_usage(argv[0]);
-			return ESMI_ERROR;
+			return ESMI_INVALID_INPUT;
 		}
 
 		if (is_string_number(argv[optind]) || is_string_number(argv[optind + 1])) {
 			printf("Option '-%c' requires 2nd, 3rd, as valid"
 					" numeric value\n\n", opt);
 			show_usage(argv[0]);
-			return ESMI_ERROR;
+			return ESMI_INVALID_INPUT;
 		}
 	}
 
@@ -1992,9 +1993,11 @@ static esmi_status_t parsesmi_args(int argc,char **argv)
 			break;
 		case 'A' :
 			ret = show_smi_all_parameters();
+			ret = ESMI_SUCCESS;
 			break;
 		case 'h' :
 			show_usage(argv[0]);
+			ret = ESMI_SUCCESS;
 			break;
 		case ':' :
 			/* missing option argument */
