@@ -56,10 +56,8 @@
 /* Platform specific definitions for F19h M10h */
 /* TODO: Need to maintain platform definitions outside the code */
 #define GEN5_RATE		2
-#define GEN5_RATE_MASK		0x3
 #define MAX_DF_PSTATE_LIMIT	2
 #define FULL_WIDTH		2
-#define TWO_BYTE_MASK           0xFFFF
 
 /*
  * total number of cores and sockets in the system
@@ -1243,7 +1241,7 @@ esmi_status_t esmi_socket_current_active_freq_limit_get(uint32_t sock_ind, uint1
 		return errno_to_esmi_status(ret);
 
 	*freq = msg.args[0] >> 16;
-	limit = msg.args[0] & TWO_BYTE_MASK;
+	limit = msg.args[0] & 0xFFFF;
 
 	while (limit != 0 && index < src_len) {
 		if ((limit & 1) == 1) {
@@ -1330,7 +1328,7 @@ esmi_status_t esmi_socket_freq_range_get(uint8_t sock_ind, uint16_t *fmax, uint1
 	ret = hsmp_xfer(&msg, O_RDONLY);
 	if (!ret) {
 		*fmax = msg.args[0] >> 16;
-		*fmin = msg.args[0] & TWO_BYTE_MASK;
+		*fmin = msg.args[0] & 0xFFFF;
 	}
 
 	return errno_to_esmi_status(ret);
@@ -1496,7 +1494,8 @@ esmi_status_t esmi_pcie_link_rate_set(uint8_t sock_ind, uint8_t rate_ctrl, uint8
 	msg.args[0]	= rate_ctrl;
 	ret = hsmp_xfer(&msg, O_RDWR);
 	if (!ret)
-		*prev_mode = msg.args[0] & GEN5_RATE_MASK;
+		/* 0x3 is the mask for prev mode(2 bits) */
+		*prev_mode = msg.args[0] & 0x3;
 
 	return errno_to_esmi_status(ret);
 }
