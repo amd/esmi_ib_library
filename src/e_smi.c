@@ -53,30 +53,6 @@
 #include <e_smi/e_smi.h>
 #include <e_smi/e_smi_monitor.h>
 
-/* Platform specific definitions for F19h M10h */
-/* TODO: Need to maintain platform definitions outside the code */
-#define GEN5_RATE		2
-#define MAX_DF_PSTATE_LIMIT	2
-#define FULL_WIDTH		2
-
-/*
- * total number of cores and sockets in the system
- * This information is going to be fixed for a boot cycle.
- */
-struct system_metrics {
-	uint32_t total_cores;		// total cores in a system.
-	uint32_t total_sockets;		// total sockets in a system.
-	uint32_t threads_per_core;	// threads per core in each cpu.
-	uint32_t cpu_family;		// system cpu family.
-	uint32_t cpu_model;		// system cpu model.
-	int32_t  hsmp_proto_ver;	// hsmp protocol version.
-	esmi_status_t init_status;	// esmi init status
-	esmi_status_t energy_status;	// energy driver status
-	esmi_status_t msr_status;	// MSR driver status
-	esmi_status_t hsmp_status;	// hsmp driver status
-	struct cpu_mapping *map;
-};
-
 static const struct system_metrics *psm = NULL;
 
 struct cpu_mapping {
@@ -412,9 +388,11 @@ esmi_status_t esmi_init()
 		msg.msg_id = HSMP_GET_PROTO_VER;
 		msg.response_sz = 1;
 		msg.sock_ind = 0;
-		if (!hsmp_xfer(&msg, O_RDONLY)) {
+		ret = hsmp_xfer(&msg, O_RDONLY);
+		if (ret == ESMI_SUCCESS) {
 			sm.hsmp_status = ESMI_INITIALIZED;
 			sm.hsmp_proto_ver = msg.args[0];
+			init_platform_info(&sm);
 		}
 	}
 
@@ -1458,7 +1436,7 @@ esmi_status_t esmi_gmi3_link_width_range_set(uint8_t sock_ind, uint8_t min_link_
 	if (sock_ind >= psm->total_sockets)
 		return ESMI_INVALID_INPUT;
 
-	ret = validate_max_min_values(max_link_width, min_link_width, FULL_WIDTH);
+	ret = validate_max_min_values(max_link_width, min_link_width, psm->gmi3_link_width_limit);
 	if (ret)
 		return ret;
 
@@ -1484,7 +1462,7 @@ esmi_status_t esmi_pcie_link_rate_set(uint8_t sock_ind, uint8_t rate_ctrl, uint8
 	if (sock_ind >= psm->total_sockets)
 		return ESMI_INVALID_INPUT;
 
-	if (rate_ctrl > GEN5_RATE)
+	if (rate_ctrl > psm->pci_gen5_rate_ctl)
 		return ESMI_INVALID_INPUT;
 
 	msg.msg_id	= HSMP_SET_PCI_RATE;
@@ -1551,7 +1529,7 @@ esmi_status_t esmi_df_pstate_range_set(uint8_t sock_ind, uint8_t max_pstate,
 	if (sock_ind >= psm->total_sockets)
 		return ESMI_INVALID_INPUT;
 
-	if (max_pstate > min_pstate || min_pstate > MAX_DF_PSTATE_LIMIT)
+	if (max_pstate > min_pstate || min_pstate > psm->df_pstate_max_limit)
 		return ESMI_INVALID_INPUT;
 
 	msg.msg_id	= HSMP_SET_PSTATE_MAX_MIN;

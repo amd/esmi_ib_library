@@ -51,6 +51,7 @@
 
 #include <stdint.h>
 #include <asm/amd_hsmp.h>
+#include <e_smi/e_smi.h>
 
 #define FILEPATHSIZ	512 //!< Buffer to hold size of sysfs filepath
 #define DRVPATHSIZ	256 //!< size of driver location path
@@ -86,6 +87,27 @@
  */
 #define CPU_SYS_PATH "/sys/devices/system/cpu"
 
+/*
+ * total number of cores and sockets in the system
+ * This information is going to be fixed for a boot cycle.
+ */
+struct system_metrics {
+	uint32_t total_cores;		// total cores in a system.
+	uint32_t total_sockets;		// total sockets in a system.
+	uint32_t threads_per_core;	// threads per core in each cpu.
+	uint32_t cpu_family;		// system cpu family.
+	uint32_t cpu_model;		// system cpu model.
+	int32_t  hsmp_proto_ver;	// hsmp protocol version.
+	esmi_status_t init_status;	// esmi init status
+	esmi_status_t energy_status;	// energy driver status
+	esmi_status_t msr_status;	// MSR driver status
+	esmi_status_t hsmp_status;	// hsmp driver status
+	struct cpu_mapping *map;
+	uint8_t df_pstate_max_limit;	// df pstate maximum limit
+	uint8_t gmi3_link_width_limit;	// gmi3 maximum link width
+	uint8_t pci_gen5_rate_ctl;
+};
+
 /**
  * MONITOR TYPES
  * @brief This enum gives information to identify different energy monitor types
@@ -104,5 +126,6 @@ int batch_read_msr_drv(uint64_t *pval, uint32_t cpus);
 int find_energy(char *devname, char *hwmon_name);
 int find_msr(const char *path);
 int hsmp_xfer(struct hsmp_message *msg, int mode);
+void init_platform_info(struct system_metrics *sm);
 
 #endif  // INCLUDE_E_SMI_E_SMI_MONITOR_H_

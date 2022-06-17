@@ -120,6 +120,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(SMI_SRC_LIST ${SMI_SRC_LIST} "${SRC_DIR}/e_smi.c")
 set(SMI_SRC_LIST ${SMI_SRC_LIST} "${SRC_DIR}/e_smi_monitor.c")
 set(SMI_SRC_LIST ${SMI_SRC_LIST} "${SRC_DIR}/e_smi_utils.c")
+set(SMI_SRC_LIST ${SMI_SRC_LIST} "${SRC_DIR}/e_smi_plat.c")
 
 set(SMI_TOOL "e_smi_tool")
 
