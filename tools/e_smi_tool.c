@@ -767,13 +767,13 @@ static esmi_status_t epyc_get_core_clock(uint32_t core_id)
 
 	ret = esmi_current_freq_limit_core_get(core_id, &cclk);
 	if (ret) {
-		printf("Failed to get cclk value for core[%3u], Err[%d]: %s\n",
+		printf("Failed to get cclk value for core[%3d], Err[%d]: %s\n",
 			core_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
 
 	printf("-----------------------------------------");
-	printf("\n| CPU[%03u] core clock (MHz) : %u\t|\n", core_id, cclk);
+	printf("\n| CPU[%03d] core clock (MHz) : %u\t|\n", core_id, cclk);
 	printf("-----------------------------------------\n");
 	return ret;
 }
