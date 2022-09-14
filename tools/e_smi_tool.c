@@ -46,6 +46,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
+#include <math.h>
 
 #include <e_smi/e_smi.h>
 
@@ -61,6 +63,15 @@
  * 1234 is just chosen to make this value different than other error codes
  */
 #define ESMI_MULTI_ERROR	1234
+#define COLS			3
+#define AID_COUNT		4
+#define XCC_COUNT		8
+#define NUM_XGMI_LINKS		8
+
+/* Total bits required to represent integer */
+#define NUM_OF_32BITS		(sizeof(uint32_t) * 8)
+#define NUM_OF_64BITS		(sizeof(uint64_t) * 8)
+#define KILO			pow(10,3)
 
 static struct epyc_sys_info {
 	uint32_t sockets;
@@ -1035,6 +1046,12 @@ static void socket_ver4_metrics(uint32_t *err_bits, char **freq_src)
 	}
 }
 
+static void socket_ver6_metrics(uint32_t *err_bits, char **freq_src)
+{
+	get_sock_freq_limit(err_bits, freq_src);
+	get_sock_freq_range(err_bits);
+}
+
 static void socket_ver5_metrics(uint32_t *err_bits, char **freq_src)
 {
 	ddr_bw_get(err_bits);
@@ -1330,83 +1347,391 @@ static int show_smi_all_parameters(void)
 	return ESMI_SUCCESS;
 }
 
+static esmi_status_t epyc_get_metrics_table_version(void)
+{
+	uint32_t met_ver;
+	esmi_status_t ret;
+
+	ret = esmi_metrics_table_version_get(&met_ver);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get Metrics Table Version, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	printf("\n------------------------------------------");
+	printf("\n| METRICS TABLE Version   |  %u \t\t |\n", met_ver);
+	printf("------------------------------------------\n");
+
+	return ESMI_SUCCESS;
+}
+
+uint32_t check_msb_32(uint32_t num)
+{
+	uint32_t msb;
+	msb = 1UL << (NUM_OF_32BITS - 1);
+	/*If msb = 1 , then take 2'complement of the number*/
+	if(num & msb) {
+		num = ~num + 1;
+		return num;
+	}
+	else
+		return num;
+}
+
+uint64_t check_msb_64(uint64_t num)
+{
+	uint64_t msb;
+	msb = 1UL << (NUM_OF_64BITS - 1);
+	/*If msb = 1 , then take 2'complement of the number*/
+	if(num & msb) {
+		num = ~num + 1;
+		return num;
+	}
+	else
+		return num;
+}
+
+
+static esmi_status_t epyc_show_metrics_table(uint8_t sock_id)
+{
+	esmi_status_t ret;
+	struct hsmp_metric_table mtbl = {0};
+	time_t rawtime;
+	struct tm *timeinfo;
+	int i, j, x;
+	uint32_t num1 = 0;
+	uint64_t num2 = 0;
+
+	double fraction_q10 = 1/pow(2,10);
+	double fraction_uq10 = fraction_q10;
+	double fraction_uq16 = 1/pow(2,16) ;
+
+	ret = esmi_metrics_table_get(sock_id, &mtbl);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get Metrics Table for socket [%d], Err[%d]: %s\n",
+			sock_id, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+
+	printf("-------------------------------------------------------------------------");
+	printf("\n| \t\t\tMETRICS TABLE (FAMILY:0x%x,MODEL:0x%x)    \t|", sys_info.family, sys_info.model);
+	printf("\n-------------------------------------------------------------------------");
+	printf("\n\n-------------------------------------------------------------------------");
+	printf("\n| ACCUMULATOR COUNTER                   |  %-20u\t\t|\n", mtbl.accumulation_counter);
+	printf("-------------------------------------------------------------------------");
+	printf("\n\n");
+	printf("-------------------------------------------------------------------------");
+	num1 = check_msb_32(mtbl.max_socket_temperature);
+	printf("\n| MAX SOCKET TEMP                       |  %18.3lf °C\t| ",
+			(num1 * fraction_q10));
+	num1 = check_msb_32(mtbl.max_vr_temperature);
+	printf("\n| MAX VR TEMP                           |  %18.3lf °C\t| ",
+			(num1 * fraction_q10));
+	num1 = check_msb_32(mtbl.max_hbm_temperature);
+	printf("\n| MAX HBM TEMP                          |  %18.3lf °C\t| ",
+			(num1 * fraction_q10));
+	num2 = check_msb_64(mtbl.max_socket_temperature_acc);
+	printf("\n| MAX SOCKET TEMP ACC                   |  %18.3lf °C\t| ",
+			(num2 * fraction_q10));
+	num2 = check_msb_64(mtbl.max_vr_temperature_acc);
+	printf("\n| MAX VR TEMP ACC                       |  %18.3lf °C\t| ",
+			(num2 * fraction_q10));
+	num2 = check_msb_64(mtbl.max_hbm_temperature_acc);
+	printf("\n| MAX HBM TEMP ACC                      |  %18.3lf °C\t| \n",
+			(num2 * fraction_q10));
+	printf("-------------------------------------------------------------------------");
+	printf("\n");
+	printf("\n-----------------------------------------------------------------");
+	printf("\n| SOCKET POWER LIMIT                    |  %5.3lf W\t\t| ",
+			(mtbl.socket_power_limit * fraction_uq10));
+	printf("\n| MAX SOCKET POWER LIMIT                |  %5.3lf W\t\t| ",
+			(mtbl.max_socket_power_limit * fraction_uq10));
+	printf("\n| SOCKET POWER                          |  %5.3lf W\t\t| \n",
+			(mtbl.socket_power * fraction_uq10));
+
+	printf("-----------------------------------------------------------------");
+	printf("\n");
+	printf("\n-------------------------------------------------------------------------");
+	rawtime = (time_t)mtbl.timestamp;
+	time (&rawtime);
+	timeinfo = localtime (&rawtime);
+	printf("\n| TIMESTAMP Raw                         |  %20llu\t\t|", mtbl.timestamp);
+	printf("\n| TIMESTAMP Readable                    |  %s\t\t", asctime(timeinfo));
+
+	printf("\n| SOCKET ENERGY ACC                     |  %15.3lf kJ\t\t| ",
+			(mtbl.socket_energy_acc * fraction_uq16)/KILO);
+	printf("\n| CCD ENERGY ACC                        |  %15.3lf kJ\t\t| ",
+			(mtbl.ccd_energy_acc * fraction_uq16)/KILO);
+	printf("\n| XCD ENERGY ACC                        |  %15.3lf kJ\t\t| ",
+			(mtbl.xcd_energy_acc * fraction_uq16)/KILO);
+	printf("\n| AID ENERGY ACC                        |  %15.3lf kJ\t\t| ",
+			(mtbl.aid_energy_acc * fraction_uq16)/KILO);
+	printf("\n| HBM ENERGY ACC                        |  %15.3lf kJ\t\t| \n",
+			(mtbl.hbm_energy_acc * fraction_uq16)/KILO);
+	printf("-------------------------------------------------------------------------");
+	printf("\n");
+	printf("\n-----------------------------------------------------------------");
+	printf("\n| CCLK frequency limit                  |  %5.3lf GHz\t\t| ",
+			(mtbl.cclk_frequency_limit * fraction_uq10));
+	printf("\n| GFXCLK frequency limit                |  %5.3lf MHz\t\t| ",
+			(mtbl.gfxclk_frequency_limit * fraction_uq10));
+	printf("\n| Effective FCLK frequency              |  %5.3lf MHz\t\t| ",
+			(mtbl.fclk_frequency * fraction_uq10));
+	printf("\n| Effective UCLK frequency              |  %5.3lf MHz\t\t| \n",
+			(mtbl.uclk_frequency * fraction_uq10));
+
+	printf("-----------------------------------------------------------------");
+	printf("\n\n-------------------------------------------------------------------------");
+	printf("\n| Effective frequency per AID: \t\t\t\t\t\t|");
+	printf("\n-------------------------------------------------------------------------");
+	printf("\n| AID | SOCCLK \t\t| VCLK \t\t| DCLK \t\t| LCLK \t\t|");
+	printf("\n-------------------------------------------------------------------------");
+	for(i = 0; i < AID_COUNT ; i++){
+		printf("\n| [%d] | %5.3lf MHz\t| %5.3lf MHz\t| %5.3lf MHz\t| %5.3lf MHz\t| ",
+				i, (mtbl.socclk_frequency[i] * fraction_uq10),
+				(mtbl.vclk_frequency[i] * fraction_uq10),
+				(mtbl.dclk_frequency[i] * fraction_uq10),
+				(mtbl.lclk_frequency[i] * fraction_uq10));
+	}
+	printf("\n-------------------------------------------------------------------------\n");
+	printf("\n---------------------------------------------------------------------------------------------------------");
+	printf("\n| List of supported frequencies(0 means state is not supported):\t\t\t\t\t|");
+	printf("\n---------------------------------------------------------------------------------------------------------");
+	printf("\n| AID | FCLK \t\t| UCLK \t\t| SOCCLK \t| VCLK \t\t| DCLK \t\t| LCLK \t\t|");
+	printf("\n---------------------------------------------------------------------------------------------------------");
+	for(i = 0; i < AID_COUNT ; i++){
+		printf("\n| [%d] |%5.3lf MHz\t|%5.3lf MHz\t|%5.3lf MHz\t|%5.3lf MHz\t|%5.3lf MHz\t|%5.3lf MHz\t|",
+				i, (mtbl.fclk_frequency_table[i] * fraction_uq10),
+				(mtbl.uclk_frequency_table[i] * fraction_uq10),
+				(mtbl.socclk_frequency_table[i] * fraction_uq10),
+				(mtbl.vclk_frequency_table[i] * fraction_uq10),
+				(mtbl.dclk_frequency_table[i] * fraction_uq10),
+				(mtbl.lclk_frequency_table[i] * fraction_uq10));
+	}
+	printf("\n--------------------------------------------------------------------------------------------------------\n");
+
+	uint32_t cpus = sys_info.cpus/sys_info.threads_per_core;
+	printf("\n---------------------------------------------------------------------------------------------------");
+	printf("---------------");
+	printf("\n| CCLK frequency accumulated for target CPUs:\t\t\t\t\t\t\t\t\t |");
+	printf("\n--------------------------------------------------------------------------------------------------");
+	printf("---------------");
+	printf("\n");
+	x = 0;
+	for(i = 0; i < (cpus/COLS); i++){
+	x = i;
+	for (j = 0; j < (cpus/COLS); j++) {
+	    if(x < 10)
+		    printf("| CPU[0%d] :%21.3lf GHz",x, (mtbl.cclk_frequency_acc[x] * fraction_uq10));
+	    else
+		    printf("| CPU[%d] :%21.3lf GHz",x, (mtbl.cclk_frequency_acc[x] * fraction_uq10));
+
+	    x = x + (cpus/COLS);
+	    if (x > (cpus-1))
+		    break;
+	    printf("  ");
+	}
+	printf(" |\n");
+	}
+	printf("--------------------------------------------------------------------------------------------------");
+	printf("----------------\n");
+
+	printf("\n---------------------------------------------------------");
+	printf("\n| Frequency per target XCC:\t\t\t\t|");
+	printf("\n---------------------------------------------------------");
+	printf("\n| XCC | GFXCLK ACC\t\t\t| GFXCLK \t|");
+	printf("\n---------------------------------------------------------");
+	for(i = 0; i < XCC_COUNT; i++){
+		printf("\n| [%d] |  %20.3lf MHz\t| %5.3lf MHz\t| ",
+				i, (mtbl.gfxclk_frequency_acc[i] * fraction_uq10),
+				(mtbl.gfxclk_frequency[i] * fraction_uq10));
+	}
+	printf("\n---------------------------------------------------------");
+	printf("\n");
+
+	printf("\n-----------------------------------------------------------------");
+	printf("\n| Max CCLK frequency supported by CPU   |  %5.3lf GHz\t\t| ",
+			(mtbl.max_cclk_frequency * fraction_uq10));
+	printf("\n| Min CCLK frequency supported by CPU   |  %5.3lf GHz\t\t| ",
+			(mtbl.min_cclk_frequency * fraction_uq10));
+	printf("\n| Max GFXCLK supported by accelerator   |  %5.3lf MHz\t\t| ",
+			(mtbl.max_gfxclk_frequency * fraction_uq10));
+	printf("\n| Min GFXCLK supported by accelerator   |  %5.3lf MHz\t\t| ",
+			(mtbl.min_gfxclk_frequency * fraction_uq10));
+	printf("\n| Max LCLK DPM state range              |  %u \t\t\t| ",
+			mtbl.max_lclk_dpm_range);
+	printf("\n| Min LCLK DPM state range              |  %u \t\t\t| ",
+			mtbl.min_lclk_dpm_range);
+	printf("\n------------------------------------------------------------------");
+
+	printf("\n");
+	printf("\n-----------------------------------------------------------------");
+	printf("\n| Current operating XGMI link width     |  %5.3lf \t\t |",
+			(mtbl.xgmi_width * fraction_uq10));
+	printf("\n| Current operating XGMI link bitrate   |  %5.3lf Gbps\t\t |",
+			(mtbl.xgmi_bitrate * fraction_uq10));
+	printf("\n------------------------------------------------------------------");
+
+	printf("\n");
+	printf("\n---------------------------------------------------------------------------");
+	printf("\n| XGMI Bandwidth accumulated per XGMI link in local socket\t\t  |");
+	printf("\n---------------------------------------------------------------------------");
+	printf("\n| Link  | \tXGMI Read BW\t\t| \tXGMI Write BW\t\t  |");
+	printf("\n---------------------------------------------------------------------------");
+	for(i = 0; i < NUM_XGMI_LINKS; i++){
+		printf("\n| [%d] \t|  %18.3lf Gbps\t| %18.3lf Gbps\t  |",
+				i, (mtbl.xgmi_read_bandwidth_acc[i] * fraction_uq10),
+				(mtbl.xgmi_write_bandwidth_acc[i] * fraction_uq10));
+	}
+	printf("\n--------------------------------------------------------------------------");
+	printf("\n");
+
+	printf("\n--------------------------------------------------------------------------");
+	printf("\n| Avg C0 residency of all enabled cores |  %18.3lf %% \t |",
+            (mtbl.socket_c0_residency * fraction_uq10));
+	printf("\n| Avg XCC busy for all enabled XCCs     |  %18.3lf %% \t |",
+            (mtbl.socket_gfx_busy * fraction_uq10));
+	printf("\n| HBM BW utilization for all HBM stacks |  %18.3lf %% \t |",
+            (mtbl.dram_bandwidth_utilization * fraction_uq10));
+	printf("\n| Acc value of SocketC0Residency        |  %18.3lf \t\t |",
+            (mtbl.socket_c0_residency_acc * fraction_uq10));
+	printf("\n| Acc value of SocketGfxBusy            |  %18.3lf \t\t |",
+            (mtbl.socket_gfx_busy_acc * fraction_uq10));
+	printf("\n| HBM BW for all socket HBM stacks      |  %18.3lf Gbps \t |",
+            (mtbl.dram_bandwidth_acc * fraction_uq10));
+	printf("\n| Max HBM BW running at max UCLK freq   |  %18.3lf Gbps \t |",
+            (mtbl.max_dram_bandwidth * fraction_uq10));
+	printf("\n| Acc value of Dram BW Utilization      |  %18.3lf \t\t |",
+            (mtbl.dram_bandwidth_utilization_acc * fraction_uq10));
+	printf("\n--------------------------------------------------------------------------");
+
+	printf("\n");
+	printf("\n--------------------------------------------------------------------------------");
+	for(i = 0; i < AID_COUNT; i++)
+		printf("\n| PCIe BW for devs connected to AID[%d]  |  %18.3lf Gbps\t\t| ", i,
+			(mtbl.pcie_bandwidth_acc[i] * fraction_uq10));
+	printf("\n--------------------------------------------------------------------------------");
+	printf("\n");
+	printf("\n---------------------------------------------------------");
+	printf("\n| Active controllers		        | Acc value\t|");
+	printf("\n---------------------------------------------------------");
+	printf("\n| Prochot                               |  %-10u \t|", mtbl.prochot_residency_acc);
+	printf("\n| PPT controller                        |  %-10u \t|", mtbl.ppt_residency_acc);
+	printf("\n| Socket thermal throttling controller  |  %-10u \t|",
+			mtbl.socket_thm_residency_acc);
+	printf("\n| VR thermal throttling controller      |  %-10u \t| ",
+			mtbl.vr_thm_residency_acc);
+	printf("\n| HBM thermal throttling controller     |  %-10u \t| ",
+			mtbl.hbm_thm_residency_acc);
+	printf("\n---------------------------------------------------------\n");
+	printf("\n");
+
+	return ESMI_SUCCESS;
+}
+
 static char* const feat_comm[] = {
 	"Output Option<s>:",
-	"  -h, --help\t\t\t\t\t\tShow this help message",
-	"  -A, --showall\t\t\t\t\t\tGet all esmi parameter values\n",
+	"  -h, --help\t\t\t\t\t\t\tShow this help message",
+	"  -A, --showall\t\t\t\t\t\t\tGet all esmi parameter values\n",
 };
 
 static char* const feat_energy[] = {
 	"Get Option<s>:",
-	"  --showcoreenergy [CORE]\t\t\t\tGet energy for a given CPU (Joules)",
-	"  --showsockenergy\t\t\t\t\tGet energy for all sockets (KJoules)",
+	"  --showcoreenergy [CORE]\t\t\t\t\tGet energy for a given CPU (Joules)",
+	"  --showsockenergy\t\t\t\t\t\tGet energy for all sockets (KJoules)",
 };
 
 static char* const feat_ver2_get[] = {
-	"  --showsockpower\t\t\t\t\tGet power metrics for all sockets (Watts)",
-	"  --showcorebl [CORE]\t\t\t\t\tGet Boostlimit for a given CPU (MHz)",
-	"  --showsockc0res [SOCKET]\t\t\t\tGet c0_residency for a given socket (%%)",
-	"  --showsmufwver\t\t\t\t\tShow SMU FW Version",
-	"  --showhsmpprotover\t\t\t\t\tShow HSMP Protocol Version",
-	"  --showprochotstatus\t\t\t\t\tShow HSMP PROCHOT status for all sockets",
-	"  --showclocks\t\t\t\t\t\tShow Clock Metrics (MHz) for all sockets",
+	"  --showsockpower\t\t\t\t\t\tGet power metrics for all sockets (Watts)",
+	"  --showcorebl [CORE]\t\t\t\t\t\tGet Boostlimit for a given CPU (MHz)",
+	"  --showsockc0res [SOCKET]\t\t\t\t\tGet c0_residency for a given socket (%%)",
+	"  --showsmufwver\t\t\t\t\t\tShow SMU FW Version",
+	"  --showhsmpprotover\t\t\t\t\t\tShow HSMP Protocol Version",
+	"  --showprochotstatus\t\t\t\t\t\tShow HSMP PROCHOT status for all sockets",
+	"  --showclocks\t\t\t\t\t\t\tShow Clock Metrics (MHz) for all sockets",
 };
 
 static char* const feat_ver2_set[] = {
 	"Set Option<s>:",
-	"  --setpowerlimit [SOCKET] [POWER]\t\t\tSet power limit"
+	"  --setpowerlimit [SOCKET] [POWER]\t\t\t\tSet power limit"
 	" for a given socket (mWatts)",
-	"  --setcorebl [CORE] [BOOSTLIMIT]\t\t\tSet boost limit"
+	"  --setcorebl [CORE] [BOOSTLIMIT]\t\t\t\tSet boost limit"
 	" for a given core (MHz)",
-	"  --setsockbl [SOCKET] [BOOSTLIMIT]\t\t\tSet Boost"
+	"  --setsockbl [SOCKET] [BOOSTLIMIT]\t\t\t\tSet Boost"
 	" limit for a given Socket (MHz)",
-	"  --apbdisable [SOCKET] [PSTATE]\t\t\tSet Data Fabric"
+	"  --apbdisable [SOCKET] [PSTATE]\t\t\t\tSet Data Fabric"
 	" Pstate for a given socket",
-	"  --apbenable [SOCKET]\t\t\t\t\tEnable the Data Fabric performance"
+	"  --apbenable [SOCKET]\t\t\t\t\t\tEnable the Data Fabric performance"
 	" boost algorithm for a given socket",
-	"  --setxgmiwidth [MIN] [MAX]\t\t\t\tSet xgmi link width"
+	"  --setxgmiwidth [MIN] [MAX]\t\t\t\t\tSet xgmi link width"
 	" in a multi socket system",
-	"  --setlclkdpmlevel [SOCKET] [NBIOID] [MIN] [MAX]\tSet lclk dpm level"
+	"  --setlclkdpmlevel [SOCKET] [NBIOID] [MIN] [MAX]\t\tSet lclk dpm level"
 	" for a given nbio in a given socket",
 };
 
 static char* const feat_ver3[] = {
-	"  --showddrbw\t\t\t\t\t\tShow DDR bandwidth details (Gbps)",
+	"  --showddrbw\t\t\t\t\t\t\tShow DDR bandwidth details (Gbps)",
 };
 
 static char* const feat_ver4[] = {
-	"  --showsockettemp\t\t\t\t\tShow Temperature monitor for all sockets (°C)",
+	"  --showsockettemp\t\t\t\t\t\tShow Temperature monitor for all sockets (°C)",
 };
 
 static char* const feat_ver5_get[] = {
-	"  --showdimmtemprange [SOCKET] [DIMM_ADDR]\t\tShow dimm temperature range and"
+	"  --showdimmtemprange [SOCKET] [DIMM_ADDR]\t\t\tShow dimm temperature range and"
 	" refresh rate for a given socket and dimm address",
-	"  --showdimmthermal [SOCKET] [DIMM_ADDR]\t\tShow dimm thermal values for a given socket"
+	"  --showdimmthermal [SOCKET] [DIMM_ADDR]\t\t\tShow dimm thermal values for a given socket"
 	" and dimm address",
-	"  --showdimmpower [SOCKET] [DIMM_ADDR]\t\t\tShow dimm power consumption for a given socket"
+	"  --showdimmpower [SOCKET] [DIMM_ADDR]\t\t\t\tShow dimm power consumption for a given socket"
 	" and dimm address",
-	"  --showcclkfreqlimit [CORE]\t\t\t\tShow current clock frequency limit(MHz) for a given core",
-	"  --showsvipower \t\t\t\t\tShow svi based power telemetry of all rails for all sockets",
-	"  --showxgmibandwidth [LINKNAME] [BWTYPE]\t\tShow xGMI bandwidth for a given socket,"
+	"  --showcclkfreqlimit [CORE]\t\t\t\t\tShow current clock frequency limit(MHz) for a given core",
+	"  --showsvipower \t\t\t\t\t\tShow svi based power telemetry of all rails for all sockets",
+	"  --showxgmibandwidth [LINKNAME] [BWTYPE]\t\t\tShow xGMI bandwidth for a given socket,"
 	" linkname and bwtype",
-	"  --showiobandwidth [SOCKET] [LINKNAME]\t\t\tShow IO bandwidth for a given socket,"
+	"  --showiobandwidth [SOCKET] [LINKNAME]\t\t\t\tShow IO bandwidth for a given socket,"
 	" linkname and bwtype",
-	"  --showlclkdpmlevel [SOCKET] [NBIOID]\t\t\tShow lclk dpm level for a given nbio"
+	"  --showlclkdpmlevel [SOCKET] [NBIOID]\t\t\t\tShow lclk dpm level for a given nbio"
 	" in a given socket",
-	"  --showsockclkfreqlimit [SOCKET]\t\t\tShow current clock frequency limit(MHz) for a given socket"
+	"  --showsockclkfreqlimit [SOCKET]\t\t\t\tShow current clock frequency limit(MHz) for a given socket"
 };
 
 static char* const feat_ver5_set[] = {
-	"  --setpcielinkratecontrol [SOCKET] [CTL]\t\tSet rate control for pcie link"
+	"  --setpcielinkratecontrol [SOCKET] [CTL]\t\t\tSet rate control for pcie link"
 	" for a given socket",
-	"  --setpowerefficiencymode [SOCKET] [MODE]\t\tSet power efficiency mode"
+	"  --setpowerefficiencymode [SOCKET] [MODE]\t\t\tSet power efficiency mode"
 	" for a given socket",
-	"  --setdfpstaterange [SOCKET] [MAX] [MIN]\t\tSet df pstate range"
+	"  --setdfpstaterange [SOCKET] [MAX] [MIN]\t\t\tSet df pstate range"
 	" for a given socket",
-	"  --setgmi3linkwidth [SOCKET] [MIN] [MAX]\t\tSet gmi3 link width"
+	"  --setgmi3linkwidth [SOCKET] [MIN] [MAX]\t\t\tSet gmi3 link width"
 	" for a given socket",
 };
 
+static char* const feat_ver6_get[] = {
+	"  --showcclkfreqlimit [CORE]\t\t\t\t\tShow current clock frequency limit(MHz) for a given core",
+	"  --showsvipower \t\t\t\t\t\tShow svi based power telemetry of all rails for all sockets",
+	"  --showxgmibandwidth [LINKNAME] [BWTYPE]\t\t\tShow xGMI bandwidth for a given socket,"
+	" linkname and bwtype",
+	"  --showiobandwidth [SOCKET] [LINKNAME]\t\t\t\tShow IO bandwidth for a given socket,"
+	" linkname and bwtype",
+	"  --showlclkdpmlevel [SOCKET] [NBIOID]\t\t\t\tShow lclk dpm level for a given nbio"
+	" in a given socket",
+	"  --showsockclkfreqlimit [SOCKET]\t\t\t\tShow current clock frequency limit(MHz) for a given socket",
+	"  --showmetrictablever\t\t\t\t\t\tShow Metrics Table Version",
+	"  --showmetrictable [SOCKET]\t\t\t\t\tShow Metrics Table",
+};
+
+static char* const feat_ver6_set[] = {
+	"  --setpowerlimit [SOCKET] [POWER]\t\t\t\tSet power limit"
+	" for a given socket (mWatts)",
+	"  --setcorebl [CORE] [BOOSTLIMIT]\t\t\t\tSet boost limit"
+	" for a given core (MHz)",
+	"  --setsockbl [SOCKET] [BOOSTLIMIT]\t\t\t\tSet Boost"
+	" limit for a given Socket (MHz)",
+	"  --setxgmiwidth [MIN] [MAX]\t\t\t\t\tSet xgmi link width"
+	" in a multi socket system",
+	"  --setlclkdpmlevel [SOCKET] [NBIOID] [MIN] [MAX]\t\tSet lclk dpm level"
+	" for a given nbio in a given socket",
+};
 static char* const blankline[] = {""};
 
 static char **features;
@@ -1510,6 +1835,25 @@ static void add_hsmp_ver5_feat(void)
 	sys_info.show_addon_clock_metrics = clock_ver5_metrics;
 }
 
+/* copy the hsmp proto ver6 specific features into features array */
+static void add_hsmp_ver6_feat(void)
+{
+	int offset = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_energy);
+
+	memcpy(features + offset, feat_ver2_get, (ARRAY_SIZE(feat_ver2_get) * sizeof(char *)));
+	offset += ARRAY_SIZE(feat_ver2_get);
+	memcpy(features + offset, feat_ver6_get, (ARRAY_SIZE(feat_ver6_get) * sizeof(char *)));
+	offset += ARRAY_SIZE(feat_ver6_get);
+	memcpy(features + offset, blankline, sizeof(char *));
+	offset += 1;
+	memcpy(features + offset, feat_ver6_set, (ARRAY_SIZE(feat_ver6_set) * sizeof(char *)));
+
+	/* version 6 cpu metrics is same as version 5 */
+	sys_info.show_addon_cpu_metrics = cpu_ver5_metrics;
+	sys_info.show_addon_socket_metrics = socket_ver6_metrics;
+	sys_info.show_addon_clock_metrics = clock_ver5_metrics;
+}
+
 static esmi_status_t init_proto_version_func_pointers()
 {
 	uint32_t proto_ver;
@@ -1553,7 +1897,6 @@ static esmi_status_t init_proto_version_func_pointers()
 		add_hsmp_ver4_feat();
 		break;
 	case 5:
-	default:
 		size = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_ver2_get) +
 		       ARRAY_SIZE(feat_ver2_set) + ARRAY_SIZE(feat_ver5_get) +
 		       ARRAY_SIZE(feat_ver5_set) + ARRAY_SIZE(feat_ver3) +
@@ -1563,6 +1906,18 @@ static esmi_status_t init_proto_version_func_pointers()
 			return ESMI_NO_MEMORY;
 		add_comm_and_energy_feat();
 		add_hsmp_ver5_feat();
+		break;
+	case 6:
+	default:
+		size = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_ver2_get) +
+		       ARRAY_SIZE(feat_energy) + ARRAY_SIZE(feat_ver6_get) +
+		       ARRAY_SIZE(feat_ver6_set) +
+		       ARRAY_SIZE(blankline);
+		features = malloc((size + 1) * sizeof(char *));
+		if (!features)
+			return ESMI_NO_MEMORY;
+		add_comm_and_energy_feat();
+		add_hsmp_ver6_feat();
 		break;
 	}
 
@@ -1630,7 +1985,9 @@ static int parsesmi_args(int argc,char **argv)
 		{"setdfpstaterange",		required_argument,	0,	'X'},
 		{"setgmi3linkwidth",		required_argument,	0,	'n'},
 		{"showlclkdpmlevel",		required_argument,	0,	'Y'},
-		{"showsockclkfreqlimit",		required_argument,	0,	'Q'},
+		{"showsockclkfreqlimit",	required_argument,	0,	'Q'},
+		{"showmetrictablever",		no_argument,		0,	'D'},
+		{"showmetrictable",		required_argument,	0,	'J'},
 		{0,			0,			0,	0},
 	};
 
@@ -1719,7 +2076,8 @@ static int parsesmi_args(int argc,char **argv)
 	    opt == 'n' ||
 	    opt == 'Y' ||
 	    opt == 'r' ||
-	    opt == 'Q') {
+	    opt == 'Q' ||
+	    opt == 'J') {
 		if (is_string_number(optarg)) {
 			printf("Option '-%c' require a valid numeric value"
 					" as an argument\n\n", opt);
@@ -2016,6 +2374,15 @@ static int parsesmi_args(int argc,char **argv)
 			/* Get the current clock freq limit for a given socket */
 			sock_id = atoi(optarg);
 			ret = epyc_get_curr_freq_limit_socket(sock_id);
+            break;
+		case 'D' :
+			/* Get Metrics Table version */
+			ret = epyc_get_metrics_table_version();
+			break;
+		case 'J' :
+			/* Get Metrics Table */
+			sock_id = atoi(optarg);
+			ret = epyc_show_metrics_table(sock_id);
 			break;
 		case 'A' :
 			ret = show_smi_all_parameters();
