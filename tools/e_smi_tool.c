@@ -760,21 +760,21 @@ static esmi_status_t epyc_get_dimm_thermal(uint8_t sock_id, uint8_t dimm_addr)
 	return ret;
 }
 
-static esmi_status_t epyc_get_core_clock(uint32_t core_id)
+static esmi_status_t epyc_get_curr_freq_limit_core(uint32_t core_id)
 {
 	esmi_status_t ret;
 	uint32_t cclk;
 
 	ret = esmi_current_freq_limit_core_get(core_id, &cclk);
 	if (ret) {
-		printf("Failed to get cclk value for core[%3d], Err[%d]: %s\n",
+		printf("Failed to get current clock frequency limit for core[%3d], Err[%d]: %s\n",
 			core_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
 
-	printf("-----------------------------------------");
-	printf("\n| CPU[%03d] core clock (MHz) : %u\t|\n", core_id, cclk);
-	printf("-----------------------------------------\n");
+	printf("--------------------------------------------------------------");
+	printf("\n| CPU[%03d] core clock current frequency limit (MHz) : %u\t|\n", core_id, cclk);
+	printf("--------------------------------------------------------------\n");
 	return ret;
 }
 
@@ -964,6 +964,24 @@ static esmi_status_t epyc_set_gmi3_link_width(uint8_t sock_id, uint8_t min, uint
 	}
 	printf("Gmi3 link width range is set successfully\n");
 
+	return ret;
+}
+
+static esmi_status_t epyc_get_curr_freq_limit_socket(uint32_t sock_id)
+{
+	esmi_status_t ret;
+	uint32_t cclk;
+
+	ret = esmi_cclk_limit_get(sock_id, &cclk);
+	if (ret) {
+		printf("Failed to get current clock frequency limit for socket[%d], Err[%d]: %s\n",
+			sock_id, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+
+	printf("----------------------------------------------------------------");
+	printf("\n| SOCKET[%d] core clock current frequency limit (MHz) : %u\t|\n", sock_id, cclk);
+	printf("----------------------------------------------------------------\n");
 	return ret;
 }
 
@@ -1223,7 +1241,7 @@ static esmi_status_t show_core_clocks_all()
 
 	cpus = sys_info.cpus/sys_info.threads_per_core;
 
-	printf("\n| CPU core clock in MHz:\t\t\t\t\t\t\t\t\t\t\t|");
+	printf("\n| CPU core clock current frequency limit in MHz:\t\t\t\t\t\t\t\t\t\t\t|");
 	for (i = 0; i < cpus; i++) {
 		cclk = 0;
 		ret = esmi_current_freq_limit_core_get(i, &cclk);
@@ -1331,7 +1349,7 @@ static char* const feat_ver2_get[] = {
 	"  --showsmufwver\t\t\t\t\tShow SMU FW Version",
 	"  --showhsmpprotover\t\t\t\t\tShow HSMP Protocol Version",
 	"  --showprochotstatus\t\t\t\t\tShow HSMP PROCHOT status for all sockets",
-	"  --showclocks\t\t\t\t\t\tShow (CPU, Mem & Fabric) clock frequencies (MHz) for all sockets",
+	"  --showclocks\t\t\t\t\t\tShow Clock Metrics (MHz) for all sockets",
 };
 
 static char* const feat_ver2_set[] = {
@@ -1367,14 +1385,15 @@ static char* const feat_ver5_get[] = {
 	" and dimm address",
 	"  --showdimmpower [SOCKET] [DIMM_ADDR]\t\t\tShow dimm power consumption for a given socket"
 	" and dimm address",
-	"  --showcoreclock [CORE]\t\t\t\tShow core clock frequency (MHz) for a given core",
+	"  --showcclkfreqlimit [CORE]\t\t\t\tShow current clock frequency limit(MHz) for a given core",
 	"  --showsvipower \t\t\t\t\tShow svi based power telemetry of all rails for all sockets",
 	"  --showxgmibandwidth [LINKNAME] [BWTYPE]\t\tShow xGMI bandwidth for a given socket,"
 	" linkname and bwtype",
 	"  --showiobandwidth [SOCKET] [LINKNAME]\t\t\tShow IO bandwidth for a given socket,"
 	" linkname and bwtype",
 	"  --showlclkdpmlevel [SOCKET] [NBIOID]\t\t\tShow lclk dpm level for a given nbio"
-	" in a given socket"
+	" in a given socket",
+	"  --showsockclkfreqlimit [SOCKET]\t\t\tShow current clock frequency limit(MHz) for a given socket"
 };
 
 static char* const feat_ver5_set[] = {
@@ -1602,7 +1621,7 @@ static int parsesmi_args(int argc,char **argv)
 		{"showdimmthermal",		required_argument,	0,	'H'},
 		{"showdimmpower",		required_argument,	0,	'g'},
 		{"showdimmtemprange",		required_argument,	0,	'T'},
-		{"showcoreclock",		required_argument,	0,	'q'},
+		{"showcclkfreqlimit",		required_argument,	0,	'q'},
 		{"showsvipower",		no_argument,		0,	'm'},
 		{"showiobandwidth",		required_argument,	0,	'B'},
 		{"showxgmibandwidth",		required_argument,	0,	'i'},
@@ -1611,6 +1630,7 @@ static int parsesmi_args(int argc,char **argv)
 		{"setdfpstaterange",		required_argument,	0,	'X'},
 		{"setgmi3linkwidth",		required_argument,	0,	'n'},
 		{"showlclkdpmlevel",		required_argument,	0,	'Y'},
+		{"showsockclkfreqlimit",		required_argument,	0,	'Q'},
 		{0,			0,			0,	0},
 	};
 
@@ -1698,7 +1718,8 @@ static int parsesmi_args(int argc,char **argv)
 	    opt == 'X' ||
 	    opt == 'n' ||
 	    opt == 'Y' ||
-	    opt == 'r') {
+	    opt == 'r' ||
+	    opt == 'Q') {
 		if (is_string_number(optarg)) {
 			printf("Option '-%c' require a valid numeric value"
 					" as an argument\n\n", opt);
@@ -1939,9 +1960,9 @@ static int parsesmi_args(int argc,char **argv)
 			ret = epyc_get_dimm_thermal(sock_id, dimm_addr);
 			break;
 		case 'q' :
-			/* Get the core clock value for a given core */
+			/* Get the current clock freq limit for a given core */
 			core_id = atoi(optarg);
-			ret = epyc_get_core_clock(core_id);
+			ret = epyc_get_curr_freq_limit_core(core_id);
 			break;
 		case 'm' :
 			/* Get svi based power telemetry of all rails */
@@ -1990,6 +2011,11 @@ static int parsesmi_args(int argc,char **argv)
 			sock_id = atoi(optarg);
 			nbio_id = atoi(argv[optind++]);
 			epyc_get_lclk_dpm_level(sock_id, nbio_id);
+			break;
+		case 'Q' :
+			/* Get the current clock freq limit for a given socket */
+			sock_id = atoi(optarg);
+			ret = epyc_get_curr_freq_limit_socket(sock_id);
 			break;
 		case 'A' :
 			ret = show_smi_all_parameters();
