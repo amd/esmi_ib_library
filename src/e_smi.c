@@ -351,6 +351,25 @@ static esmi_status_t detect_packages(struct system_metrics *psysm)
 	return ESMI_SUCCESS;
 }
 
+static bool check_for_64bit_rapl_reg(struct system_metrics *psysm)
+{
+	bool ret;
+
+	if (psysm->cpu_family == 0x19) {
+		switch (psysm->cpu_model) {
+			case 0x00 ... 0x0f:
+			case 0x30 ... 0x3f:
+				ret = false;
+				break;
+			default:
+				ret = true;
+				break;
+		}
+	}
+
+	return ret;
+}
+
 /*
  * First initialization function to be executed and confirming
  * all the monitor or driver objects should be initialized or not
@@ -369,7 +388,10 @@ esmi_status_t esmi_init()
 	if (ret != ESMI_SUCCESS) {
 		return ret;
 	}
-	if (sm.cpu_family == 0x19 && sm.cpu_model == 0x10) {
+	if (sm.cpu_family < 0x19)
+		return ESMI_NOT_SUPPORTED;
+
+	if (check_for_64bit_rapl_reg(&sm)) {
 		ret = create_msr_monitor();
 		if (ret == ESMI_SUCCESS)
 			sm.msr_status = ESMI_INITIALIZED;
