@@ -251,6 +251,7 @@ For convenience purposes, following is the output from the -h flag:
 	Output Option<s>:
 	  -h, --help                                            Show this help message
 	  -A, --showall                                         Get all esmi parameter values
+	  --testmailbox [SOCKET] [VALUE]                        Test HSMP mailbox interface
 
 	Get Option<s>:
 	  --showcoreenergy [CORE]                               Get energy for a given CPU (Joules)
@@ -331,6 +332,9 @@ Following are the value ranges and other information needed for passing it to to
 9.	--setgmi3linkwidth [SOCKET] [MIN] [MAX]
 
 	  MIN : MAX : 0 - 2 with MIN <= MAX
+
+9.	--testmailbox [SOCKET] [VALUE]
+	  VALUE : Any 32 bit value
 
 ```
 Below is a sample usage to get the individual library functionality API's.
