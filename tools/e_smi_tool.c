@@ -817,20 +817,13 @@ static int epyc_get_power_telemetry()
 	return ESMI_SUCCESS;
 }
 
-static char *links[] = {"P0", "P1", "P2", "P3", "G0", "G1", "G2", "G3"};
-
+/* order here should match with bw_string[] in esmi.h */
 const char *bw_type_list[3] = {"AGG_BW", "RD_BW", "WR_BW"};
 
-static void find_link_bwtype_index(char *link, char *bw_type, int *link_ind, int *bw_type_ind)
+static void find_bwtype_index(char *bw_type, int *bw_type_ind)
 {
 	int i;
 
-	for(i = 0; i < ARRAY_SIZE(links); i++) {
-		if(!strcmp(link, links[i])) {
-			*link_ind = i;
-			break;
-		}
-	}
 	if (bw_type == NULL)
 		return;
 	for(i = 0; i < ARRAY_SIZE(bw_type_list); i++) {
@@ -849,13 +842,7 @@ static esmi_status_t epyc_get_io_bandwidth_info(uint32_t sock_id, char *link)
 	int index = -1;
 	struct link_id_bw_type io_link;
 
-	find_link_bwtype_index(link, NULL, &index, NULL);
-	if (index == -1) {
-		printf("Please provide valid link name.\n");
-		printf(MAG "Try --help for more information.\n" RESET);
-		return ESMI_INVALID_INPUT;
-	}
-	io_link.link_id =  1 << index;
+	io_link.link_name = link;
 	/* Aggregate bw = 1 */
 	io_link.bw_type = 1 ;
 	ret = esmi_current_io_bandwidth_get(sock_id, io_link, &bw);
@@ -878,16 +865,16 @@ static esmi_status_t epyc_get_xgmi_bandwidth_info(char *link, char *bw_type)
 	esmi_status_t ret;
 	uint32_t bw;
 	int id;
-	int link_ind = -1, bw_ind = -1;
+	int bw_ind = -1;
 
-	find_link_bwtype_index(link, bw_type, &link_ind, &bw_ind);
-	if (link_ind == -1 || bw_ind == -1) {
-		printf("Please provide valid link name.\n");
+	find_bwtype_index(bw_type, &bw_ind);
+	if (bw_ind == -1) {
+		printf("Please provide valid link bandwidth type.\n");
 		printf(MAG "Try --help for more information.\n" RESET);
 		return ESMI_INVALID_INPUT;
 	}
 
-	xgmi_link.link_id = 1 << link_ind;
+	xgmi_link.link_name = link;
 	xgmi_link.bw_type = 1 << bw_ind;
 	ret = esmi_current_xgmi_bw_get(xgmi_link, &bw);
 	if (ret != ESMI_SUCCESS) {
@@ -897,7 +884,7 @@ static esmi_status_t epyc_get_xgmi_bandwidth_info(char *link, char *bw_type)
 	}
 
 	printf("\n-------------------------------------------------------------\n");
-	printf("| Current Aggregate bandwidth of xGMI link %s | %6u Mbps |\n", link, bw);
+	printf("| Current %s bandwidth of xGMI link %s | %6u Mbps |\n", bw_string[bw_ind], link, bw);
 	printf("-------------------------------------------------------------\n");
 
 	return ret;
