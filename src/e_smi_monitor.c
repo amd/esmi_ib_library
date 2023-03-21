@@ -55,7 +55,7 @@
 
 char energymon_path[DRVPATHSIZ];
 
-static uint64_t energy_unit;
+static uint64_t energy_unit = 0;
 
 /* NODE FILENAMES */
 static char energy_file[] = "energy#_input";
@@ -201,20 +201,33 @@ static void make_path(monitor_types_t type, char *driver_path,
 	replace_ch_to_num(file_path, FILEPATHSIZ, '#', sensor_id);
 }
 
-int find_msr(const char *path)
+int find_msr_safe()
 {
-        int ret;
-        char file_path[FILEPATHSIZ];
+	char file_path[FILEPATHSIZ];
+	int ret;
 
-        make_path(MSR_SAFE_TYPE, MSR_PATH, 0, file_path);
-        ret = readmsr_u64(file_path, &energy_unit, ENERGY_PWR_UNIT_MSR);
+	make_path(MSR_SAFE_TYPE, MSR_PATH, 0, file_path);
+	ret = access(file_path, F_OK);
+	if (ret == -1)
+		return errno;
 
-        if (ret)
-                return ret;
+	return ret;
+}
+
+static int read_energy_unit()
+{
+	char file_path[FILEPATHSIZ];
+	int ret;
+
+	make_path(MSR_SAFE_TYPE, MSR_PATH, 0, file_path);
+
+	ret = readmsr_u64(file_path, &energy_unit, ENERGY_PWR_UNIT_MSR);
+	if (ret)
+		return ret;
 
 	energy_unit = (energy_unit & AMD_ENERGY_UNIT_MASK) >> AMD_ENERGY_UNIT_OFFSET;
 
-        return ESMI_SUCCESS;
+	return ESMI_SUCCESS;
 }
 
 int read_energy_drv(uint32_t sensor_id, uint64_t *pval)
@@ -236,6 +249,11 @@ int read_msr_drv(uint32_t sensor_id, uint64_t *pval, uint64_t reg)
 
         *pval = 0;
 
+	if (!energy_unit){
+		ret = read_energy_unit();
+		if (ret)
+			return ret;
+	}
         make_path(MSR_SAFE_TYPE, MSR_PATH, sensor_id, file_path);
         ret = readmsr_u64(file_path, pval, reg);
 
@@ -268,6 +286,11 @@ int batch_read_msr_drv(uint64_t *pval, uint32_t cpus)
 	char file_path[FILEPATHSIZ];
 	int i, ret;
 
+	if (!energy_unit){
+		ret = read_energy_unit();
+		if (ret)
+			return ret;
+	}
 	memset(pval, 0, cpus * sizeof(uint64_t));
 	for (i = 0; i < cpus; i++) {
 		make_path(MSR_SAFE_TYPE, MSR_PATH, i, file_path);

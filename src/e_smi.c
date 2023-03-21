@@ -249,7 +249,7 @@ static esmi_status_t create_energy_monitor(void)
 
 static esmi_status_t create_msr_monitor(void)
 {
-	return errno_to_esmi_status(find_msr(MSR_PATH));
+	return errno_to_esmi_status(find_msr_safe());
 }
 
 /*

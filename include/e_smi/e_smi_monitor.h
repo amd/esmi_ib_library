@@ -130,7 +130,7 @@ int batch_read_energy_drv(uint64_t *pval, uint32_t cpus);
 int batch_read_msr_drv(uint64_t *pval, uint32_t cpus);
 
 int find_energy(char *devname, char *hwmon_name);
-int find_msr(const char *path);
+int find_msr_safe();
 int hsmp_xfer(struct hsmp_message *msg, int mode);
 void init_platform_info(struct system_metrics *sm);
 
