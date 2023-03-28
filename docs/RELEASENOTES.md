@@ -1,11 +1,16 @@
 
 # EPYC™ System Management Interface (E-SMI) In-band Library
 
-NEW! E-SMI library 2.0 is now available
+NEW! E-SMI library beta 3.0 is now available
 
 The EPYC™ System Management Interface In-band Library, or E-SMI library, is a C library for Linux that provides a user space interface to monitor and control the CPU's power, energy, performance and other system management features.
 
 # Changes Notes
+
+## Highlights of release v3.0.0
+* AMD MI300 processors are supported in this release.
+* Library is modified to support platform specific check in each message in an organised way.
+* tool options are modified to show valid input values
 
 ## Highlights of minor release v2.1
 * Library is updated to align with changes in the processor spec
@@ -62,7 +67,7 @@ The EPYC™ System Management Interface In-band Library, or E-SMI library, is a 
 # Specifications
 
 ## Processors:
-Target released for AMD EPYC™ processor Family 19h, model 0h~1Fh and 30~3Fh.
+Target released for AMD EPYC™ processor Family 19h, model 0h~1Fh, 30~3Fh and 90~90h.
 
 ## Operating Systems
 AMD ESMI In-band library is tested on following distributions
