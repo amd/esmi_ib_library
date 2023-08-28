@@ -1535,7 +1535,7 @@ esmi_status_t esmi_df_pstate_range_set(uint8_t sock_ind, uint8_t max_pstate,
 	msg.msg_id	= HSMP_SET_PSTATE_MAX_MIN;
 	msg.num_args	= 1;
 	msg.sock_ind	= sock_ind;
-	msg.args[0]	= (min_pstate << 8) || max_pstate;
+	msg.args[0]	= (min_pstate << 8) | max_pstate;
 	ret = hsmp_xfer(&msg, O_WRONLY);
 
 	return errno_to_esmi_status(ret);
