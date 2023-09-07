@@ -2115,6 +2115,10 @@ static int parsesmi_args(int argc,char **argv)
 			show_usage(argv[0]);
 			return ESMI_INVALID_INPUT;
 		}
+		if (*optarg == '-') {
+			printf(MAG "Negative values are not accepted\n\n" RESET);
+			return ESMI_INVALID_INPUT;
+		}
 	}
 	if (opt == 'C' ||
 	    opt == 'u' ||
@@ -2138,18 +2142,14 @@ static int parsesmi_args(int argc,char **argv)
 			return ESMI_INVALID_INPUT;
 		}
 		if (opt != 'g' && opt != 'H' && opt != 'T' && opt != 'N') {
-			if (*argv[optind] == '-') {
-				if (*(argv[optind] + 1) < 48 && *(argv[optind] + 1) > 57) {
-					printf(MAG "\nOption '-%c' require TWO arguments"
-					 " <index>  <set_value>\n\n" RESET, opt);
-					show_usage(argv[0]);
-					return ESMI_INVALID_INPUT;
-				}
-			}
 			if (is_string_number(argv[optind])) {
 				printf(MAG "Option '-%c' requires 2nd argument as valid"
 				       " numeric value\n\n" RESET, opt);
 				show_usage(argv[0]);
+				return ESMI_INVALID_INPUT;
+			}
+			if (*argv[optind] == '-') {
+				printf(MAG "Negative values are not accepted\n\n" RESET);
 				return ESMI_INVALID_INPUT;
 			}
 		} else {
