@@ -1615,16 +1615,14 @@ esmi_status_t esmi_hsmp_proto_ver_get(uint32_t *proto_ver)
 	struct hsmp_message msg = { 0 };
 	esmi_status_t ret;
 
-	msg.msg_id = HSMP_GET_PROTO_VER;
-	if (check_sup(msg.msg_id))
-		return ESMI_NO_HSMP_MSG_SUP;
-
-	CHECK_HSMP_GET_INPUT(proto_ver);
-
 	if (psm->hsmp_proto_ver) {
 		*proto_ver = psm->hsmp_proto_ver;
-		return errno_to_esmi_status(0);
+		return ESMI_SUCCESS;
 	}
+
+	msg.msg_id = HSMP_GET_PROTO_VER;
+
+	CHECK_HSMP_GET_INPUT(proto_ver);
 
 	msg.response_sz = 1;
 	msg.sock_ind = 0;

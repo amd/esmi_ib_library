@@ -43,11 +43,6 @@
 #include <e_smi/e_smi.h>
 #include <e_smi/e_smi_monitor.h>
 
-#define MILAN_TBL_SIZE (sizeof tbl_milan / sizeof tbl_milan[0])
-#define TRENTO_TBL_SIZE (sizeof tbl_trento / sizeof tbl_trento[0])
-#define GENOA_TBL_SIZE (sizeof tbl_genoa / sizeof tbl_genoa[0])
-#define MI300_TBL_SIZE (sizeof tbl_mi300 / sizeof tbl_mi300[0])
-
 /* Genesis - hsmp_proto_ver2 */
 /* MSGID1h - MSGID14h */
 static bool tbl_milan[] = { false, true, true, true, true, true, true, true, true, true,
@@ -113,12 +108,12 @@ void init_platform_info(struct system_metrics *sm)
 	{
 		case HSMP_PROTO_VER2:
 			lut = tbl_milan;
-			lut_size = MILAN_TBL_SIZE;
+			lut_size = ARRAY_SIZE(tbl_milan);
 			sm->lencode = NULL;
 			break;
 		case HSMP_PROTO_VER4:
 			lut = tbl_trento;
-			lut_size = TRENTO_TBL_SIZE;
+			lut_size = ARRAY_SIZE(tbl_trento);
 			sm->lencode = NULL;
 			break;
 		case HSMP_PROTO_VER5:
@@ -127,17 +122,16 @@ void init_platform_info(struct system_metrics *sm)
 			sm->pci_gen5_rate_ctl = 2;
 			sm->lencode = proto_ver5_encoding;
 			lut = tbl_genoa;
-			lut_size = GENOA_TBL_SIZE;
+			lut_size = ARRAY_SIZE(tbl_genoa);
 			break;
 		case HSMP_PROTO_VER6:
 			lut = tbl_mi300;
-			lut_size = MI300_TBL_SIZE;
+			lut_size = ARRAY_SIZE(tbl_mi300);
 			sm->lencode = proto_ver6_encoding;
 			break;
 		default:
-			sm->df_pstate_max_limit = 3;
-			sm->gmi3_link_width_limit = 0;
-			sm->pci_gen5_rate_ctl = 0;
+			lut = tbl_mi300;
+			lut_size = ARRAY_SIZE(tbl_mi300);
 			sm->lencode = proto_ver6_encoding;
 			break;
 	}
