@@ -41,7 +41,6 @@
 #include <cpuid.h>
 #include <dirent.h>
 #include <errno.h>
-#include <math.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -353,7 +352,7 @@ static esmi_status_t detect_packages(struct system_metrics *psysm)
 
 static bool check_for_64bit_rapl_reg(struct system_metrics *psysm)
 {
-	bool ret;
+	bool ret = true;
 
 	if (psysm->cpu_family == 0x19) {
 		switch (psysm->cpu_model) {
@@ -884,6 +883,9 @@ esmi_status_t esmi_apb_enable(uint32_t sock_ind)
 	struct hsmp_message msg = { 0 };
 	esmi_status_t ret;
 
+	if (psm->hsmp_proto_ver == HSMP_PROTO_VER6)
+		return ESMI_NO_HSMP_MSG_SUP;
+
 	CHECK_HSMP_INPUT();
 
 	if (sock_ind >= psm->total_sockets)
@@ -906,6 +908,9 @@ esmi_status_t esmi_apb_disable(uint32_t sock_ind, uint8_t pstate)
 {
 	struct hsmp_message msg = { 0 };
 	esmi_status_t ret;
+
+	if (psm->hsmp_proto_ver == HSMP_PROTO_VER6)
+		return ESMI_NO_HSMP_MSG_SUP;
 
 	CHECK_HSMP_INPUT();
 
@@ -1064,7 +1069,7 @@ esmi_status_t esmi_ddr_bw_get(struct ddr_bw_metrics *ddr_bw)
 
 	CHECK_HSMP_GET_INPUT(ddr_bw);
 
-	if (psm->hsmp_proto_ver < HSMP_PROTO_VER3) {
+	if ((psm->hsmp_proto_ver < HSMP_PROTO_VER3) || (psm->hsmp_proto_ver == HSMP_PROTO_VER6)) {
 		return ESMI_NO_HSMP_MSG_SUP;
 	}
 
@@ -1118,7 +1123,7 @@ esmi_status_t esmi_dimm_temp_range_and_refresh_rate_get(uint8_t sock_ind, uint8_
 	struct hsmp_message msg = { 0 };
 	esmi_status_t ret;
 
-	if (psm->hsmp_proto_ver < HSMP_PROTO_VER5)
+	if ((psm->hsmp_proto_ver < HSMP_PROTO_VER5) || (psm->hsmp_proto_ver == HSMP_PROTO_VER6))
 		return ESMI_NO_HSMP_MSG_SUP;
 
 	if (sock_ind >= psm->total_sockets)
@@ -1146,7 +1151,7 @@ esmi_status_t esmi_dimm_power_consumption_get(uint8_t sock_ind, uint8_t dimm_add
 	struct hsmp_message msg = { 0 };
 	esmi_status_t ret;
 
-	if (psm->hsmp_proto_ver < HSMP_PROTO_VER5)
+	if ((psm->hsmp_proto_ver < HSMP_PROTO_VER5) || (psm->hsmp_proto_ver == HSMP_PROTO_VER6))
 		return ESMI_NO_HSMP_MSG_SUP;
 
 	if (sock_ind >= psm->total_sockets)
@@ -1185,7 +1190,7 @@ esmi_status_t esmi_dimm_thermal_sensor_get(uint8_t sock_ind, uint8_t dimm_addr,
 	struct hsmp_message msg = { 0 };
 	esmi_status_t ret;
 
-	if (psm->hsmp_proto_ver < HSMP_PROTO_VER5)
+	if ((psm->hsmp_proto_ver < HSMP_PROTO_VER5) || (psm->hsmp_proto_ver == HSMP_PROTO_VER6))
 		return ESMI_NO_HSMP_MSG_SUP;
 
 	if (sock_ind >= psm->total_sockets)
@@ -1195,9 +1200,9 @@ esmi_status_t esmi_dimm_thermal_sensor_get(uint8_t sock_ind, uint8_t dimm_addr,
 
 	msg.msg_id	= HSMP_GET_DIMM_THERMAL;
 	msg.response_sz = 1;
-	msg.num_args 	= 1;
-	msg.args[0] 	= dimm_addr;
-	msg.sock_ind 	= sock_ind;
+	msg.num_args	= 1;
+	msg.args[0]	= dimm_addr;
+	msg.sock_ind	= sock_ind;
 	ret = hsmp_xfer(&msg, O_RDONLY);
 	if (!ret) {
 		dimm_temp->sensor = msg.args[0] >> 21;
@@ -1235,7 +1240,7 @@ esmi_status_t esmi_socket_current_active_freq_limit_get(uint32_t sock_ind, uint1
 
 	msg.msg_id	= HSMP_GET_SOCKET_FREQ_LIMIT;
 	msg.response_sz = 1;
-	msg.sock_ind 	= sock_ind;
+	msg.sock_ind	= sock_ind;
 	ret = hsmp_xfer(&msg, O_RDONLY);
 	if (ret)
 		return errno_to_esmi_status(ret);
@@ -1450,7 +1455,7 @@ esmi_status_t esmi_gmi3_link_width_range_set(uint8_t sock_ind, uint8_t min_link_
 	struct hsmp_message msg = { 0 };
 	esmi_status_t ret;
 
-	if (psm->hsmp_proto_ver < HSMP_PROTO_VER5)
+	if ((psm->hsmp_proto_ver < HSMP_PROTO_VER5) || (psm->hsmp_proto_ver == HSMP_PROTO_VER6))
 		return ESMI_NO_HSMP_MSG_SUP;
 
 	CHECK_HSMP_INPUT();
@@ -1476,7 +1481,7 @@ esmi_status_t esmi_pcie_link_rate_set(uint8_t sock_ind, uint8_t rate_ctrl, uint8
 	struct hsmp_message msg = { 0 };
 	esmi_status_t ret;
 
-	if (psm->hsmp_proto_ver < HSMP_PROTO_VER5)
+	if ((psm->hsmp_proto_ver < HSMP_PROTO_VER5) || (psm->hsmp_proto_ver == HSMP_PROTO_VER6))
 		return ESMI_NO_HSMP_MSG_SUP;
 
 	CHECK_HSMP_GET_INPUT(prev_mode);
@@ -1581,6 +1586,93 @@ esmi_status_t esmi_hsmp_proto_ver_get(uint32_t *proto_ver)
 	ret = hsmp_xfer(&msg, O_RDONLY);
 	if (!ret)
 		*proto_ver = msg.args[0];
+
+	return errno_to_esmi_status(ret);
+}
+
+/*
+ * To get the version number of the metrics table
+ */
+esmi_status_t esmi_metrics_table_version_get(uint32_t *metrics_version)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
+
+	if (psm->hsmp_proto_ver < HSMP_PROTO_VER6)
+		return ESMI_NO_HSMP_MSG_SUP;
+
+	CHECK_HSMP_GET_INPUT(metrics_version);
+
+	msg.msg_id	= HSMP_GET_METRIC_TABLE_VER;
+	msg.response_sz	= 1;
+	msg.sock_ind	= 0;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret)
+		*metrics_version = msg.args[0];
+
+	return errno_to_esmi_status(ret);
+}
+
+/*
+ * To get the metrics table
+ */
+esmi_status_t esmi_metrics_table_get(uint8_t sock_ind, struct hsmp_metric_table *metrics_table)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret = 0;
+	char filepath[FILEPATHSIZ];
+	FILE *fp;
+	int num;
+
+	if (psm->hsmp_proto_ver < HSMP_PROTO_VER6)
+		return ESMI_NO_HSMP_MSG_SUP;
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	snprintf(filepath, FILEPATHSIZ,
+		 "%s/socket%d/metrics_bin",
+		 HSMP_METRICTABLE_PATH, sock_ind);
+
+	fp = fopen(filepath, "rb");
+
+	if(fp == NULL)
+		return ESMI_FILE_ERROR;
+
+	num = fread(metrics_table, sizeof(struct hsmp_metric_table), 1, fp);
+	if (num != 1) {
+		perror("error reading file");
+		ret = ferror(fp);
+	}
+
+	fclose(fp);
+	return errno_to_esmi_status(ret);
+}
+
+/*
+ * To get the the dram address of the metrics table
+ */
+esmi_status_t esmi_dram_address_metrics_table_get(uint8_t sock_ind, uint64_t *dram_addr)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
+
+	if (psm->hsmp_proto_ver < HSMP_PROTO_VER6)
+		return ESMI_NO_HSMP_MSG_SUP;
+
+	CHECK_HSMP_INPUT();
+
+        if (!dram_addr)
+		return ESMI_ARG_PTR_NULL;
+        if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	msg.msg_id	= HSMP_GET_METRIC_TABLE_DRAM_ADDR;
+	msg.response_sz	= 2;
+	msg.sock_ind	= sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret)
+		*dram_addr = msg.args[0] | (((uint64_t)(msg.args[1])) << 32);
 
 	return errno_to_esmi_status(ret);
 }

@@ -42,10 +42,12 @@
 #define INCLUDE_E_SMI_E_SMI_H_
 
 #include <stdbool.h>
+#include <asm/amd_hsmp.h>
 
 #define ENERGY_DEV_NAME	"amd_energy"	//!< Supported Energy driver name
 
 #define HSMP_CHAR_DEVFILE_NAME	"/dev/hsmp" //!< HSMP device path
+#define HSMP_METRICTABLE_PATH	"/sys/devices/platform/amd_hsmp" //!< HSMP MetricTable sysfs path
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0])) //!< macro to calculate size
 
@@ -202,16 +204,6 @@ typedef enum {
 	ESMI_HSMP_TIMEOUT,	//!< HSMP message is timedout
 	ESMI_NO_HSMP_MSG_SUP,	//!< HSMP message/feature not supported.
 } esmi_status_t;
-
-/**
- * @brief HSMP protocol version names
- */
-enum hsmp_proto_versions {
-	HSMP_PROTO_VER2 = 2,
-	HSMP_PROTO_VER3,
-	HSMP_PROTO_VER4,
-	HSMP_PROTO_VER5
-};
 
 /****************************************************************************/
 /** @defgroup InitShut Initialization and Shutdown
@@ -1086,6 +1078,53 @@ esmi_status_t esmi_current_xgmi_bw_get(struct link_id_bw_type link,
 				       uint32_t *xgmi_bw);
 
 /** @} */  // end of BwQuer
+
+/*****************************************************************************/
+/** @defgroup MetQuer Metrics Table
+ *  The following functions are assigned for CPU relative functionality, which is
+ *  expected to be compatible with Epyc products.
+ *  @{
+ */
+
+/**
+ *  @brief Get metrics table version
+ *
+ *  @details Get the version number[31:0] of metrics table
+ *
+ *  @param[inout] metrics_version input buffer to return the metrics table version.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval Non-zero is returned upon failure.
+ */
+esmi_status_t esmi_metrics_table_version_get(uint32_t *metrics_version);
+
+/**
+ *  @brief Get metrics table
+ *
+ *  @details Read the metrics table
+ *
+ *  @param[in] sock_ind Socket index.
+ *  @param[inout] metrics_table input buffer to return the metrics table.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval Non-zero is returned upon failure.
+ */
+esmi_status_t esmi_metrics_table_get(uint8_t sock_ind, struct hsmp_metric_table *metrics_table);
+
+/**
+ *  @brief Get the DRAM address for the metrics table.
+ *
+ *  @details Get DRAM address for Metric table transfer
+ *
+ *  @param[in] sock_ind Socket index.
+ *  @param[inout] dram_addr 64-bit DRAM address
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval Non-zero is returned upon failure.
+ */
+esmi_status_t esmi_dram_address_metrics_table_get(uint8_t sock_ind, uint64_t *dram_addr);
+
+/** @} */  // end of MetQuer
 
 /*****************************************************************************/
 /** @defgroup AuxilQuer Auxiliary functions
