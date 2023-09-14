@@ -53,6 +53,8 @@
 
 #define BIT(N)	(1 << N)		//!< macro for mask
 
+static const char *bw_string[3] = {"aggregate", "read", "write"}; //!< bandwidth types for io/xgmi links
+
 /** \file e_smi.h
  *  Main header file for the E-SMI library.
  *  All required function, structure, enum, etc. definitions should be defined
@@ -120,29 +122,15 @@ typedef enum {
 } io_bw_encoding;
 
 /**
- * @brief IO LINK and xGMI link Encoding values
- */
-typedef enum {
-	P0 = BIT(0),
-	P1 = BIT(1),
-	P2 = BIT(2),
-	P3 = BIT(3),
-	G0 = BIT(4),
-	G1 = BIT(5),
-	G2 = BIT(6),
-	G3 = BIT(7)
-} link_id_encoding;
-
-
-/**
- * @brief LINK ID and Bandwidth type Information.It contains
- * LINK ID Encoding. Valid Link ID encodings are 1(P0), 2(P1),
- * 4(P2), 8(P3), 16(G0), 32(G1), 64(G2), 128(G3). Valid xGMI Bandwidth
- * types 1(Aggregate_BW), 2 (Read BW), 4 (Write BW).
+ * @brief LINK name and Bandwidth type Information.It contains
+ * link names i.e valid link names are
+ * "P0", "P1", "P2", "P3", "P4", "G0", "G1", "G2", "G3", "G4"
+ * "G5", "G6", "G7"
+ * Valid bandwidth types 1(Aggregate_BW), 2 (Read BW), 4 (Write BW).
  */
 struct link_id_bw_type {
-	io_bw_encoding bw_type;    //!< Bandwidth Type Information [1, 2, 4]
-	link_id_encoding link_id;  //!< Link ID [1,2,4,8,16,32,64,128]
+	io_bw_encoding bw_type;			//!< Bandwidth Type Information [1, 2, 4]
+	char *link_name;			//!< Link name [P0, P1, G0, G1 etc]
 };
 
 /**

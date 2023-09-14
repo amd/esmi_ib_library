@@ -95,6 +95,17 @@ static bool tbl_mi300[] = { false, true, true, true, true, true, true, true, tru
 bool *lut = NULL;
 int lut_size = 0;
 
+/* encoding values are as per link_names array order in src/e_smi.c */
+/* xgmi and io link encodings on genoa(proto ver5) platforms */
+static struct link_encoding proto_ver5_encoding[] = { {"P0", BIT(0)}, {"P1", BIT(1)}, {"P2", BIT(2)},
+						      {"P3", BIT(3)}, {"G0", BIT(4)}, {"G1", BIT(5)},
+						      {"G2", BIT(6)}, {"G3", BIT(7)}, {NULL, -1} };
+
+/* xgmi and io link encodings on mi300(proto ver6) platforms */
+static struct link_encoding proto_ver6_encoding[] = { {"P2", 0x3}, {"P3", 0x4}, {"G0", 0x8}, {"G1", 0x9},
+						      {"G2", 0xA}, {"G3", 0xB}, {"G4", 0xC}, {"G5", 0xD},
+						      {"G6", 0xE}, {"G7", 0xF}, {NULL, -1} };
+
 /* Assign platform specific values from the documentation */
 void init_platform_info(struct system_metrics *sm)
 {
@@ -103,26 +114,31 @@ void init_platform_info(struct system_metrics *sm)
 		case HSMP_PROTO_VER2:
 			lut = tbl_milan;
 			lut_size = MILAN_TBL_SIZE;
+			sm->lencode = NULL;
 			break;
 		case HSMP_PROTO_VER4:
 			lut = tbl_trento;
 			lut_size = TRENTO_TBL_SIZE;
+			sm->lencode = NULL;
 			break;
 		case HSMP_PROTO_VER5:
 			sm->df_pstate_max_limit = 2;
 			sm->gmi3_link_width_limit = 2;
 			sm->pci_gen5_rate_ctl = 2;
+			sm->lencode = proto_ver5_encoding;
 			lut = tbl_genoa;
 			lut_size = GENOA_TBL_SIZE;
 			break;
 		case HSMP_PROTO_VER6:
 			lut = tbl_mi300;
 			lut_size = MI300_TBL_SIZE;
+			sm->lencode = proto_ver6_encoding;
 			break;
 		default:
 			sm->df_pstate_max_limit = 3;
 			sm->gmi3_link_width_limit = 0;
 			sm->pci_gen5_rate_ctl = 0;
+			sm->lencode = proto_ver6_encoding;
 			break;
 	}
 }

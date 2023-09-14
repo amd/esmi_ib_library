@@ -87,6 +87,11 @@
  */
 #define CPU_SYS_PATH "/sys/devices/system/cpu"
 
+struct link_encoding {
+        char *name;
+        int val;
+};
+
 /*
  * total number of cores and sockets in the system
  * This information is going to be fixed for a boot cycle.
@@ -106,6 +111,7 @@ struct system_metrics {
 	uint8_t df_pstate_max_limit;	// df pstate maximum limit
 	uint8_t gmi3_link_width_limit;	// gmi3 maximum link width
 	uint8_t pci_gen5_rate_ctl;
+	struct link_encoding *lencode;	// holds platform specifc link encodings
 };
 
 /**

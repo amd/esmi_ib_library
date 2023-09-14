@@ -1381,26 +1381,23 @@ esmi_status_t esmi_socket_freq_range_get(uint8_t sock_ind, uint16_t *fmax, uint1
 	return errno_to_esmi_status(ret);
 }
 
-static int validate_link_id(uint8_t link_id)
+static int validate_link_name(char *name, int *encode_val)
 {
 	esmi_status_t ret;
+	int i = 0;
 
-	switch (link_id) {
-		case P0:
-		case P1:
-		case P2:
-		case P3:
-		case G0:
-		case G1:
-		case G2:
-		case G3:
-			ret = ESMI_SUCCESS;
-			break;
-		default:
-			ret = ESMI_INVALID_INPUT;
+	if (!psm->lencode)
+		return ESMI_NO_HSMP_MSG_SUP;
+	if (!name)
+		return ESMI_ARG_PTR_NULL;
+	while (psm->lencode[i].name != NULL) {
+		if (!strcmp(name, psm->lencode[i].name)) {
+			*encode_val = psm->lencode[i].val;
+			return ESMI_SUCCESS;
+		}
+		i++;
 	}
-
-	return ret;
+	return ESMI_INVALID_INPUT;
 }
 
 static esmi_status_t validate_bw_type(uint8_t bw_type)
@@ -1426,6 +1423,7 @@ esmi_status_t esmi_current_io_bandwidth_get(uint8_t sock_ind, struct link_id_bw_
 {
 	struct hsmp_message msg = { 0 };
 	esmi_status_t ret;
+	int encode_val = 0;
 
 	msg.msg_id	= HSMP_GET_IOLINK_BANDWITH;
 	if (check_sup(msg.msg_id))
@@ -1440,12 +1438,12 @@ esmi_status_t esmi_current_io_bandwidth_get(uint8_t sock_ind, struct link_id_bw_
 	if (link.bw_type != 1)
 		return ESMI_INVALID_INPUT;
 
-	if (validate_link_id(link.link_id))
+	if(validate_link_name(link.link_name, &encode_val))
 		return ESMI_INVALID_INPUT;
 
 	msg.response_sz = 1;
 	msg.num_args	= 1;
-	msg.args[0]	= link.bw_type | link.link_id << 8;
+	msg.args[0]	= link.bw_type | encode_val << 8;
 	msg.sock_ind	= sock_ind;
 	ret = hsmp_xfer(&msg, O_RDONLY);
 	if (!ret)
@@ -1459,6 +1457,7 @@ esmi_status_t esmi_current_xgmi_bw_get(struct link_id_bw_type link,
 {
 	struct hsmp_message msg = { 0 };
 	esmi_status_t ret;
+	int encode_val = 0;
 
 	msg.msg_id	= HSMP_GET_XGMI_BANDWITH;
 	if (check_sup(msg.msg_id))
@@ -1466,14 +1465,15 @@ esmi_status_t esmi_current_xgmi_bw_get(struct link_id_bw_type link,
 
 	CHECK_HSMP_GET_INPUT(xgmi_bw);
 
-	if (validate_link_id(link.link_id))
+	if(validate_link_name(link.link_name, &encode_val))
 		return ESMI_INVALID_INPUT;
+
 	if (validate_bw_type(link.bw_type))
 		return ESMI_INVALID_INPUT;
 
 	msg.response_sz = 1;
 	msg.num_args	= 1;
-	msg.args[0]	= link.bw_type | link.link_id << 8;
+	msg.args[0]	= link.bw_type | encode_val << 8;
 	ret = hsmp_xfer(&msg, O_RDONLY);
 	if (!ret)
 		*xgmi_bw = msg.args[0];
