@@ -40,9 +40,10 @@ set(PKG_VERSION_NUM_COMMIT 0)
 set(PKG_VERSION_GIT_TAG_PREFIX "esmi_pkg_ver")
 set(SO_VERSION_GIT_TAG_PREFIX "esmi_so_ver")
 
+set(ENV{ESMI_BUILD_ID} "${ESMI_BUILD_ID}")
 # provide git to utilities
-find_program (GIT NAMES git)
 
+find_program (GIT NAMES git)
 get_package_version_number("1.0.0" ${PKG_VERSION_GIT_TAG_PREFIX} GIT)
 # VERSION_* variables should be set by get_version_from_tag
 message("Package version: ${PKG_VERSION_STR}")
@@ -52,16 +53,20 @@ message("Package version: ${PKG_VERSION_STR}")
 get_version_from_tag("1.0.0.0" ${SO_VERSION_GIT_TAG_PREFIX} GIT)
 
 # VERSION_* variables should be set by get_version_from_tag
-if ( ${E_PATCH_VERSION} )
-    set ( VERSION_PATCH ${E_PATCH_VERSION})
+if (${VERSION_PATCH})
+    set (${E_SMI}_VERSION_PATCH "${VERSION_PATCH}")
     set(SO_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 else()
+    set(${E_SMI}_VERSION_PATCH "0")
     set(SO_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}")
 endif ()
+if (DEFINED VERSION_ID)
+    set (${E_SMI}_VERSION_BUILD "${VERSION_ID}")
+else()
+    set(${E_SMI}_VERSION_BUILD "0")
+endif()
 set(${E_SMI}_VERSION_MAJOR "${VERSION_MAJOR}")
 set(${E_SMI}_VERSION_MINOR "${VERSION_MINOR}")
-set(${E_SMI}_VERSION_PATCH "0")
-set(${E_SMI}_VERSION_BUILD "0")
 message("SOVERSION: ${SO_VERSION_STRING}")
 
 ## Define default variable and variables for the optional build target
