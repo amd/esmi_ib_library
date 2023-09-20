@@ -1948,10 +1948,10 @@ static esmi_status_t init_proto_version_func_pointers()
 static void print_esmi_version()
 {
 
-	printf("------------------------------------------\n");
-	printf("| E-smi library version  |  %d.%d.%d \t |\n",
-	       e_smi_VERSION_MAJOR, e_smi_VERSION_MINOR, e_smi_VERSION_PATCH);
-	printf("------------------------------------------\n");
+	printf("-----------------------------------------------------------\n");
+	printf("| E-smi library version  |  %d.%d.%d build: %-10s \t |\n",
+	       e_smi_VERSION_MAJOR, e_smi_VERSION_MINOR, e_smi_VERSION_PATCH, e_smi_VERSION_BUILD);
+	printf("-----------------------------------------------------------\n");
 }
 
 /**
