@@ -55,6 +55,7 @@
 #define RED "\x1b[31m"
 #define MAG "\x1b[35m"
 #define RESET "\x1b[0m"
+#include <e_smi/e_smi64Config.h>
 
 #define ARGS_MAX 64
 #define SHOWLINESZ 256
@@ -1648,6 +1649,7 @@ static char* const feat_comm[] = {
 	"Output Option<s>:",
 	"  -h, --help\t\t\t\t\t\t\tShow this help message",
 	"  -A, --showall\t\t\t\t\t\t\tGet all esmi parameter values",
+	"  -V  --version \t\t\t\t\t\tE-smi library version",
 	"  --testmailbox [SOCKET] [VALUE]\t\t\t\tTest HSMP mailbox interface\n",
 };
 
@@ -1943,6 +1945,15 @@ static esmi_status_t init_proto_version_func_pointers()
 	return ESMI_SUCCESS;
 }
 
+static void print_esmi_version()
+{
+
+	printf("------------------------------------------\n");
+	printf("| E-smi library version  |  %d.%d.%d \t |\n",
+	       e_smi_VERSION_MAJOR, e_smi_VERSION_MINOR, e_smi_VERSION_PATCH);
+	printf("------------------------------------------\n");
+}
+
 /**
 Parse command line parameters and set data for program.
 @param argc number of command line parameters
@@ -2006,11 +2017,12 @@ static int parsesmi_args(int argc,char **argv)
 		{"showsockclkfreqlimit",	required_argument,	0,	'Q'},
 		{"showmetrictablever",		no_argument,		0,	'D'},
 		{"showmetrictable",		required_argument,	0,	'J'},
+		{"version",			no_argument,		0,	'V'},
 		{0,			0,			0,	0},
 	};
 
 	int long_index = 0;
-	char *helperstring = "+hA";
+	char *helperstring = "+hAV";
 
 	if (getuid() != 0) {
 		while ((opt = getopt_long(argc, argv, helperstring,
@@ -2394,7 +2406,7 @@ static int parsesmi_args(int argc,char **argv)
 			/* Get the current clock freq limit for a given socket */
 			sock_id = atoi(optarg);
 			ret = epyc_get_curr_freq_limit_socket(sock_id);
-           		 break;
+			break;
 		case 'D' :
 			/* Get Metrics Table version */
 			ret = epyc_get_metrics_table_version();
@@ -2421,6 +2433,10 @@ static int parsesmi_args(int argc,char **argv)
 			break;
 		case 'h' :
 			show_usage(argv[0]);
+			ret = ESMI_SUCCESS;
+			break;
+		case 'V' :
+			print_esmi_version();
 			ret = ESMI_SUCCESS;
 			break;
 		case ':' :
