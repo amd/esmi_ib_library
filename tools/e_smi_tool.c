@@ -48,6 +48,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <math.h>
+#include <limits.h>
 
 #include <e_smi/e_smi.h>
 
@@ -1321,6 +1322,33 @@ static int show_cpu_metrics(uint32_t *err_bits)
 	return ESMI_SUCCESS;
 }
 
+static int test_hsmp_mailbox(uint8_t sock_id, uint32_t input_data)
+{
+	uint32_t data = input_data;
+	esmi_status_t ret;
+
+	ret = esmi_test_hsmp_mailbox(sock_id, &data);
+	if (ret) {
+		printf("Failed to test hsmp mailbox on socket[%u], Err[%d] : %s\n",
+			sock_id, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	if (data != (input_data + 1)) {
+		printf("------------------------------------");
+		printf("\n| Socket[%u] Test message FAILED | \n", sock_id);
+		printf("| Expected : %-5u hex: %#-5x | ", (input_data + 1), (input_data + 1));
+		printf("\n| Received : %-5u hex: %#-5x |", data, data);
+		printf("\n------------------------------------------\n");
+		return 0;
+	}
+	printf("------------------------------------------");
+	printf("\n| Socket[%u] Test message PASSED | \n", sock_id);
+	printf("| Expected : %-5u hex: %#-5x | ", (input_data + 1), (input_data + 1));
+	printf("\n| Received : %-5u hex: %#-5x |", data, data);
+	printf("\n------------------------------------------\n");
+	return 0;
+}
+
 static int show_smi_all_parameters(void)
 {
 	char *freq_src[ARRAY_SIZE(freqlimitsrcnames) * sys_info.sockets];
@@ -1632,7 +1660,8 @@ static esmi_status_t epyc_show_metrics_table(uint8_t sock_id)
 static char* const feat_comm[] = {
 	"Output Option<s>:",
 	"  -h, --help\t\t\t\t\t\t\tShow this help message",
-	"  -A, --showall\t\t\t\t\t\t\tGet all esmi parameter values\n",
+	"  -A, --showall\t\t\t\t\t\t\tGet all esmi parameter values",
+	"  --testmailbox [SOCKET] [VALUE]\t\t\t\tTest HSMP mailbox interface\n",
 };
 
 static char* const feat_energy[] = {
@@ -1950,11 +1979,13 @@ static int parsesmi_args(int argc,char **argv)
 	char *link_name;
 	char *bw_type;
 	uint8_t ctrl, mode;
+	uint64_t input_data;
 
 	//Specifying the expected options
 	static struct option long_options[] = {
 		{"help",                no_argument,		0,	'h'},
 		{"showall",             no_argument,		0,	'A'},
+		{"testmailbox",         required_argument,	0,	'N'},
 		{"showcoreenergy",      required_argument,	0,	'e'},
 		{"showsockenergy",	no_argument,		0,	's'},
 		{"showsockpower",	no_argument,		0,	'p'},
@@ -2077,7 +2108,8 @@ static int parsesmi_args(int argc,char **argv)
 	    opt == 'Y' ||
 	    opt == 'r' ||
 	    opt == 'Q' ||
-	    opt == 'J') {
+	    opt == 'J' ||
+	    opt == 'N') {
 		if (is_string_number(optarg)) {
 			printf("Option '-%c' require a valid numeric value"
 					" as an argument\n\n", opt);
@@ -2096,6 +2128,7 @@ static int parsesmi_args(int argc,char **argv)
 	    opt == 'k' ||
 	    opt == 'X' ||
 	    opt == 'n' ||
+	    opt == 'N' ||
 	    opt == 'Y' ||
 	    opt == 'b') {
 		// make sure optind is valid  ... or another option
@@ -2105,7 +2138,7 @@ static int parsesmi_args(int argc,char **argv)
 			show_usage(argv[0]);
 			return ESMI_INVALID_INPUT;
 		}
-		if (opt != 'g' && opt != 'H' && opt != 'T') {
+		if (opt != 'g' && opt != 'H' && opt != 'T' && opt != 'N') {
 			if (*argv[optind] == '-') {
 				if (*(argv[optind] + 1) < 48 && *(argv[optind] + 1) > 57) {
 					printf(MAG "\nOption '-%c' require TWO arguments"
@@ -2129,7 +2162,7 @@ static int parsesmi_args(int argc,char **argv)
 				return ESMI_INVALID_INPUT;
 			}
 			if (!strncmp(argv[optind], "0x", 2) || !strncmp(argv[optind], "0X", 2)) {
-				dimm_addr = strtoul(argv[optind++], &end, 16);
+				input_data = strtoul(argv[optind++], &end, 16);
 				if (*end) {
 					printf(MAG "Option '--%s' requires 2nd argument as valid"
 					       " numeric value\n\n"
@@ -2145,7 +2178,7 @@ static int parsesmi_args(int argc,char **argv)
 					show_usage(argv[0]);
 					return ESMI_INVALID_INPUT;
 				}
-				dimm_addr = atoi(argv[optind++]);
+				input_data = atol(argv[optind++]);
 			}
 		}
 	}
@@ -2305,17 +2338,17 @@ static int parsesmi_args(int argc,char **argv)
 		case 'g' :
 			/* Get DIMM power consumption */
 			sock_id = atoi(optarg);
-			ret = epyc_get_dimm_power(sock_id, dimm_addr);
+			ret = epyc_get_dimm_power(sock_id, input_data);
 			break;
 		case 'T' :
 			/* Get DIMM temp range and refresh rate */
 			sock_id = atoi(optarg);
-			ret = epyc_get_dimm_temp_range_refresh_rate(sock_id, dimm_addr);
+			ret = epyc_get_dimm_temp_range_refresh_rate(sock_id, input_data);
 			break;
 		case 'H' :
 			/* Get DIMM temperature */
 			sock_id = atoi(optarg);
-			ret = epyc_get_dimm_thermal(sock_id, dimm_addr);
+			ret = epyc_get_dimm_thermal(sock_id, input_data);
 			break;
 		case 'q' :
 			/* Get the current clock freq limit for a given core */
@@ -2374,7 +2407,7 @@ static int parsesmi_args(int argc,char **argv)
 			/* Get the current clock freq limit for a given socket */
 			sock_id = atoi(optarg);
 			ret = epyc_get_curr_freq_limit_socket(sock_id);
-            break;
+           		 break;
 		case 'D' :
 			/* Get Metrics Table version */
 			ret = epyc_get_metrics_table_version();
@@ -2383,6 +2416,17 @@ static int parsesmi_args(int argc,char **argv)
 			/* Get Metrics Table */
 			sock_id = atoi(optarg);
 			ret = epyc_show_metrics_table(sock_id);
+			break;
+		case 'N' :
+			/* Test HSMP mailbox i/f */
+			sock_id = atoi(optarg);
+			if (input_data > UINT_MAX) {
+				printf(RED "%s: option '-%c' requires input argument"
+					" to be less than 0x%x"
+					RESET "\n\n", argv[0], opt, UINT_MAX);
+				break;
+			}
+			ret = test_hsmp_mailbox(sock_id, input_data);
 			break;
 		case 'A' :
 			ret = show_smi_all_parameters();
