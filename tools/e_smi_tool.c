@@ -1648,21 +1648,21 @@ static esmi_status_t epyc_show_metrics_table(uint8_t sock_id)
 static char* const feat_comm[] = {
 	"Output Option<s>:",
 	"  -h, --help\t\t\t\t\t\t\tShow this help message",
-	"  -A, --showall\t\t\t\t\t\t\tGet all esmi parameter values",
-	"  -V  --version \t\t\t\t\t\tE-smi library version",
-	"  --testmailbox [SOCKET] [VALUE]\t\t\t\tTest HSMP mailbox interface\n",
+	"  -A, --showall\t\t\t\t\t\t\tShow all esmi parameter values",
+	"  -V  --version \t\t\t\t\t\tShow e-smi library version",
+	"  --testmailbox [SOCKET] [VALUE<0-0xFFFFFFFF>]\t\t\tTest HSMP mailbox interface\n",
 };
 
 static char* const feat_energy[] = {
 	"Get Option<s>:",
-	"  --showcoreenergy [CORE]\t\t\t\t\tGet energy for a given CPU (Joules)",
-	"  --showsockenergy\t\t\t\t\t\tGet energy for all sockets (KJoules)",
+	"  --showcoreenergy [CORE]\t\t\t\t\tShow energy for a given CPU (Joules)",
+	"  --showsockenergy\t\t\t\t\t\tShow energy for all sockets (KJoules)",
 };
 
 static char* const feat_ver2_get[] = {
-	"  --showsockpower\t\t\t\t\t\tGet power metrics for all sockets (Watts)",
-	"  --showcorebl [CORE]\t\t\t\t\t\tGet Boostlimit for a given CPU (MHz)",
-	"  --showsockc0res [SOCKET]\t\t\t\t\tGet c0_residency for a given socket (%%)",
+	"  --showsockpower\t\t\t\t\t\tShow power metrics for all sockets (Watts)",
+	"  --showcorebl [CORE]\t\t\t\t\t\tShow Boostlimit for a given CPU (MHz)",
+	"  --showsockc0res [SOCKET]\t\t\t\t\tShow c0_residency for a given socket (%%)",
 	"  --showsmufwver\t\t\t\t\t\tShow SMU FW Version",
 	"  --showhsmpprotover\t\t\t\t\t\tShow HSMP Protocol Version",
 	"  --showprochotstatus\t\t\t\t\t\tShow HSMP PROCHOT status for all sockets",
@@ -1677,14 +1677,14 @@ static char* const feat_ver2_set[] = {
 	" for a given core (MHz)",
 	"  --setsockbl [SOCKET] [BOOSTLIMIT]\t\t\t\tSet Boost"
 	" limit for a given Socket (MHz)",
-	"  --apbdisable [SOCKET] [PSTATE]\t\t\t\tSet Data Fabric"
+	"  --apbdisable [SOCKET] [PSTATE<0-3>]\t\t\t\tSet Data Fabric"
 	" Pstate for a given socket",
 	"  --apbenable [SOCKET]\t\t\t\t\t\tEnable the Data Fabric performance"
 	" boost algorithm for a given socket",
-	"  --setxgmiwidth [MIN] [MAX]\t\t\t\t\tSet xgmi link width"
-	" in a multi socket system",
-	"  --setlclkdpmlevel [SOCKET] [NBIOID] [MIN] [MAX]\t\tSet lclk dpm level"
-	" for a given nbio in a given socket",
+	"  --setxgmiwidth [MIN<0-2>] [MAX<0-2>]\t\t\t\tSet xgmi link width"
+	" in a multi socket system (MAX >= MIN)",
+	"  --setlclkdpmlevel [SOCKET] [NBIOID<0-3>] [MIN<0-3>] [MAX<0-3>]Set lclk dpm level"
+	" for a given nbio in a given socket (MAX >= MIN)"
 };
 
 static char* const feat_ver3[] = {
@@ -1704,34 +1704,34 @@ static char* const feat_ver5_get[] = {
 	" and dimm address",
 	"  --showcclkfreqlimit [CORE]\t\t\t\t\tShow current clock frequency limit(MHz) for a given core",
 	"  --showsvipower \t\t\t\t\t\tShow svi based power telemetry of all rails for all sockets",
-	"  --showxgmibandwidth [LINKNAME] [BWTYPE]\t\t\tShow xGMI bandwidth for a given socket,"
+	"  --showxgmibw [LINK<P0-P7,G0-G7>] [BW<AGG_BW,RD_BW,WR_BW>]\tShow xGMI bandwidth for a given socket,"
 	" linkname and bwtype",
-	"  --showiobandwidth [SOCKET] [LINKNAME]\t\t\t\tShow IO bandwidth for a given socket,"
-	" linkname and bwtype",
-	"  --showlclkdpmlevel [SOCKET] [NBIOID]\t\t\t\tShow lclk dpm level for a given nbio"
+	"  --showiobw [SOCKET] [LINK<P0-P7,G0-G7>]\t\t\tShow IO aggregate bandwidth for a given socket and"
+	" linkname",
+	"  --showlclkdpmlevel [SOCKET] [NBIOID<0-3>]\t\t\tShow lclk dpm level for a given nbio"
 	" in a given socket",
 	"  --showsockclkfreqlimit [SOCKET]\t\t\t\tShow current clock frequency limit(MHz) for a given socket"
 };
 
 static char* const feat_ver5_set[] = {
-	"  --setpcielinkratecontrol [SOCKET] [CTL]\t\t\tSet rate control for pcie link"
+	"  --setpcielinkratecontrol [SOCKET] [CTL<0-2>]\t\t\tSet rate control for pcie link"
 	" for a given socket",
-	"  --setpowerefficiencymode [SOCKET] [MODE]\t\t\tSet power efficiency mode"
+	"  --setpowerefficiencymode [SOCKET] [MODE<0-2>]\t\t\tSet power efficiency mode"
 	" for a given socket",
-	"  --setdfpstaterange [SOCKET] [MAX] [MIN]\t\t\tSet df pstate range"
-	" for a given socket",
-	"  --setgmi3linkwidth [SOCKET] [MIN] [MAX]\t\t\tSet gmi3 link width"
-	" for a given socket",
+	"  --setdfpstaterange [SOCKET] [MAX<0-2>] [MIN<0-2>]\t\tSet df pstate range"
+	" for a given socket (MAX <= MIN)",
+	"  --setgmi3linkwidth [SOCKET] [MIN<0-2>] [MAX<0-2>]\t\tSet gmi3 link width"
+	" for a given socket (MAX >= MIN)",
 };
 
 static char* const feat_ver6_get[] = {
 	"  --showcclkfreqlimit [CORE]\t\t\t\t\tShow current clock frequency limit(MHz) for a given core",
 	"  --showsvipower \t\t\t\t\t\tShow svi based power telemetry of all rails for all sockets",
-	"  --showxgmibandwidth [LINKNAME] [BWTYPE]\t\t\tShow xGMI bandwidth for a given socket,"
+	"  --showxgmibw [LINK<P2,P3,G0-G7>] [BW<AGG_BW,RD_BW,WR_BW>]\tShow xGMI bandwidth for a given socket,"
 	" linkname and bwtype",
-	"  --showiobandwidth [SOCKET] [LINKNAME]\t\t\t\tShow IO bandwidth for a given socket,"
-	" linkname and bwtype",
-	"  --showlclkdpmlevel [SOCKET] [NBIOID]\t\t\t\tShow lclk dpm level for a given nbio"
+	"  --showiobw [SOCKET] [LINK<P2,P3,G0-G7>]\t\t\tShow IO aggregate bandwidth for a given socket and"
+	" linkname",
+	"  --showlclkdpmlevel [SOCKET] [NBIOID<0-3>]\t\t\tShow lclk dpm level for a given nbio"
 	" in a given socket",
 	"  --showsockclkfreqlimit [SOCKET]\t\t\t\tShow current clock frequency limit(MHz) for a given socket",
 	"  --showmetrictablever\t\t\t\t\t\tShow Metrics Table Version",
@@ -1745,10 +1745,10 @@ static char* const feat_ver6_set[] = {
 	" for a given core (MHz)",
 	"  --setsockbl [SOCKET] [BOOSTLIMIT]\t\t\t\tSet Boost"
 	" limit for a given Socket (MHz)",
-	"  --setxgmiwidth [MIN] [MAX]\t\t\t\t\tSet xgmi link width"
-	" in a multi socket system",
-	"  --setlclkdpmlevel [SOCKET] [NBIOID] [MIN] [MAX]\t\tSet lclk dpm level"
-	" for a given nbio in a given socket",
+	"  --setxgmiwidth [MIN<0-2>] [MAX<0-2>]\t\t\t\tSet xgmi link width"
+	" in a multi socket system (MAX >= MIN)",
+	"  --setlclkdpmlevel [SOCKET] [NBIOID<0-3>] [MIN<0-3>] [MAX<0-3>]Set lclk dpm level"
+	" for a given nbio in a given socket (MAX >= MIN)",
 };
 static char* const blankline[] = {""};
 
@@ -2007,8 +2007,8 @@ static int parsesmi_args(int argc,char **argv)
 		{"showdimmtemprange",		required_argument,	0,	'T'},
 		{"showcclkfreqlimit",		required_argument,	0,	'q'},
 		{"showsvipower",		no_argument,		0,	'm'},
-		{"showiobandwidth",		required_argument,	0,	'B'},
-		{"showxgmibandwidth",		required_argument,	0,	'i'},
+		{"showiobw",			required_argument,	0,	'B'},
+		{"showxgmibw",			required_argument,	0,	'i'},
 		{"setpcielinkratecontrol",	required_argument,	0,	'j'},
 		{"setpowerefficiencymode",	required_argument,	0,	'k'},
 		{"setdfpstaterange",		required_argument,	0,	'X'},
