@@ -1127,6 +1127,29 @@ esmi_status_t esmi_dram_address_metrics_table_get(uint8_t sock_ind, uint64_t *dr
 /** @} */  // end of MetQuer
 
 /*****************************************************************************/
+/** @defgroup TestQuer Test HSMP mailbox
+ *  This is used to check if the HSMP interface is functioning correctly.
+ *  Increments the input argument value by 1.
+ *  @{
+ */
+
+/**
+ *  @brief Test HSMP mailbox interface
+ *
+ *  @details
+ *  [31:0] = input value
+ *
+ *  @param[in] sock_ind :Socket index.
+ *  @param[in/out] data : input buffer to send input value and to get the output value
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval Non-zero is returned upon failure.
+ */
+esmi_status_t esmi_test_hsmp_mailbox(uint8_t sock_ind, uint32_t *data);
+
+/** @} */  // end of TestQuer
+
+/*****************************************************************************/
 /** @defgroup AuxilQuer Auxiliary functions
  *  Below functions provide interfaces to get the total number of cores and
  *  sockets available and also to get the first online core on a given socket

@@ -1676,3 +1676,28 @@ esmi_status_t esmi_dram_address_metrics_table_get(uint8_t sock_ind, uint64_t *dr
 
 	return errno_to_esmi_status(ret);
 }
+
+/*
+ * Function to test the HSMP interface.
+ */
+esmi_status_t esmi_test_hsmp_mailbox(uint8_t sock_ind, uint32_t *data)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
+
+	CHECK_HSMP_GET_INPUT(data);
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	msg.msg_id	= HSMP_TEST;
+	msg.response_sz = 1;
+	msg.num_args	= 1;
+	msg.sock_ind	= sock_ind;
+	msg.args[0]	= *data;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret)
+		*data = msg.args[0];
+
+	return errno_to_esmi_status(ret);
+}
