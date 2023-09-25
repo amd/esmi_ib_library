@@ -15,6 +15,8 @@
 #include <time.h>
 #include <math.h>
 #include <limits.h>
+#include <fcntl.h>
+#include <errno.h>
 
 #include <e_smi/e_smi.h>
 
@@ -85,6 +87,36 @@ static void err_bits_print(uint32_t err_bits)
 	}
 }
 
+#define ALLOWLIST_FILE "/dev/cpu/msr_allowlist"
+static char *allowlistcontent = "# MSR # Write Mask # Comment\n"
+			  "0xC0010299 0x0000000000000000\n"
+			  "0xC001029A 0x0000000000000000\n"
+			  "0xC001029B 0x0000000000000000\n"
+			  "0xC00102F0 0x0000000000000000\n"
+			  "0xC00102F1 0x0000000000000000\n";
+
+static int write_msr_allowlist_file()
+{
+	int fd;
+	int ret;
+
+	if (!access(ALLOWLIST_FILE, F_OK)) {
+		fd = open(ALLOWLIST_FILE, O_RDWR);
+		if (fd < 0) {
+			printf("Error in opening msr allowlist: %s\n", strerror(errno));
+			return errno;
+		}
+		ret = write(fd, allowlistcontent, strlen(allowlistcontent));
+		if (ret < 0) {
+			printf("Error in writing msr allowlist: %s\n", strerror(errno));
+			return errno;
+		}
+
+		close(fd);
+	}
+	printf("Successfully added msr allowlist.\n");
+}
+
 static esmi_status_t epyc_get_coreenergy(uint32_t core_id)
 {
 	esmi_status_t ret;
@@ -94,6 +126,10 @@ static esmi_status_t epyc_get_coreenergy(uint32_t core_id)
 	if (ret != ESMI_SUCCESS) {
 		printf("Failed to get core[%d] energy, Err[%d]: %s\n",
 			core_id, ret, esmi_get_err_msg(ret));
+		if (ret == ESMI_PERMISSION) {
+			printf(RED "\nTry adding msr allowlist using "
+				"--writemsrallowlist tool option.\n" RESET);
+		}
 		return ret;
 	}
 	printf("-------------------------------------------------");
@@ -126,6 +162,9 @@ static int epyc_get_sockenergy(void)
 	printf("\n");
 	err_bits_print(err_bits);
 
+	if ((err_bits >> ESMI_PERMISSION) & 0x1)
+		printf(RED "\nTry adding msr allowlist using "
+			"--writemsrallowlist tool option.\n" RESET);
 	if (err_bits > 1)
 		return ESMI_MULTI_ERROR;
 
@@ -1616,7 +1655,8 @@ static char* const feat_comm[] = {
 	"  -h, --help\t\t\t\t\t\t\tShow this help message",
 	"  -A, --showall\t\t\t\t\t\t\tShow all esmi parameter values",
 	"  -V  --version \t\t\t\t\t\tShow e-smi library version",
-	"  --testmailbox [SOCKET] [VALUE<0-0xFFFFFFFF>]\t\t\tTest HSMP mailbox interface\n",
+	"  --testmailbox [SOCKET] [VALUE<0-0xFFFFFFFF>]\t\t\tTest HSMP mailbox interface",
+	"  --writemsrallowlist \t\t\t\t\t\tWrite msr-safe allowlist file\n",
 };
 
 static char* const feat_energy[] = {
@@ -1984,6 +2024,7 @@ static int parsesmi_args(int argc,char **argv)
 		{"showmetrictablever",		no_argument,		0,	'D'},
 		{"showmetrictable",		required_argument,	0,	'J'},
 		{"version",			no_argument,		0,	'V'},
+		{"writemsrallowlist",		no_argument,		0,	'W'},
 		{0,			0,			0,	0},
 	};
 
@@ -2009,6 +2050,7 @@ static int parsesmi_args(int argc,char **argv)
 				case 'k':
 				case 'j':
 				case 'X':
+				case 'W':
 				case 'n':
 					args[0] = sudostr;
 					args[1] = argv[0];
@@ -2403,6 +2445,10 @@ static int parsesmi_args(int argc,char **argv)
 			break;
 		case 'V' :
 			print_esmi_version();
+			ret = ESMI_SUCCESS;
+			break;
+		case 'W' :
+			write_msr_allowlist_file();
 			ret = ESMI_SUCCESS;
 			break;
 		case ':' :
