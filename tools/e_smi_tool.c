@@ -1722,7 +1722,7 @@ static char* const feat_ver5_get[] = {
 static char* const feat_ver5_set[] = {
 	"  --setpcielinkratecontrol [SOCKET] [CTL<0-2>]\t\t\tSet rate control for pcie link"
 	" for a given socket",
-	"  --setpowerefficiencymode [SOCKET] [MODE<0-2>]\t\t\tSet power efficiency mode"
+	"  --setpowerefficiencymode [SOCKET] [MODE<0-3>]\t\t\tSet power efficiency mode"
 	" for a given socket",
 	"  --setdfpstaterange [SOCKET] [MAX<0-2>] [MIN<0-2>]\t\tSet df pstate range"
 	" for a given socket (MAX <= MIN)",
