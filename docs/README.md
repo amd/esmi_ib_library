@@ -344,7 +344,7 @@ Following are the value ranges and other information needed for passing it to to
 
 7.	--setpowerefficiencymode [SOCKET] [MODE]
 
-	  MODE : 0 - 2
+	  MODE : 0 - 3
 
 8.	--setdfpstaterange [SOCKET] [MAX] [MIN]
 
