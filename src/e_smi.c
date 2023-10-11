@@ -1513,18 +1513,6 @@ esmi_status_t esmi_pcie_link_rate_set(uint8_t sock_ind, uint8_t rate_ctrl, uint8
 	return errno_to_esmi_status(ret);
 }
 
-static esmi_status_t validate_pwr_efficiency_mode(uint8_t mode)
-{
-	switch (mode) {
-		case 0:
-		case 1:
-		case 2:
-			return ESMI_SUCCESS;
-		default:
-			return ESMI_INVALID_INPUT;
-	}
-}
-
 esmi_status_t esmi_pwr_efficiency_mode_set(uint8_t sock_ind, uint8_t mode)
 {
 	struct hsmp_message msg = { 0 };
@@ -1539,7 +1527,7 @@ esmi_status_t esmi_pwr_efficiency_mode_set(uint8_t sock_ind, uint8_t mode)
 	if (sock_ind >= psm->total_sockets)
 		return ESMI_INVALID_INPUT;
 
-	if (validate_pwr_efficiency_mode(mode))
+	if (mode > 3)
 		return ESMI_INVALID_INPUT;
 
 	msg.num_args	= 1;

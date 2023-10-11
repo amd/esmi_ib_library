@@ -530,6 +530,14 @@ esmi_status_t esmi_socket_power_cap_set(uint32_t socket_idx, uint32_t pcap);
  *  2 = IO performance mode: This mode sets up data fabric to maximize IO performance.
  *  This can result in lower core performance to increase the IO throughput.
  *
+ *  3 = Balanced Memory Performance Mode: This mode biases the memory subsystem and
+ *  Infinity Fabric™ performance towards efficiency, by lowering the frequency of the
+ *  fabric and the width of the xGMI links under light traffic conditions.
+ *  Core behavior is unaffected. There may be a performance impact under lightly
+ *  loaded conditions for memory-bound applications compared to the default high performance
+ *  mode. With higher memory and fabric load, the system becomes similar in performance
+ *  to the default high performance mode.
+ *
  *  @param[in] sock_ind A socket index.
  *
  *  @param[in] mode Power efficiency mode to be set.
