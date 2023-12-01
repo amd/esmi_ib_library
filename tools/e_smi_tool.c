@@ -1683,7 +1683,7 @@ static char* const feat_ver2_set[] = {
 	" for a given core (MHz)",
 	"  --setsockbl [SOCKET] [BOOSTLIMIT]\t\t\t\tSet Boost"
 	" limit for a given Socket (MHz)",
-	"  --apbdisable [SOCKET] [PSTATE<0-3>]\t\t\t\tSet Data Fabric"
+	"  --apbdisable [SOCKET] [PSTATE<0-2>]\t\t\t\tSet Data Fabric"
 	" Pstate for a given socket",
 	"  --apbenable [SOCKET]\t\t\t\t\t\tEnable the Data Fabric performance"
 	" boost algorithm for a given socket",
