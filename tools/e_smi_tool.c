@@ -1710,13 +1710,21 @@ static char* const feat_ver5_get[] = {
 	" and dimm address",
 	"  --showcclkfreqlimit [CORE]\t\t\t\t\tShow current clock frequency limit(MHz) for a given core",
 	"  --showsvipower \t\t\t\t\t\tShow svi based power telemetry of all rails for all sockets",
-	"  --showxgmibw [LINK<P0-P7,G0-G7>] [BW<AGG_BW,RD_BW,WR_BW>]\tShow xGMI bandwidth for a given socket,"
-	" linkname and bwtype",
-	"  --showiobw [SOCKET] [LINK<P0-P7,G0-G7>]\t\t\tShow IO aggregate bandwidth for a given socket and"
+	"  --showiobw [SOCKET] [LINK<P0-P3,G0-G3>]\t\t\tShow IO aggregate bandwidth for a given socket and"
 	" linkname",
 	"  --showlclkdpmlevel [SOCKET] [NBIOID<0-3>]\t\t\tShow lclk dpm level for a given nbio"
 	" in a given socket",
 	"  --showsockclkfreqlimit [SOCKET]\t\t\t\tShow current clock frequency limit(MHz) for a given socket"
+};
+
+static char* const feat_ver5_F19_M00_0F_get[] = {
+	"  --showxgmibw [LINK<P0-P3,G0-G3>] [BW<AGG_BW,RD_BW,WR_BW>]\tShow xGMI bandwidth for a given socket,"
+	" linkname and bwtype"
+};
+
+static char* const feat_ver5_F1A_M00_0F_get[] = {
+	"  --showxgmibw [LINK<P1,P3,G0-G3>] [BW<AGG_BW,RD_BW,WR_BW>]\tShow xGMI bandwidth for a given socket,"
+	" linkname and bwtype"
 };
 
 static char* const feat_ver5_set[] = {
@@ -1733,7 +1741,7 @@ static char* const feat_ver5_set[] = {
 static char* const feat_ver6_get[] = {
 	"  --showcclkfreqlimit [CORE]\t\t\t\t\tShow current clock frequency limit(MHz) for a given core",
 	"  --showsvipower \t\t\t\t\t\tShow svi based power telemetry of all rails for all sockets",
-	"  --showxgmibw [LINK<P2,P3,G0-G7>] [BW<AGG_BW,RD_BW,WR_BW>]\tShow xGMI bandwidth for a given socket,"
+	"  --showxgmibw [LINK<G0-G7>] [BW<AGG_BW,RD_BW,WR_BW>]\t\tShow xGMI bandwidth for a given socket,"
 	" linkname and bwtype",
 	"  --showiobw [SOCKET] [LINK<P2,P3,G0-G7>]\t\t\tShow IO aggregate bandwidth for a given socket and"
 	" linkname",
@@ -1744,18 +1752,6 @@ static char* const feat_ver6_get[] = {
 	"  --showmetrictable [SOCKET]\t\t\t\t\tShow Metrics Table",
 };
 
-static char* const feat_ver6_set[] = {
-	"  --setpowerlimit [SOCKET] [POWER]\t\t\t\tSet power limit"
-	" for a given socket (mWatts)",
-	"  --setcorebl [CORE] [BOOSTLIMIT]\t\t\t\tSet boost limit"
-	" for a given core (MHz)",
-	"  --setsockbl [SOCKET] [BOOSTLIMIT]\t\t\t\tSet Boost"
-	" limit for a given Socket (MHz)",
-	"  --setxgmiwidth [MIN<0-2>] [MAX<0-2>]\t\t\t\tSet xgmi link width"
-	" in a multi socket system (MAX >= MIN)",
-	"  --setlclkdpmlevel [SOCKET] [NBIOID<0-3>] [MIN<0-3>] [MAX<0-3>]Set lclk dpm level"
-	" for a given nbio in a given socket (MAX >= MIN)",
-};
 static char* const blankline[] = {""};
 
 static char **features;
@@ -1847,6 +1843,15 @@ static void add_hsmp_ver5_feat(void)
 	offset += ARRAY_SIZE(feat_ver3);
 	memcpy(features + offset, feat_ver5_get, (ARRAY_SIZE(feat_ver5_get) * sizeof(char *)));
 	offset += ARRAY_SIZE(feat_ver5_get);
+	if (sys_info.family == 0x1A) {
+		memcpy(features + offset, feat_ver5_F1A_M00_0F_get,
+		       (ARRAY_SIZE(feat_ver5_F1A_M00_0F_get) * sizeof(char *)));
+		offset += ARRAY_SIZE(feat_ver5_F1A_M00_0F_get);
+	} else {
+		memcpy(features + offset, feat_ver5_F19_M00_0F_get,
+		       (ARRAY_SIZE(feat_ver5_F19_M00_0F_get) * sizeof(char *)));
+		offset += ARRAY_SIZE(feat_ver5_F19_M00_0F_get);
+	}
 	memcpy(features + offset, blankline, sizeof(char *));
 	offset += 1;
 	memcpy(features + offset, feat_ver2_set, (ARRAY_SIZE(feat_ver2_set) * sizeof(char *)));
@@ -1870,7 +1875,7 @@ static void add_hsmp_ver6_feat(void)
 	offset += ARRAY_SIZE(feat_ver6_get);
 	memcpy(features + offset, blankline, sizeof(char *));
 	offset += 1;
-	memcpy(features + offset, feat_ver6_set, (ARRAY_SIZE(feat_ver6_set) * sizeof(char *)));
+	memcpy(features + offset, feat_ver2_set, (ARRAY_SIZE(feat_ver2_set) * sizeof(char *)));
 
 	/* version 6 cpu metrics is same as version 5 */
 	sys_info.show_addon_cpu_metrics = cpu_ver5_metrics;
@@ -1925,6 +1930,10 @@ static esmi_status_t init_proto_version_func_pointers()
 		       ARRAY_SIZE(feat_ver2_set) + ARRAY_SIZE(feat_ver5_get) +
 		       ARRAY_SIZE(feat_ver5_set) + ARRAY_SIZE(feat_ver3) +
 		       ARRAY_SIZE(feat_energy) + ARRAY_SIZE(blankline);
+		if (sys_info.family == 0x1A)
+			size = size + ARRAY_SIZE(feat_ver5_F1A_M00_0F_get);
+		else
+			size = size + ARRAY_SIZE(feat_ver5_F19_M00_0F_get);
 		features = malloc((size + 1) * sizeof(char *));
 		if (!features)
 			return ESMI_NO_MEMORY;
@@ -1935,7 +1944,7 @@ static esmi_status_t init_proto_version_func_pointers()
 	default:
 		size = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_ver2_get) +
 		       ARRAY_SIZE(feat_energy) + ARRAY_SIZE(feat_ver6_get) +
-		       ARRAY_SIZE(feat_ver6_set) +
+		       ARRAY_SIZE(feat_ver2_set) +
 		       ARRAY_SIZE(blankline);
 		features = malloc((size + 1) * sizeof(char *));
 		if (!features)
