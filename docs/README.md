@@ -310,11 +310,12 @@ For convenience purposes, following is the output from the -h flag:
 ```
 Following are the value ranges and other information needed for passing it to tool
 ```
-1.	--showxgmibandwidth [SOCKET] [LINKNAME] [BWTYPE]
+1.	--showxgmibw [SOCKET] [LINKNAME] [BWTYPE]
 
 	  LINKNAME :
-	  Genoa:P0/P1/P2/P3/G0/G1/G2/G3
-	  MI300A:P2/P3/G0/G1/G2/G3/G4/G5/G6/G7
+	  Rolling Stones:P0/P1/P2/P3/G0/G1/G2/G3
+	  Mi300A:G0/G1/G2/G3/G4/G5/G6/G7
+	  Breithorn:P1/P3/G0/G1/G2/G3
 
 	  BWTYPE : AGG_BW/RD_BW/WR_BW
 
@@ -328,9 +329,7 @@ Following are the value ranges and other information needed for passing it to to
 
 4.	--apbdisable [SOCKET] [PSTATE]
 
-	  PSTATE : 0 - 2 for hsmp protocol version 5
-
-	  PSTATE : 0 - 3 for hsmp protocol version < 5
+	  PSTATE : 0 - 2
 
 5.	--setlclkdpmlevel [SOCKET] [NBIOID] [MIN] [MAX]
 
