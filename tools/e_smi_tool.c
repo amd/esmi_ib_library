@@ -2201,8 +2201,7 @@ static int parsesmi_args(int argc,char **argv)
 
 	if (opt == 'l') {
 		// make sure optind is valid  ... or another option
-		if ((optind + 2) >= argc || *argv[optind] == '-'
-		    || *argv[optind + 1] == '-' || *argv[optind + 2] == '-') {
+		if ((optind + 2) >= argc ) {
 			printf("\nOption '-%c' requires FOUR arguments"
 			 " <socket> <nbioid> <min_value> <max_value>\n\n", opt);
 			show_usage(argv[0]);
@@ -2214,6 +2213,11 @@ static int parsesmi_args(int argc,char **argv)
 			printf("Option '-%c' requires 2nd, 3rd, 4th argument as valid"
 					" numeric value\n\n", opt);
 			show_usage(argv[0]);
+			return ESMI_INVALID_INPUT;
+		}
+		if (*argv[optind] == '-' || *argv[optind + 1] == '-' ||
+		    *argv[optind + 2] == '-') {
+			printf(MAG "Negative values are not accepted\n" RESET);
 			return ESMI_INVALID_INPUT;
 		}
 	}
