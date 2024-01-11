@@ -26,45 +26,28 @@ set(E_SMI_COMPONENT "lib${E_SMI}")
 set(E_SMI_TARGET "${E_SMI}64")
 set(E_SMI_STATIC "${E_SMI_TARGET}_static")
 
-# The following default version values should be updated as appropriate for
-# ABI breaks (update MAJOR and MINOR), and ABI/API additions (update MINOR).
-# Until ABI stabilizes VERSION_MAJOR will be 0. This should be over-ridden
-# by git tags (through "git describe") when they are present.
-set(PKG_VERSION_MAJOR 1)
-set(PKG_VERSION_MINOR 0)
-set(PKG_VERSION_PATCH 0)
-set(PKG_VERSION_NUM_COMMIT 0)
-
 ################# Determine the library version #########################
 ## Setup the package version based on git tags.
 set(PKG_VERSION_GIT_TAG_PREFIX "esmi_pkg_ver")
-set(SO_VERSION_GIT_TAG_PREFIX "esmi_so_ver")
 
 set(ENV{ESMI_BUILD_ID} "${ESMI_BUILD_ID}")
-# provide git to utilities
 
+# provide git to utilities
 find_program (GIT NAMES git)
-get_package_version_number("1.0.0" ${PKG_VERSION_GIT_TAG_PREFIX} GIT)
-# VERSION_* variables should be set by get_version_from_tag
+get_package_version_number("1.0.0.0" ${PKG_VERSION_GIT_TAG_PREFIX} GIT)
 message("Package version: ${PKG_VERSION_STR}")
 
 # Debian package specific variables
 # Set a default value for the package version
-get_version_from_tag("1.0.0.0" ${SO_VERSION_GIT_TAG_PREFIX} GIT)
 
-# VERSION_* variables should be set by get_version_from_tag
+# VERSION_* variables should be set by get_package_version_number
 if (${VERSION_PATCH})
     set (${E_SMI}_VERSION_PATCH "${VERSION_PATCH}")
-    set(SO_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 else()
     set(${E_SMI}_VERSION_PATCH "0")
-    set(SO_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}")
 endif ()
-if (DEFINED VERSION_ID)
-    set (${E_SMI}_VERSION_BUILD "${VERSION_ID}")
-else()
-    set(${E_SMI}_VERSION_BUILD "0")
-endif()
+set(SO_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
+set (${E_SMI}_VERSION_BUILD "${VERSION_ID}")
 set(${E_SMI}_VERSION_MAJOR "${VERSION_MAJOR}")
 set(${E_SMI}_VERSION_MINOR "${VERSION_MINOR}")
 message("SOVERSION: ${SO_VERSION_STRING}")
