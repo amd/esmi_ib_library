@@ -771,10 +771,12 @@ esmi_status_t esmi_core_boostlimit_set(uint32_t core_ind,
 
 	CHECK_HSMP_INPUT();
 
-	/* TODO check boostlimit against a valid range */
 	if (core_ind >= psm->total_cores) {
 		return ESMI_INVALID_INPUT;
 	}
+
+	if (boostlimit > UINT16_MAX)
+		return ESMI_INVALID_INPUT;
 
 	if (!psm->map)
 		return ESMI_IO_ERROR;
@@ -807,6 +809,9 @@ esmi_status_t esmi_socket_boostlimit_set(uint32_t sock_ind,
 	if (sock_ind >= psm->total_sockets) {
 		return ESMI_INVALID_INPUT;
 	}
+
+	if (boostlimit > UINT16_MAX)
+		return ESMI_INVALID_INPUT;
 
 	msg.num_args = 1;
 	msg.sock_ind = sock_ind;

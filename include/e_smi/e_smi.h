@@ -626,7 +626,7 @@ esmi_status_t esmi_socket_c0_residency_get(uint32_t socket_idx,
  *  @param[in] cpu_ind a cpu index is a given core to set the boostlimit
  *
  *  @param[in] boostlimit a uint32_t that indicates the desired boostlimit
- *  value of a given core
+ *  value of a given core. The maximum accepted value is 65535MHz(UINT16_MAX).
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
@@ -646,7 +646,7 @@ esmi_status_t esmi_core_boostlimit_set(uint32_t cpu_ind, uint32_t boostlimit);
  *  @param[in] socket_idx a socket index to set boostlimit.
  *
  *  @param[in] boostlimit a uint32_t that indicates the desired boostlimit
- *  value of a particular socket.
+ *  value of a particular socket. The maximum accepted value is 65535MHz(UINT16_MAX).
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
