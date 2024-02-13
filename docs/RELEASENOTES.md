@@ -7,6 +7,9 @@ The EPYC™ System Management Interface In-band Library, or E-SMI library, is a 
 
 # Changes Notes
 
+## Highlights of release v3.0.3
+* Bug fix release
+
 ## Highlights of release v3.0.0
 * AMD MI300 processors are supported in this release.
 * Library is modified to support platform specific check in each message in an organised way.
