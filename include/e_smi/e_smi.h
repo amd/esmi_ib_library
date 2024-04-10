@@ -477,6 +477,22 @@ esmi_status_t esmi_socket_power_cap_max_get(uint32_t socket_idx,
  */
 esmi_status_t esmi_pwr_svi_telemetry_all_rails_get(uint32_t sock_ind, uint32_t *power);
 
+/**
+ *  @brief Get the current power efficiency mode.
+ *
+ *  @details This function returns the current power
+ *  efficiency mode.
+ *
+ *  @param[in] sock_ind Socket index.
+ *
+ *  @param[inout] mode Input buffer to return the mode.
+ *  Refer \ref esmi_pwr_efficiency_mode_set for details on the modes
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_pwr_efficiency_mode_get(uint8_t sock_ind, uint8_t *mode);
 
 /** @} */  // end of PowerQuer
 

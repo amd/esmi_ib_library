@@ -1543,6 +1543,32 @@ esmi_status_t esmi_pwr_efficiency_mode_set(uint8_t sock_ind, uint8_t mode)
 	return errno_to_esmi_status(ret);
 }
 
+esmi_status_t esmi_pwr_efficiency_mode_get(uint8_t sock_ind, uint8_t *mode)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
+
+	msg.msg_id	= HSMP_SET_POWER_MODE;
+	if (check_sup(msg.msg_id))
+		return ESMI_NO_HSMP_MSG_SUP;
+
+	CHECK_HSMP_GET_INPUT(mode);
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	msg.num_args	= 1;
+	msg.response_sz = 1;
+	msg.sock_ind	= sock_ind;
+	msg.args[0]	= BIT(31);
+	ret = hsmp_xfer(&msg, O_RDWR);
+	/* bits 0-2 contain current mode */
+	if (!ret)
+		*mode =  msg.args[0] & (BIT(3) - 1);
+
+	return errno_to_esmi_status(ret);
+}
+
 esmi_status_t esmi_df_pstate_range_set(uint8_t sock_ind, uint8_t max_pstate,
 				       uint8_t min_pstate)
 {
