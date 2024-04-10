@@ -1733,3 +1733,144 @@ esmi_status_t esmi_test_hsmp_mailbox(uint8_t sock_ind, uint32_t *data)
 
 	return errno_to_esmi_status(ret);
 }
+
+/*
+ * Function to set CpuRailIsoFreqPolicy.
+ */
+esmi_status_t esmi_cpurail_isofreq_policy_set(uint8_t sock_ind, bool *val)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
+
+	msg.msg_id	= HSMP_CPU_RAIL_ISO_FREQ_POLICY;
+	if (check_sup(msg.msg_id))
+		return ESMI_NO_HSMP_MSG_SUP;
+
+	CHECK_HSMP_GET_INPUT(val);
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	msg.num_args	= 1;
+	msg.response_sz = 1;
+	msg.sock_ind	= sock_ind;
+	msg.args[0] 	= *val;
+
+	ret = hsmp_xfer(&msg, O_RDWR);
+	if (!ret)
+		*val = msg.args[0] & BIT(0);
+
+	return errno_to_esmi_status(ret);
+}
+
+/*
+ * Function to get CpuRailIsoFreqPolicy.
+ */
+esmi_status_t esmi_cpurail_isofreq_policy_get(uint8_t sock_ind, bool *val)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
+
+	msg.msg_id	= HSMP_CPU_RAIL_ISO_FREQ_POLICY;
+	if (check_sup(msg.msg_id))
+		return ESMI_NO_HSMP_MSG_SUP;
+
+	CHECK_HSMP_GET_INPUT(val);
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	msg.num_args	= 1;
+	msg.response_sz = 1;
+	msg.sock_ind	= sock_ind;
+	msg.args[0] 	= BIT(31);
+
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret)
+		*val = msg.args[0] & BIT(0);
+
+	return errno_to_esmi_status(ret);
+}
+
+/*
+ * Function to enable/disable DF C-state.
+ */
+esmi_status_t esmi_dfc_enable_set(uint8_t sock_ind, bool *val)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
+
+	msg.msg_id	= HSMP_DFC_ENABLE_CTRL;
+	if (check_sup(msg.msg_id))
+		return ESMI_NO_HSMP_MSG_SUP;
+
+	CHECK_HSMP_GET_INPUT(val);
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	msg.num_args	= 1;
+	msg.sock_ind	= sock_ind;
+	msg.args[0]	= *val;
+	msg.response_sz = 1;
+
+	ret = hsmp_xfer(&msg, O_RDWR);
+	if (!ret)
+		*val = msg.args[0] & BIT(0);
+
+	return errno_to_esmi_status(ret);
+}
+
+/*
+ * Function to get DF C-state status.
+ */
+esmi_status_t esmi_dfc_ctrl_setting_get(uint8_t sock_ind, bool *val)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
+
+	msg.msg_id	= HSMP_DFC_ENABLE_CTRL;
+	if (check_sup(msg.msg_id))
+		return ESMI_NO_HSMP_MSG_SUP;
+
+	CHECK_HSMP_GET_INPUT(val);
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	msg.num_args	= 1;
+	msg.sock_ind	= sock_ind;
+	msg.args[0]	= BIT(31);
+	msg.response_sz = 1;
+
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret)
+		*val = msg.args[0] & BIT(0);
+
+	return errno_to_esmi_status(ret);
+}
+
+/*
+ * Function to set xGMI P-state range.
+ */
+esmi_status_t esmi_xgmi_pstate_range_set(uint8_t min_state, uint8_t max_state)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
+
+	msg.msg_id	= HSMP_SET_XGMI_PSTATE_RANGE;
+	if (check_sup(msg.msg_id))
+		return ESMI_NO_HSMP_MSG_SUP;
+
+	CHECK_HSMP_INPUT();
+
+	if (max_state > min_state || min_state > 1)
+		return ESMI_INVALID_INPUT;
+
+	msg.num_args	= 1;
+	msg.sock_ind	= 0;
+	msg.args[0]	= min_state << 8 | max_state;
+	ret = hsmp_xfer(&msg, O_WRONLY);
+
+	return errno_to_esmi_status(ret);
+}

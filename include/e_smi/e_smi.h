@@ -395,6 +395,42 @@ esmi_status_t esmi_socket_freq_range_get(uint8_t sock_ind, uint16_t *fmax, uint1
  */
 esmi_status_t esmi_current_freq_limit_core_get(uint32_t core_id, uint32_t *freq);
 
+/**
+ *  @brief Get the CpuRailIsoFreqPolicy.
+ *
+ *  @details This function gets the CpuRailIsoFreqPolicy.
+ *
+ *  @param[in] socket_idx a socket index
+ *
+ *  @param[in] val Input buffer containing boolean value which indicates whether all cores on both
+ *  rails have same frequency limit or different frequency limit.
+ *  All cores on both rails have same freq limit - 1
+ *  Each rail has different independent frequency limit - 0
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_cpurail_isofreq_policy_get(uint8_t sock_ind, bool *val);
+
+/**
+ *  @brief get the DfcEnable.
+ *
+ *  @details This function gets DF C-state enabling control.
+ *  DF C-state is a low power state for IOD.
+ *
+ *  @param[in] socket_idx a socket index
+ *
+ *  @param[in] val Input buffer holds a boolean which indicates whether DFC is enabled or disabled.
+ *  Enable DFC - 1
+ *  Disable DFC - 0
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_dfc_ctrl_setting_get(uint8_t sock_ind, bool *val);
+
 /** @} */  // end of SystemStatisticsQuer
 
 /*****************************************************************************/
@@ -577,6 +613,48 @@ esmi_status_t esmi_socket_power_cap_set(uint32_t socket_idx, uint32_t pcap);
  *
  */
 esmi_status_t esmi_pwr_efficiency_mode_set(uint8_t sock_ind, uint8_t mode);
+
+/**
+ *  @brief Set the CpuRailIsoFreqPolicy.
+ *
+ *  @details This function sets the CpuRailIsoFreqPolicy.
+ *
+ *  If a socket wide limit (e.g. PPT)is setting the core clock frequency, then this setting has
+ *  no effect.
+ *  For other limiters specific to CPU power rails (e.g. TDC), this policy allows or disables
+ *  independent core clocks per rail(VDDCR_CPU0 or VDDCR_CPU1).
+ *
+ *  @param[in] socket_idx a socket index
+ *
+ *  @param[in] val Input buffer to contian a boolean which indicates whether all cores on both
+ *  rails have same frequency limit or different frequency limit.
+ *  All cores on both rails have same freq limit - 1
+ *  Each rail has different independent frequency limit - 0
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_cpurail_isofreq_policy_set(uint8_t sock_ind, bool *val);
+
+/**
+ *  @brief Set the DfcEnable.
+ *
+ *  @details This function sets DF C-state enabling control.
+ *  DF C-state is a low power state for IOD.
+ *
+ *  @param[in] socket_idx a socket index
+ *
+ *  @param[in] val Input buffer holds a boolean which indicates whether to
+ *  disable DFC or to enable DFC.
+ *  Enable DFC - 1
+ *  Disable DFC - 0
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_dfc_enable_set(uint8_t sock_ind, bool *val);
 
 /** @} */  // end of PowerCont
 
@@ -1021,6 +1099,25 @@ esmi_status_t esmi_pcie_link_rate_set(uint8_t sock_ind, uint8_t rate_ctrl, uint8
  *
  */
 esmi_status_t esmi_df_pstate_range_set(uint8_t sock_ind, uint8_t max_pstate, uint8_t min_pstate);
+
+/**
+ *  @brief Set xgmi pstate range.
+ *
+ *  @details This function will set the max and min xgmi pstate.
+ *  Acceptable values for the P-state are 0(high performance) and 1(low performance) with
+ *  max_state <= min_state.
+ *  XGMI pstate range can be set from both HSMP and APML, the most
+ *  recent of the two is enforced.
+ *
+ *  @param[in] max_pstate Maximum pstate value to be set.
+ *
+ *  @param[in] min_pstate Minimum pstate value to be set.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_xgmi_pstate_range_set(uint8_t max_state, uint8_t min_state);
 
 /** @} */  // end of PStateCont
 
