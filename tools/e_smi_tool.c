@@ -1722,15 +1722,23 @@ static char* const feat_ver5_F19_M00_0F_get[] = {
 	" linkname and bwtype"
 };
 
-static char* const feat_ver5_F1A_M00_0F_get[] = {
+static char* const feat_ver5_F19_M00_0F_set[] = {
+	"  --setpowerefficiencymode [SOCKET] [MODE<0-3>]\t\t\tSet power efficiency mode"
+	" for a given socket",
+};
+
+static char* const feat_ver5_F1A_M00_1F_get[] = {
 	"  --showxgmibw [LINK<P1,P3,G0-G3>] [BW<AGG_BW,RD_BW,WR_BW>]\tShow xGMI bandwidth for a given socket,"
 	" linkname and bwtype"
 };
 
+static char* const feat_ver5_F1A_M00_1F_set[] = {
+	"  --setpowerefficiencymode [SOCKET] [MODE<0-5>]\t\t\tSet power efficiency mode"
+	" for a given socket",
+};
+
 static char* const feat_ver5_set[] = {
 	"  --setpcielinkratecontrol [SOCKET] [CTL<0-2>]\t\t\tSet rate control for pcie link"
-	" for a given socket",
-	"  --setpowerefficiencymode [SOCKET] [MODE<0-3>]\t\t\tSet power efficiency mode"
 	" for a given socket",
 	"  --setdfpstaterange [SOCKET] [MAX<0-2>] [MIN<0-2>]\t\tSet df pstate range"
 	" for a given socket (MAX <= MIN)",
@@ -1843,10 +1851,10 @@ static void add_hsmp_ver5_feat(void)
 	offset += ARRAY_SIZE(feat_ver3);
 	memcpy(features + offset, feat_ver5_get, (ARRAY_SIZE(feat_ver5_get) * sizeof(char *)));
 	offset += ARRAY_SIZE(feat_ver5_get);
-	if (sys_info.family == 0x1A) {
-		memcpy(features + offset, feat_ver5_F1A_M00_0F_get,
-		       (ARRAY_SIZE(feat_ver5_F1A_M00_0F_get) * sizeof(char *)));
-		offset += ARRAY_SIZE(feat_ver5_F1A_M00_0F_get);
+	if (sys_info.family == 0x1A && sys_info.model <= 0x1F) {
+		memcpy(features + offset, feat_ver5_F1A_M00_1F_get,
+		       (ARRAY_SIZE(feat_ver5_F1A_M00_1F_get) * sizeof(char *)));
+		offset += ARRAY_SIZE(feat_ver5_F1A_M00_1F_get);
 	} else {
 		memcpy(features + offset, feat_ver5_F19_M00_0F_get,
 		       (ARRAY_SIZE(feat_ver5_F19_M00_0F_get) * sizeof(char *)));
@@ -1857,6 +1865,16 @@ static void add_hsmp_ver5_feat(void)
 	memcpy(features + offset, feat_ver2_set, (ARRAY_SIZE(feat_ver2_set) * sizeof(char *)));
 	offset += ARRAY_SIZE(feat_ver2_set);
 	memcpy(features + offset, feat_ver5_set, (ARRAY_SIZE(feat_ver5_set) * sizeof(char *)));
+	offset += ARRAY_SIZE(feat_ver5_set);
+	if (sys_info.family == 0x1A && sys_info.model <= 0x1F) {
+		memcpy(features + offset, feat_ver5_F1A_M00_1F_set,
+		       (ARRAY_SIZE(feat_ver5_F1A_M00_1F_set) * sizeof(char *)));
+		offset += ARRAY_SIZE(feat_ver5_F1A_M00_1F_set);
+	} else {
+		memcpy(features + offset, feat_ver5_F19_M00_0F_set,
+		       (ARRAY_SIZE(feat_ver5_F19_M00_0F_set) * sizeof(char *)));
+		offset += ARRAY_SIZE(feat_ver5_F19_M00_0F_set);
+	}
 
 	/* proto version 5 has extra socket metrics as well as extra cpu metrics */
 	sys_info.show_addon_cpu_metrics = cpu_ver5_metrics;
@@ -1930,10 +1948,13 @@ static esmi_status_t init_proto_version_func_pointers()
 		       ARRAY_SIZE(feat_ver2_set) + ARRAY_SIZE(feat_ver5_get) +
 		       ARRAY_SIZE(feat_ver5_set) + ARRAY_SIZE(feat_ver3) +
 		       ARRAY_SIZE(feat_energy) + ARRAY_SIZE(blankline);
-		if (sys_info.family == 0x1A)
-			size = size + ARRAY_SIZE(feat_ver5_F1A_M00_0F_get);
-		else
-			size = size + ARRAY_SIZE(feat_ver5_F19_M00_0F_get);
+		if (sys_info.family == 0x1A && sys_info.model <= 0x1f) {
+			size += ARRAY_SIZE(feat_ver5_F1A_M00_1F_get);
+			size += ARRAY_SIZE(feat_ver5_F1A_M00_1F_set);
+		} else {
+			size += ARRAY_SIZE(feat_ver5_F19_M00_0F_get);
+			size += ARRAY_SIZE(feat_ver5_F19_M00_0F_set);
+		}
 		features = malloc((size + 1) * sizeof(char *));
 		if (!features)
 			return ESMI_NO_MEMORY;
