@@ -164,6 +164,10 @@ char * esmi_get_err_msg(esmi_status_t esmi_err)
 			return "HSMP interface not supported/enabled";
 		case ESMI_NO_HSMP_MSG_SUP:
 			return "HSMP message/command not supported";
+		case ESMI_PRE_REQ_NOT_SAT:
+			return "Prerequisite to execute the command not satisfied";
+		case ESMI_SMU_BUSY:
+			return "SMU is busy";
 		default:
 			return "Unknown error";
 	}
@@ -191,6 +195,8 @@ static esmi_status_t errno_to_esmi_status(int err)
 		case EINVAL:	return ESMI_INVALID_INPUT;
 		case ETIMEDOUT:	return ESMI_HSMP_TIMEOUT;
 		case ENOMSG:	return ESMI_NO_HSMP_MSG_SUP;
+		case EREMOTEIO:	return ESMI_PRE_REQ_NOT_SAT;
+		case EBUSY:	return ESMI_SMU_BUSY;
 		default:	return ESMI_UNKNOWN_ERROR;
 	}
 }

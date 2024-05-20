@@ -157,6 +157,8 @@ typedef enum {
 	ESMI_INVALID_INPUT,	//!< Input value is invalid
 	ESMI_HSMP_TIMEOUT,	//!< HSMP message is timedout
 	ESMI_NO_HSMP_MSG_SUP,	//!< HSMP message/feature not supported.
+	ESMI_PRE_REQ_NOT_SAT,	//!< Prerequisite to execute the command not satisfied
+	ESMI_SMU_BUSY,		//!< SMU is busy
 } esmi_status_t;
 
 /****************************************************************************/
