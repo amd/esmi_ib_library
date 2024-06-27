@@ -219,9 +219,14 @@ static esmi_status_t create_energy_monitor(void)
 	return ESMI_SUCCESS;
 }
 
-static esmi_status_t create_msr_monitor(void)
+static esmi_status_t create_msr_safe_monitor(void)
 {
 	return errno_to_esmi_status(find_msr_safe());
+}
+
+static esmi_status_t create_msr_monitor(void)
+{
+	return errno_to_esmi_status(find_msr());
 }
 
 /*
@@ -357,6 +362,7 @@ esmi_status_t esmi_init()
 	sm.init_status = ESMI_NOT_INITIALIZED;
 	sm.energy_status = ESMI_NOT_INITIALIZED;
 	sm.msr_status = ESMI_NOT_INITIALIZED;
+	sm.msr_safe_status = ESMI_NOT_INITIALIZED;
 	sm.hsmp_status = ESMI_NOT_INITIALIZED;
 
 	ret = detect_packages(&sm);
@@ -367,9 +373,19 @@ esmi_status_t esmi_init()
 		return ESMI_NOT_SUPPORTED;
 
 	if (check_for_64bit_rapl_reg(&sm)) {
-		ret = create_msr_monitor();
-		if (ret == ESMI_SUCCESS)
-			sm.msr_status = ESMI_INITIALIZED;
+		ret = create_msr_safe_monitor();
+		if (ret == ESMI_SUCCESS) {
+			sm.msr_safe_status = ESMI_INITIALIZED;
+		} else {
+			ret = create_energy_monitor();
+			if (ret == ESMI_SUCCESS) {
+				sm.energy_status = ESMI_INITIALIZED;
+			} else {
+				ret = create_msr_monitor();
+				if (ret == ESMI_SUCCESS)
+					sm.msr_status = ESMI_INITIALIZED;
+			}
+		}
 	} else {
 		ret = create_energy_monitor();
 		if (ret == ESMI_SUCCESS)
@@ -393,7 +409,7 @@ esmi_status_t esmi_init()
 		}
 	}
 
-	if (sm.energy_status && sm.msr_status && sm.hsmp_status)
+	if (sm.energy_status && sm.msr_status && sm.msr_safe_status && sm.hsmp_status)
 		sm.init_status = ESMI_NO_DRV;
 	else
 		sm.init_status = ESMI_INITIALIZED;
@@ -479,7 +495,8 @@ esmi_status_t esmi_number_of_sockets_get(uint32_t *sockets)
 	if (psm->init_status == ESMI_NOT_INITIALIZED) {\
 		return ESMI_NOT_INITIALIZED;\
 	} else if ((psm->energy_status == ESMI_NOT_INITIALIZED) && \
-			(psm->msr_status == ESMI_NOT_INITIALIZED)) {\
+			(psm->msr_status == ESMI_NOT_INITIALIZED) && \
+			(psm->msr_safe_status == ESMI_NOT_INITIALIZED)) {\
 		return ESMI_NO_ENERGY_DRV;\
 	}\
 	if (NULL == parg) {\
@@ -524,15 +541,19 @@ esmi_status_t esmi_core_energy_get(uint32_t core_ind, uint64_t *penergy)
 	}
 	core_ind %= psm->total_cores/psm->threads_per_core;
 
-	if (!psm->energy_status)
+	if (!psm->energy_status) {
 		/*
 		 * The hwmon enumeration of energy%d_input entries starts
 		 * from 1.
 		 */
 		ret = read_energy_drv(core_ind + 1, penergy);
 
-	else
-		ret = read_msr_drv(core_ind, penergy, ENERGY_CORE_MSR);
+	} else {
+		if (!psm->msr_safe_status)
+			ret = read_msr_drv(MSR_SAFE_TYPE, core_ind, penergy, ENERGY_CORE_MSR);
+		else
+			ret = read_msr_drv(MSR_TYPE, core_ind, penergy, ENERGY_CORE_MSR);
+	}
 
 	return errno_to_esmi_status(ret);
 }
@@ -562,7 +583,10 @@ esmi_status_t esmi_socket_energy_get(uint32_t sock_ind, uint64_t *penergy)
 		status = esmi_first_online_core_on_socket(sock_ind, &core_ind);
 		if (status != ESMI_SUCCESS)
 			return status;
-		ret = read_msr_drv(core_ind, penergy, ENERGY_PKG_MSR);
+		if (!psm->msr_safe_status)
+			ret = read_msr_drv(MSR_SAFE_TYPE, core_ind, penergy, ENERGY_PKG_MSR);
+		else
+			ret = read_msr_drv(MSR_TYPE, core_ind, penergy, ENERGY_PKG_MSR);
 	}
 
 	return errno_to_esmi_status(ret);
@@ -582,7 +606,7 @@ esmi_status_t esmi_all_energies_get(uint64_t *penergy)
 	if (!psm->energy_status)
 		ret = batch_read_energy_drv(penergy, cpus);
 	else
-		ret = batch_read_msr_drv(penergy, cpus);
+		ret = batch_read_msr_drv(MSR_TYPE, penergy, cpus);
 
 	return errno_to_esmi_status(ret);
 }

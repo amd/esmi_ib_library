@@ -72,6 +72,7 @@ struct system_metrics {
 	esmi_status_t init_status;	// esmi init status
 	esmi_status_t energy_status;	// energy driver status
 	esmi_status_t msr_status;	// MSR driver status
+	esmi_status_t msr_safe_status;	// MSR safe driver status
 	esmi_status_t hsmp_status;	// hsmp driver status
 	struct cpu_mapping *map;
 	uint8_t df_pstate_max_limit;	// df pstate maximum limit
@@ -88,16 +89,18 @@ struct system_metrics {
 typedef enum {
 	ENERGY_TYPE,				//!< Core and Socket Energy coordinate
 	MSR_SAFE_TYPE,				//!< RAPL MSR Energy read coordinate
+	MSR_TYPE,				//!< RAPL MSR Energy read coordinate
 	MONITOR_TYPE_MAX			//!< Max Monitor Type coordinate
 } monitor_types_t;
 
 int read_energy_drv(uint32_t sensor_id, uint64_t *val);
-int read_msr_drv(uint32_t sensor_id, uint64_t *pval, uint64_t reg);
+int read_msr_drv(monitor_types_t type, uint32_t sensor_id, uint64_t *pval, uint64_t reg);
 int batch_read_energy_drv(uint64_t *pval, uint32_t cpus);
-int batch_read_msr_drv(uint64_t *pval, uint32_t cpus);
+int batch_read_msr_drv(monitor_types_t type, uint64_t *pval, uint32_t cpus);
 
 int find_energy(char *devname, char *hwmon_name);
 int find_msr_safe();
+int find_msr();
 int hsmp_xfer(struct hsmp_message *msg, int mode);
 void init_platform_info(struct system_metrics *sm);
 

@@ -26,9 +26,11 @@ static uint64_t energy_unit = 0;
 /* NODE FILENAMES */
 static char energy_file[] = "energy#_input";
 static char msr_safe_file[] = "#/msr_safe";
+static char msr_file[] = "#/msr";
 
 static char *filenames[MONITOR_TYPE_MAX] = { energy_file,
-					     msr_safe_file
+					     msr_safe_file,
+					     msr_file
 };
 
 int find_energy(char *devname, char *hwmon_name)
@@ -180,13 +182,25 @@ int find_msr_safe()
 	return ret;
 }
 
-static int read_energy_unit()
+int find_msr()
 {
 	char file_path[FILEPATHSIZ];
 	int ret;
 
-	make_path(MSR_SAFE_TYPE, MSR_PATH, 0, file_path);
+	make_path(MSR_TYPE, MSR_PATH, 0, file_path);
+	ret = access(file_path, F_OK);
+	if (ret == -1)
+		return errno;
 
+	return ret;
+}
+
+static int read_energy_unit(monitor_types_t type)
+{
+	char file_path[FILEPATHSIZ];
+	int ret;
+
+	make_path(type, MSR_PATH, 0, file_path);
 	ret = readmsr_u64(file_path, &energy_unit, ENERGY_PWR_UNIT_MSR);
 	if (ret)
 		return ret;
@@ -208,7 +222,7 @@ int read_energy_drv(uint32_t sensor_id, uint64_t *pval)
 	return readsys_u64(file_path, pval);
 }
 
-int read_msr_drv(uint32_t sensor_id, uint64_t *pval, uint64_t reg)
+int read_msr_drv(monitor_types_t type, uint32_t sensor_id, uint64_t *pval, uint64_t reg)
 {
         int ret;
         char file_path[FILEPATHSIZ];
@@ -216,11 +230,11 @@ int read_msr_drv(uint32_t sensor_id, uint64_t *pval, uint64_t reg)
         *pval = 0;
 
 	if (!energy_unit){
-		ret = read_energy_unit();
+		ret = read_energy_unit(type);
 		if (ret)
 			return ret;
 	}
-        make_path(MSR_SAFE_TYPE, MSR_PATH, sensor_id, file_path);
+        make_path(type, MSR_PATH, sensor_id, file_path);
         ret = readmsr_u64(file_path, pval, reg);
 
         *pval = *pval * pow(0.5, (double)energy_unit) * 1000000;
@@ -247,19 +261,19 @@ int batch_read_energy_drv(uint64_t *pval, uint32_t cpus)
 	return status;
 }
 
-int batch_read_msr_drv(uint64_t *pval, uint32_t cpus)
+int batch_read_msr_drv(monitor_types_t type, uint64_t *pval, uint32_t cpus)
 {
 	char file_path[FILEPATHSIZ];
 	int i, ret;
 
 	if (!energy_unit){
-		ret = read_energy_unit();
+		ret = read_energy_unit(type);
 		if (ret)
 			return ret;
 	}
 	memset(pval, 0, cpus * sizeof(uint64_t));
 	for (i = 0; i < cpus; i++) {
-		make_path(MSR_SAFE_TYPE, MSR_PATH, i, file_path);
+		make_path(type, MSR_PATH, i, file_path);
 		ret = readmsr_u64(file_path, &pval[i], ENERGY_CORE_MSR);
 		if (ret != 0 && ret != ENODEV)
 			return ret;
