@@ -111,6 +111,7 @@ void init_platform_info(struct system_metrics *sm)
 				lut = tbl_turin;
 				lut_size = ARRAY_SIZE(tbl_turin);
 				sm->max_pwr_eff_mode = MAX_PWR_EFF_MODE_FAM0x1A;
+				sm->hsmp_rapl_reading = true;
 			} else {
 				lut = tbl_genoa;
 				lut_size = ARRAY_SIZE(tbl_genoa);
@@ -131,6 +132,7 @@ void init_platform_info(struct system_metrics *sm)
 			lut = tbl_turin;
 			lut_size = ARRAY_SIZE(tbl_turin);
 			sm->max_pwr_eff_mode = MAX_PWR_EFF_MODE_FAM0x1A;
+			sm->hsmp_rapl_reading = true;
 			break;
 	}
 }

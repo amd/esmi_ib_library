@@ -211,7 +211,7 @@ static esmi_status_t errno_to_esmi_status(int err)
  * Find the amd_energy driver is present and get the
  * path from driver initialzed sysfs path
  */
-static esmi_status_t create_energy_monitor(void)
+static esmi_status_t create_amd_energy_monitor(void)
 {
 	static char hwmon_name[FILESIZ];
 
@@ -364,6 +364,35 @@ static bool check_for_64bit_rapl_reg(struct system_metrics *psysm)
 	return ret;
 }
 
+static void create_energy_monitor(struct system_metrics *sm)
+{
+	if (check_for_64bit_rapl_reg(sm)) {
+		if (sm->hsmp_status == ESMI_INITIALIZED
+		    && sm->hsmp_rapl_reading)
+			return;
+
+		if (create_msr_safe_monitor() == ESMI_SUCCESS) {
+			sm->msr_safe_status = ESMI_INITIALIZED;
+			return;
+		}
+
+		if (create_amd_energy_monitor() == ESMI_SUCCESS) {
+			sm->energy_status = ESMI_INITIALIZED;
+			return;
+		}
+
+		if (create_msr_monitor() == ESMI_SUCCESS) {
+			sm->msr_status = ESMI_INITIALIZED;
+			return;
+		}
+	} else {
+		if (create_amd_energy_monitor() == ESMI_SUCCESS)
+			sm->energy_status = ESMI_INITIALIZED;
+	}
+
+	return;
+}
+
 /*
  * First initialization function to be executed and confirming
  * all the monitor or driver objects should be initialized or not
@@ -386,25 +415,6 @@ esmi_status_t esmi_init()
 	if (sm.cpu_family < 0x19)
 		return ESMI_NOT_SUPPORTED;
 
-	if (check_for_64bit_rapl_reg(&sm)) {
-		ret = create_msr_safe_monitor();
-		if (ret == ESMI_SUCCESS) {
-			sm.msr_safe_status = ESMI_INITIALIZED;
-		} else {
-			ret = create_energy_monitor();
-			if (ret == ESMI_SUCCESS) {
-				sm.energy_status = ESMI_INITIALIZED;
-			} else {
-				ret = create_msr_monitor();
-				if (ret == ESMI_SUCCESS)
-					sm.msr_status = ESMI_INITIALIZED;
-			}
-		}
-	} else {
-		ret = create_energy_monitor();
-		if (ret == ESMI_SUCCESS)
-			sm.energy_status = ESMI_INITIALIZED;
-	}
 	ret = create_hsmp_monitor(&sm);
 	if (ret == ESMI_SUCCESS) {
 		ret = create_cpu_mappings(&sm);
@@ -422,6 +432,8 @@ esmi_status_t esmi_init()
 			init_platform_info(&sm);
 		}
 	}
+
+	create_energy_monitor(&sm);
 
 	if (sm.energy_status && sm.msr_status && sm.msr_safe_status && sm.hsmp_status)
 		sm.init_status = ESMI_NO_DRV;
@@ -510,7 +522,8 @@ esmi_status_t esmi_number_of_sockets_get(uint32_t *sockets)
 		return ESMI_NOT_INITIALIZED;\
 	} else if ((psm->energy_status == ESMI_NOT_INITIALIZED) && \
 			(psm->msr_status == ESMI_NOT_INITIALIZED) && \
-			(psm->msr_safe_status == ESMI_NOT_INITIALIZED)) {\
+			(psm->msr_safe_status == ESMI_NOT_INITIALIZED) && \
+			(psm->hsmp_status == ESMI_NOT_INITIALIZED || !psm->hsmp_rapl_reading)) {\
 		return ESMI_NO_ENERGY_DRV;\
 	}\
 	if (NULL == parg) {\
@@ -693,7 +706,9 @@ esmi_status_t esmi_core_energy_get(uint32_t core_ind, uint64_t *penergy)
 	}
 	core_ind %= psm->total_cores/psm->threads_per_core;
 
-	if (!psm->energy_status) {
+	if (!psm->hsmp_status && psm->hsmp_rapl_reading) {
+		return esmi_core_energy_hsmp_mailbox_get(core_ind, penergy);
+	} else if (!psm->energy_status) {
 		/*
 		 * The hwmon enumeration of energy%d_input entries starts
 		 * from 1.
@@ -724,7 +739,9 @@ esmi_status_t esmi_socket_energy_get(uint32_t sock_ind, uint64_t *penergy)
 		return ESMI_INVALID_INPUT;
 	}
 
-	if (!psm->energy_status) {
+	if (!psm->hsmp_status && psm->hsmp_rapl_reading) {
+		return  esmi_package_energy_hsmp_mailbox_get(sock_ind, penergy);
+	} else if (!psm->energy_status) {
 		/*
 		 * The hwmon enumeration of socket energy entries starts
 		 * from "total_cores/threads_per_core + sock_ind + 1".
@@ -744,6 +761,20 @@ esmi_status_t esmi_socket_energy_get(uint32_t sock_ind, uint64_t *penergy)
 	return errno_to_esmi_status(ret);
 }
 
+static int read_all_energy_hsmp_drv(uint64_t *pval, uint32_t cpus)
+{
+	int i, ret;
+	memset(pval, 0, cpus * sizeof(uint64_t));
+
+	for (i = 0; i < cpus; i++) {
+		ret = esmi_core_energy_hsmp_mailbox_get(i, &pval[i]);
+		if (ret)
+			return ret;
+	}
+
+	return ret;
+}
+
 /*
  * Function to get the enenrgy of cpus and sockets.
  */
@@ -755,7 +786,9 @@ esmi_status_t esmi_all_energies_get(uint64_t *penergy)
 	CHECK_ENERGY_GET_INPUT(penergy);
 	cpus = psm->total_cores / psm->threads_per_core;
 
-	if (!psm->energy_status)
+	if (!psm->hsmp_status && psm->hsmp_rapl_reading)
+		return read_all_energy_hsmp_drv(penergy, cpus);
+	else if (!psm->energy_status)
 		ret = batch_read_energy_drv(penergy, cpus);
 	else
 		ret = batch_read_msr_drv(MSR_TYPE, penergy, cpus);
