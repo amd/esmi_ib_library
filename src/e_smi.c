@@ -326,10 +326,18 @@ static esmi_status_t detect_packages(struct system_metrics *psysm)
 	}
 	psysm->total_cores = ret + 1;
 
-	if (!__get_cpuid(0x1, &eax, &ebx, &ecx, &edx))
-		return ESMI_IO_ERROR;
-
-	max_cores_socket = ((ebx >> 16) & 0xff);
+	/* fam 0x1A, model0x00-0x1f are dense sockets and support more than 255 threads,
+	 * On these systems, number of threads is detected by reading
+         * Core::X86::Cpuid::SizeId[NC]+1 */
+	if (psysm->cpu_family == 0x1A && psysm->cpu_model >= 0x10 && psysm->cpu_model <= 0x1f) {
+		if (!__get_cpuid(0x80000008, &eax, &ebx, &ecx, &edx))
+			return ESMI_IO_ERROR;
+		max_cores_socket = (ecx & 0xfff) + 1;
+	} else {
+		if (!__get_cpuid(0x1, &eax, &ebx, &ecx, &edx))
+			return ESMI_IO_ERROR;
+		max_cores_socket = ((ebx >> 16) & 0xff);
+	}
 
 	/* Number of sockets in the system */
 	psysm->total_sockets = psysm->total_cores / max_cores_socket;
