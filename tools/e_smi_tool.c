@@ -1760,6 +1760,20 @@ static char* const feat_ver6_get[] = {
 	"  --showmetrictable [SOCKET]\t\t\t\t\tShow Metrics Table",
 };
 
+static char* const feat_ver6_set[] = {
+	"Set Option<s>:",
+	"  --setpowerlimit [SOCKET] [POWER]\t\t\t\tSet power limit"
+	" for a given socket (mWatts)",
+	"  --setcorebl [CORE] [BOOSTLIMIT]\t\t\t\tSet boost limit"
+	" for a given core (MHz)",
+	"  --setsockbl [SOCKET] [BOOSTLIMIT]\t\t\t\tSet Boost"
+	" limit for a given Socket (MHz)",
+	"  --setxgmiwidth [MIN<0-2>] [MAX<0-2>]\t\t\t\tSet xgmi link width"
+	" in a multi socket system (MAX >= MIN)",
+	"  --setlclkdpmlevel [SOCKET] [NBIOID<0-3>] [MIN<0-3>] [MAX<0-3>]Set lclk dpm level"
+	" for a given nbio in a given socket (MAX >= MIN)",
+};
+
 static char* const blankline[] = {""};
 
 static char **features;
@@ -1893,7 +1907,7 @@ static void add_hsmp_ver6_feat(void)
 	offset += ARRAY_SIZE(feat_ver6_get);
 	memcpy(features + offset, blankline, sizeof(char *));
 	offset += 1;
-	memcpy(features + offset, feat_ver2_set, (ARRAY_SIZE(feat_ver2_set) * sizeof(char *)));
+	memcpy(features + offset, feat_ver6_set, (ARRAY_SIZE(feat_ver6_set) * sizeof(char *)));
 
 	/* version 6 cpu metrics is same as version 5 */
 	sys_info.show_addon_cpu_metrics = cpu_ver5_metrics;
@@ -1997,8 +2011,7 @@ static esmi_status_t init_proto_version_func_pointers()
 	case 6:
 		size = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_ver2_get) +
 		       ARRAY_SIZE(feat_energy) + ARRAY_SIZE(feat_ver6_get) +
-		       ARRAY_SIZE(feat_ver2_set) +
-		       ARRAY_SIZE(blankline);
+		       ARRAY_SIZE(feat_ver6_set) + ARRAY_SIZE(blankline);
 		features = malloc((size + 1) * sizeof(char *));
 		if (!features)
 			return ESMI_NO_MEMORY;
