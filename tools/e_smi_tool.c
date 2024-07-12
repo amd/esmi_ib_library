@@ -1650,6 +1650,29 @@ static esmi_status_t epyc_show_metrics_table(uint8_t sock_id)
 	return ESMI_SUCCESS;
 }
 
+static int epyc_get_pwr_efficiency_mode(uint8_t sock_ind)
+{
+	esmi_status_t ret;
+	uint8_t val;
+
+	ret = esmi_pwr_efficiency_mode_get(sock_ind, &val);
+	if (ret == ESMI_INVALID_INPUT) {
+		printf("option showcurrpwrefficiencymode supported only with amd_hsmp driver version >= 2.4\n"
+			"Please check the driver version\n");
+		return ret;
+	}
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get power efficiency mode for socket [%d] Err[%d]: %s\n",
+			sock_ind, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	printf("---------------------------------------\n");
+	printf("| Current power efficiency mode is %d |\n", val);
+	printf("---------------------------------------\n");
+
+	return ret;
+}
+
 static char* const feat_comm[] = {
 	"Output Option<s>:",
 	"  -h, --help\t\t\t\t\t\t\tShow this help message",
@@ -1729,7 +1752,8 @@ static char* const feat_ver5_F19_M00_0F_set[] = {
 
 static char* const feat_ver5_F1A_M00_1F_get[] = {
 	"  --showxgmibw [LINK<P1,P3,G0-G3>] [BW<AGG_BW,RD_BW,WR_BW>]\tShow xGMI bandwidth for a given socket,"
-	" linkname and bwtype"
+	" linkname and bwtype",
+	"  --showcurrpwrefficiencymode [SOCKET]\t\t\t\tShow current power effciency mode"
 };
 
 static char* const feat_ver5_F1A_M00_1F_set[] = {
@@ -2114,6 +2138,7 @@ static int parsesmi_args(int argc,char **argv)
 		{"showmetrictable",		required_argument,	0,	'J'},
 		{"version",			no_argument,		0,	'V'},
 		{"writemsrallowlist",		no_argument,		0,	'W'},
+		{"showcurrpwrefficiencymode", 	required_argument, 	0, 	'O'},
 		{0,			0,			0,	0},
 	};
 
@@ -2205,6 +2230,7 @@ static int parsesmi_args(int argc,char **argv)
 	    opt == 'r' ||
 	    opt == 'Q' ||
 	    opt == 'J' ||
+	    opt == 'O' ||
 	    opt == 'N') {
 		if (is_string_number(optarg)) {
 			printf("Option '-%c' require a valid numeric value"
@@ -2527,6 +2553,10 @@ static int parsesmi_args(int argc,char **argv)
 				break;
 			}
 			ret = test_hsmp_mailbox(sock_id, input_data);
+			break;
+		case 'O' :
+			sock_id = atoi(optarg);
+			ret = epyc_get_pwr_efficiency_mode(sock_id);
 			break;
 		case 'A' :
 			ret = show_smi_all_parameters();
