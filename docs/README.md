@@ -55,34 +55,55 @@ Upon a successful build, the `ESMI_Manual.pdf` and `ESMI_IB_Release_Notes.pdf` w
 The RPM and DEB packages can be created with the following steps (continued from the steps above):
 `$ make package`
 
-# Kernel dependencies
+# Kernel version dependency
+Family 0x19 model 00-0fh a0-afh are supported from v5.16-rc7 onwards
+Family 0x19 model 90-9fh are supported from v6.6-rc1 onwards
+Family 0x1A model 00-1fh are supported from v6.5-rc5 onwards
+
+# Kernel driver dependencies
 The E-SMI Library depends on the following device drivers from Linux to manage the system management features.
 
-## Monitoring energy counters
-* AMD family 19, model 00-0fh and 30-3fh
+## amd_hsmp driver
+This is used to monitor and manage power metrics, boostlimits and other system management features.
+The power metrics, boostlimits and other features are managed by the SMU(System Management Unit of the processor) firmware and exposed via PCI config space and accessed through "Host System Management Port(HSMP)" at host/cpu side. AMD provides Linux kernel module(amd_hsmp) exposing this information to the user-space via ioctl interface.
+* amd_hsmp driver is accepted in upstream kernel and is available at linux tree at drivers/platform/x86/amd/hsmp.c from version 5.17.rc1 onwards
+  either it can be compiled as part of kernel as a module or built in driver or as an out of tree module which is available at https://github.com/amd/amd_hsmp.git
+* E-smi compilation has dependency on amd_hsmp header file from uapi header of amd_hsmp driver.
+  It should be available at
+  * /usr/include/asm/ on RHEL systems
+  * /usr/include/x86_64-linux-gnu/asm/ on Ubuntu systems.
+  If its not present, it can be copied from amd_hsmp/ github repo or from the kernel source arch/x86/include/uapi/asm/amd_hsmp.h
+* There is always a dependency between E-smi and amd_hsmp driver versions.
+  The new features of E-smi work only if there is a matching HSMP driver.
+## amd_hsmp/msr_safe/amd_energy/msr
+One of these drivers is needed to monitor energy counters.
+* AMD family 19h, model 00-0fh and 30-3fh
   * These processors support energy monitoring through 32 bit RAPL MSR registers.
   *`amd_energy` driver, an out of tree kernel module, hosted at [amd_energy](https://github.com/amd/amd_energy) can report per core and per socket counters via the HWMON sysfs entries.
   * This driver provides accumulation of energy for avoiding wrap around problem.
-* AMD family 19, model 10-1fh and a0-afh
+  * This is the only supported energy driver for 32bit RAPLS
+* AMD family 19h, model 10-1fh, a0-afh and 90-9fh, AMD family 0x1A, model 00-1fh
   * These processors support energy monitoring through 64 bit RAPL MSR registers.
   * Because of 64 bit registers, there is no accumulation of energy needed.
-  * For these processors "msr-safe" driver is used from [msr-safe](https://github.com/LLNL/msr-safe.git).
-  * Msr-safe driver needs allowlist file to be written to "/dev/cpu/msr_allowlist" for allowing the read of those specific msr registers.
-    Please follow below steps or use --writeallowlist tool option.
-    * create "amd_allowlist" file with below contents and run the command "sudo su" and "cat amd_allowlist > /dev/cpu/msr_allowlist"
-```
-# MSR # Write Mask # Comment
-0xC0010299 0x0000000000000000 # "ENERGY_PWR_UNIT_MSR"
-0xC001029A 0x0000000000000000 # "ENERGY_CORE_MSR"
-0xC001029B 0x0000000000000000 # "ENERGY_PKG_MSR"
-```
+  * For these processors either  [msr_safe](https://github.com/LLNL/msr-safe.git) [amd_energy](https://github.com/amd/amd_energy) or kernel's default msr driver can be used.
+* AMD family 1Ah, model 0x00-0x1f support RAPL reading using HSMP mailbox.
+  * For these processors either amd_hsmp driver or msr_safe driver or amd_energy driver or msr driver can be used.
 
-## Monitoring and managing power metrics, boostlimits and other system management features
-The power metrics, boostlimits and other features are managed by the SMU(System Management Unit of the processor) firmware and exposed via PCI config space and accessed through "Host System Management Port(HSMP)" at host/cpu side. AMD provides Linux kernel module(amd_hsmp) exposing this information to the user-space via ioctl interface.
-* amd_hsmp driver is accepted in upstream kernel and is available at linux tree at drivers/platform/x86/amd/hsmp.c from version 5.17.rc1 onwards
-* If you are using a kernel version less than that, then copy the header file from arch/x86/include/uapi/asm/amd_hsmp.h in linux source tree to below locations based on the type of the system.
-  * On RHEL systems, path is: /usr/include/asm/
-  * On Ubuntu systems path is: /usr/include/x86_64-linux-gnu/asm/
+  * The order of checking for the availability of drivers in e-smi is as follows.
+    * If amd_hsmp driver is present and supports RAPL reading, this is used for reading energy.
+    * If amd_hsmp driver is not present/not supports energy reading, and msr-safe driver is present, this is used for reading energy.
+      Msr-safe driver needs allowlist file to be written to "/dev/cpu/msr_allowlist" for allowing the read of those specific msr registers.
+      Please follow below steps or use the tool option "writemsrallowlist" to write the allowlist file.
+      Create "amd_allowlist" file with below contents and run the command "sudo su" and "cat amd_allowlist > /dev/cpu/msr_allowlist"
+      * # MSR # Write Mask # Comment
+      * 0xC0010299 0x0000000000000000 # "ENERGY_PWR_UNIT_MSR"
+      * 0xC001029A 0x0000000000000000 # "ENERGY_CORE_MSR"
+      * 0xC001029B 0x0000000000000000 # "ENERGY_PKG_MSR"
+    * If msr_safe driver is not present, amd_energy driver is present, this is used for reading energy.
+    * If msr_safe driver or amd_energy driver not present, msr driver will be used for reading energy.
+  * Any one of msr_safe/amd_energy/msr driver is sufficient
+
+# BIOS dependency
 * To get HSMP working. PCIe interface needs to be enabled in the BIOS. On the reference BIOS please follow the sequence below for enabling HSMP.
 
   **Advanced > AMD CBS > NBIO Common Options > SMU Common Options > HSMP Support**
@@ -92,10 +113,14 @@ The power metrics, boostlimits and other features are managed by the SMU(System 
   **BIOS Default:     "Enabled"**
 
   If the above HSMP support option is disabled, the related E-SMI APIs will return -ETIMEDOUT.
+  The latest BIOS supports probing of HSMP driver through ACPI device.
+  The ACPI supported amd driver version is 2.2
 
 # Supported hardware
 AMD Zen3 based CPU Family `19h` Models `0h-Fh` and `30h-3Fh`.\n
 AMD Zen4 based CPU Family `19h` Models `10h-1Fh` and `A0-AFh`.\n
+AMD Zen4 based CPU Family `19h` Models `90-9Fh`.\n
+AMD Zen4 based CPU Family `1Ah` Models `00-1Fh`.\n
 
 # Additional required software for building
 In order to build the E-SMI library, the following components are required. Note that the software versions listed are what is being used in development. Earlier versions are not guaranteed to work:
@@ -263,59 +288,72 @@ Below is a sample usage to dump core and socket metrics
 
 For detailed and up to date usage information, we recommend consulting the help:
 
-For convenience purposes, following is the output from the -h flag:
+For convenience purposes, following is the output from the -h flag on hsmp protocol version 7 based system:
 
 ```
-	e_smi_library/b$ ./e_smi_tool -h
 
 	============================= E-SMI ===================================
 
 	Usage: ./e_smi_tool [Option]... <INPUT>...
 
 	Output Option<s>:
-	-h, --help                                                    Show this help message
-	-A, --showall                                                 Show all esmi parameter values
-	-V  --version                                                 Show e-smi library version
-	--testmailbox [SOCKET] [VALUE]                                Test HSMP mailbox interface
-	--writemsrallowlist                                           Write msr-safe allowlist file
-
+	  -h, --help                                                    Show this help message
+	  -A, --showall                                                 Show all esmi parameter values
+	  -V  --version                                                 Show e-smi library version
+	  --testmailbox [SOCKET] [VALUE<0-0xFFFFFFFF>]                  Test HSMP mailbox interface
+	  --writemsrallowlist                                           Write msr-safe allowlist file
 
 	Get Option<s>:
-	--showcoreenergy [CORE]                                       Show energy for a given CPU (Joules)
-	--showsockenergy                                              Show energy for all sockets (KJoules)
-	--showsockpower                                               Show power metrics for all sockets (Watts)
-	--showcorebl [CORE]                                           Show Boostlimit for a given CPU (MHz)
-	--showsockc0res [SOCKET]                                      Show c0_residency for a given socket (%%)
-	--showsmufwver                                                Show SMU FW Version
-	--showhsmpprotover                                            Show HSMP Protocol Version
-	--showprochotstatus                                           Show HSMP PROCHOT status for all sockets
-	--showclocks                                                  Show Clock Metrics (MHz) for all sockets
-	--showcclkfreqlimit [CORE]                                    Show current clock frequency limit(MHz) for a given core
-	--showsvipower                                                Show svi based power telemetry of all rails for all sockets
-	--showxgmibw [LINK<P2,P3,G0-G7>] [BW<AGG_BW,RD_BW,WR_BW>]     Show xGMI bandwidth for a given socket, linkname and bwtype
-	--showiobw [SOCKET] [LINK<P2,P3,G0-G7>]                       Show IO aggregate bandwidth for a given socket and linkname
-	--showlclkdpmlevel [SOCKET] [NBIOID<0-3>]                     Show lclk dpm level for a given nbio in a given socket
-	--showsockclkfreqlimit [SOCKET]                               Show current clock frequency limit(MHz) for a given socket
-	--showmetrictablever                                          Show Metrics Table Version
-	--showmetrictable [SOCKET]                                    Show Metrics Table
+	  --showcoreenergy [CORE]                                       Show energy for a given CPU (Joules)
+	  --showsockenergy                                              Show energy for all sockets (KJoules)
+	  --showsockpower                                               Show power metrics for all sockets (Watts)
+	  --showcorebl [CORE]                                           Show Boostlimit for a given CPU (MHz)
+	  --showsockc0res [SOCKET]                                      Show c0_residency for a given socket (%%)
+	  --showsmufwver                                                Show SMU FW Version
+	  --showhsmpprotover                                            Show HSMP Protocol Version
+	  --showprochotstatus                                           Show HSMP PROCHOT status for all sockets
+	  --showclocks                                                  Show Clock Metrics (MHz) for all sockets
+	  --showddrbw                                                   Show DDR bandwidth details (Gbps)
+	  --showdimmtemprange [SOCKET] [DIMM_ADDR]                      Show dimm temperature range and refresh rate for a given socket and dimm address
+	  --showdimmthermal [SOCKET] [DIMM_ADDR]                        Show dimm thermal values for a given socket and dimm address
+	  --showdimmpower [SOCKET] [DIMM_ADDR]                          Show dimm power consumption for a given socket and dimm address
+	  --showcclkfreqlimit [CORE]                                    Show current clock frequency limit(MHz) for a given core
+	  --showsvipower                                                Show svi based power telemetry of all rails for all sockets
+	  --showiobw [SOCKET] [LINK<P0-P3,G0-G3>]                       Show IO aggregate bandwidth for a given socket and linkname
+	  --showlclkdpmlevel [SOCKET] [NBIOID<0-3>]                     Show lclk dpm level for a given nbio in a given socket
+	  --showsockclkfreqlimit [SOCKET]                               Show current clock frequency limit(MHz) for a given socket
+	  --showxgmibw [LINK<P1,P3,G0-G3>] [BW<AGG_BW,RD_BW,WR_BW>]     Show xGMI bandwidth for a given socket, linkname and bwtype
+	  --showcurrpwrefficiencymode [SOCKET]                          Show current power effciency mode
+	  --showcpurailisofreqpolicy [SOCKET]                           Show current CPU ISO frequency policy
+	  --showdfcstatectrl [SOCKET]                                   Show current DF C-state status
 
-	--setpowerlimit [SOCKET] [POWER]                              Set power limit for a given socket (mWatts)
-	--setcorebl [CORE] [BOOSTLIMIT]                               Set boost limit for a given core (MHz)
-	--setsockbl [SOCKET] [BOOSTLIMIT]                             Set Boost limit for a given Socket (MHz)
-	--setxgmiwidth [MIN<0-2>] [MAX<0-2>]                          Set xgmi link width in a multi socket system (MAX >= MIN)
-	--setlclkdpmlevel [SOCKET] [NBIOID<0-3>] [MIN<0-3>] [MAX<0-3>]Set lclk dpm level for a given nbio in a given socket (MAX >= MIN)
+	Set Option<s>:
+	  --setpowerlimit [SOCKET] [POWER]                              Set power limit for a given socket (mWatts)
+	  --setcorebl [CORE] [BOOSTLIMIT]                               Set boost limit for a given core (MHz)
+	  --setsockbl [SOCKET] [BOOSTLIMIT]                             Set Boost limit for a given Socket (MHz)
+	  --apbdisable [SOCKET] [PSTATE<0-2>]                           Set Data Fabric Pstate for a given socket
+	  --apbenable [SOCKET]                                          Enable the Data Fabric performance boost algorithm for a given socket
+	  --setxgmiwidth [MIN<0-2>] [MAX<0-2>]                          Set xgmi link width in a multi socket system (MAX >= MIN)
+	  --setlclkdpmlevel [SOCKET] [NBIOID<0-3>] [MIN<0-3>] [MAX<0-3>]Set lclk dpm level for a given nbio in a given socket (MAX >= MIN)
+	  --setpcielinkratecontrol [SOCKET] [CTL<0-2>]                  Set rate control for pcie link for a given socket
+	  --setdfpstaterange [SOCKET] [MAX<0-2>] [MIN<0-2>]             Set df pstate range for a given socket (MAX <= MIN)
+	  --setgmi3linkwidth [SOCKET] [MIN<0-2>] [MAX<0-2>]             Set gmi3 link width for a given socket (MAX >= MIN)
+	  --setpowerefficiencymode [SOCKET] [MODE<0-5>]                 Set power efficiency mode for a given socket
+	  --setxgmipstaterange [MAX<0,1>] [MIN<0,1>]                    Set xgmi pstate range
+	  --setcpurailisofreqpolicy [SOCKET] [VAL<0,1>]                 Set CPU ISO frequency policy
+	  --dfcctrl [SOCKET] [VAL<0,1>]                                 Enable or disable DF c-state
 
 	============================= End of E-SMI ============================
 
 ```
 Following are the value ranges and other information needed for passing it to tool
 ```
-1.	--showxgmibw [SOCKET] [LINKNAME] [BWTYPE]
+1.	----showxgmibw [SOCKET] [LINKNAME] [BWTYPE]
 
 	  LINKNAME :
 	  Rolling Stones:P0/P1/P2/P3/G0/G1/G2/G3
-	  Mi300A:G0/G1/G2/G3/G4/G5/G6/G7
-	  Breithorn:P1/P3/G0/G1/G2/G3
+	  Mi300:G0/G1/G2/G3/G4/G5/G6/G7
+	  Family 0x1A, model 0x00-0x1F:P1/P3/G0/G1/G2/G3
 
 	  BWTYPE : AGG_BW/RD_BW/WR_BW
 
@@ -343,7 +381,8 @@ Following are the value ranges and other information needed for passing it to to
 
 7.	--setpowerefficiencymode [SOCKET] [MODE]
 
-	  MODE : 0 - 3
+	  Rolling Stones: MODE : 0 - 3
+	  Family 0x1A model 0x00-0x1F: MODE : 0 - 5
 
 8.	--setdfpstaterange [SOCKET] [MAX] [MIN]
 

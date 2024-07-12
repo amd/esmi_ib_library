@@ -1,14 +1,15 @@
 
 # EPYC™ System Management Interface (E-SMI) In-band Library
 
-NEW! E-SMI library beta 3.0 is now available
+NEW! E-SMI library beta 4.0 is now available
 
 The EPYC™ System Management Interface In-band Library, or E-SMI library, is a C library for Linux that provides a user space interface to monitor and control the CPU's power, energy, performance and other system management features.
 
 # Changes Notes
 
-## Highlights of release v3.0.3
-* Bug fix release
+## Highlights of release v4.0.0
+* AMD Family 0x1A and model 0x00-0x1f processors are supported in this release.
+* Any of the hsmp/amd_energy/msr_safe/msr driver can be used to monitor energy.
 
 ## Highlights of release v3.0.0
 * AMD MI300 processors are supported in this release.
@@ -70,13 +71,18 @@ The EPYC™ System Management Interface In-band Library, or E-SMI library, is a 
 # Specifications
 
 ## Processors:
-Target released for AMD EPYC™ processor Family 19h, model 0h~1Fh, 30~3Fh and 90~90h.
+Target released for AMD EPYC™ processor Family 19h, model 0h-1Fh, 30h-3Fh, 90h-9Fh, A0h-AFh and Family 0x1A model 0h-1Fh.
 
 ## Operating Systems
 AMD ESMI In-band library is tested on following distributions
 * Ubuntu 18.04, 20.04
 * SUSE SLES 15 and
 * RHEL 8.1
+
+# Dependency
+This new e-smi release works well with [amd_hsmp](https://github.com/amd/amd_hsmp.git) driver version 2.4.
+Not all features will work with version < 2.4. Setting cpu rail iso frequency policy, df c-state enabling,
+xGMI pstate range setting etc will only work with 2.4 version of amd_hsmp driver.
 
 # Resources and Technical Support
 ## Resources
