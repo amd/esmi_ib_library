@@ -1901,6 +1901,39 @@ static void add_hsmp_ver6_feat(void)
 	sys_info.show_addon_clock_metrics = clock_ver5_metrics;
 }
 
+static void add_hsmp_ver7_feat(void)
+{
+	int offset = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_energy);
+
+	/* copy all the "get" messages */
+	memcpy(features + offset, feat_ver2_get, (ARRAY_SIZE(feat_ver2_get) * sizeof(char *)));
+	offset += ARRAY_SIZE(feat_ver2_get);
+	memcpy(features + offset, feat_ver3, (ARRAY_SIZE(feat_ver3) * sizeof(char *)));
+	offset += ARRAY_SIZE(feat_ver3);
+	memcpy(features + offset, feat_ver5_get, (ARRAY_SIZE(feat_ver5_get) * sizeof(char *)));
+	offset += ARRAY_SIZE(feat_ver5_get);
+	memcpy(features + offset, feat_ver5_F1A_M00_1F_get,
+	       (ARRAY_SIZE(feat_ver5_F1A_M00_1F_get) * sizeof(char *)));
+	offset += ARRAY_SIZE(feat_ver5_F1A_M00_1F_get);
+
+	memcpy(features + offset, blankline, sizeof(char *));
+	offset += 1;
+
+	/* copy all the "set" messages */
+	memcpy(features + offset, feat_ver2_set, (ARRAY_SIZE(feat_ver2_set) * sizeof(char *)));
+	offset += ARRAY_SIZE(feat_ver2_set);
+	memcpy(features + offset, feat_ver5_set, (ARRAY_SIZE(feat_ver5_set) * sizeof(char *)));
+	offset += ARRAY_SIZE(feat_ver5_set);
+	memcpy(features + offset, feat_ver5_F1A_M00_1F_set,
+			(ARRAY_SIZE(feat_ver5_F1A_M00_1F_set) * sizeof(char *)));
+	offset += ARRAY_SIZE(feat_ver5_F1A_M00_1F_set);
+
+	/* proto version 7 metrics are same as version 5 */
+	sys_info.show_addon_cpu_metrics = cpu_ver5_metrics;
+	sys_info.show_addon_socket_metrics = socket_ver5_metrics;
+	sys_info.show_addon_clock_metrics = clock_ver5_metrics;
+}
+
 static esmi_status_t init_proto_version_func_pointers()
 {
 	uint32_t proto_ver;
@@ -1962,7 +1995,6 @@ static esmi_status_t init_proto_version_func_pointers()
 		add_hsmp_ver5_feat();
 		break;
 	case 6:
-	default:
 		size = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_ver2_get) +
 		       ARRAY_SIZE(feat_energy) + ARRAY_SIZE(feat_ver6_get) +
 		       ARRAY_SIZE(feat_ver2_set) +
@@ -1972,6 +2004,20 @@ static esmi_status_t init_proto_version_func_pointers()
 			return ESMI_NO_MEMORY;
 		add_comm_and_energy_feat();
 		add_hsmp_ver6_feat();
+		break;
+	case 7:
+	default:
+		size = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_ver2_get) +
+		       ARRAY_SIZE(feat_ver2_set) + ARRAY_SIZE(feat_ver5_get) +
+		       ARRAY_SIZE(feat_ver5_set) + ARRAY_SIZE(feat_ver3) +
+		       ARRAY_SIZE(feat_energy) + ARRAY_SIZE(blankline) +
+		       ARRAY_SIZE(feat_ver5_F1A_M00_1F_get) +
+		       ARRAY_SIZE(feat_ver5_F1A_M00_1F_set);
+		features = malloc((size + 1) * sizeof(char *));
+		if (!features)
+			return ESMI_NO_MEMORY;
+		add_comm_and_energy_feat();
+		add_hsmp_ver7_feat();
 		break;
 	}
 
