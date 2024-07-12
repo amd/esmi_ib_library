@@ -365,7 +365,7 @@ esmi_status_t esmi_socket_current_active_freq_limit_get(uint32_t sock_ind,
  *
  *  @details This function returns the socket frequency range, fmax
  *  and fmin.
- *  Supported only on hsmp protocol version-5
+ *  Supported only on hsmp protocol version 5 and 7.
  *
  *  @param[in] sock_ind Socket index.
  *
@@ -383,7 +383,7 @@ esmi_status_t esmi_socket_freq_range_get(uint8_t sock_ind, uint16_t *fmax, uint1
  *  @brief Get the current active frequency limit of the core.
  *
  *  @details This function returns the core frequency limit for the specified core.
- *  Supported only on hsmp protocol version-5
+ *  Supported only on hsmp protocol version 5 and 7.
  *
  *  @param[in] core_id Core index.
  *
@@ -465,7 +465,7 @@ esmi_status_t esmi_socket_power_cap_max_get(uint32_t socket_idx,
  *  @brief Get the SVI based power telemetry for all rails.
  *
  *  @details This function returns the SVI based power telemetry for all rails.
- *  Supported only on hsmp protocol version-5
+ *  Supported only on hsmp protocol version 5 and 7.
  *
  *  @param[in] sock_ind Socket index.
  *
@@ -515,7 +515,7 @@ esmi_status_t esmi_socket_power_cap_set(uint32_t socket_idx, uint32_t pcap);
  *  @brief Set the power efficiency profile policy
  *
  *  @details This function will set the power efficiency mode.
- *  Supported only on hsmp protocol version-5
+ *  Supported only on hsmp protocol version 5 and 7.
  *
  *  Power efficiency modes are:
  *
@@ -720,7 +720,7 @@ esmi_status_t esmi_socket_temperature_get(uint32_t sock_ind, uint32_t *ptmon);
  *
  *  @details This function returns the per DIMM temperature range and
  *  refresh rate from the MR4 register.
- *  Supported only on hsmp protocol version-5
+ *  Supported only on hsmp protocol version 5 and 7.
  *
  *  @param[in] sock_ind Socket index through which the DIMM can be accessed
  *
@@ -740,7 +740,7 @@ esmi_status_t esmi_dimm_temp_range_and_refresh_rate_get(uint8_t sock_ind, uint8_
  *  @brief Get dimm power consumption and update rate
  *
  *  @details This function returns the DIMM power and update rate
- *  Supported only on hsmp protocol version-5
+ *  Supported only on hsmp protocol version 5 and 7.
  *
  *  @param[in] sock_ind Socket index through which the DIMM can be accessed.
  *
@@ -761,7 +761,7 @@ esmi_status_t esmi_dimm_power_consumption_get(uint8_t sock_ind, uint8_t dimm_add
  *
  *  @details This function will return the DIMM thermal sensor(2 sensors per DIMM)
  *  and update rate
- *  Supported only on hsmp protocol version-5
+ *  Supported only on hsmp protocol version 5 and 7.
  *
  *  @param[in] sock_ind Socket index through which the DIMM can be accessed.
  *
@@ -832,7 +832,7 @@ esmi_status_t esmi_xgmi_width_set(uint8_t min, uint8_t max);
  *
  *  2 => Full width
  *
- *  Supported only on hsmp protocol version-5
+ *  Supported only on hsmp protocol version5 and 7.
  *
  *  @param[in] sock_ind Socket index.
  *
@@ -929,7 +929,7 @@ esmi_status_t esmi_socket_lclk_dpm_level_set(uint32_t sock_ind, uint8_t nbio_id,
  *  DPM levels can be set from APML also. This API gives current levels which may
  *  have been set from either APML or HSMP.
  *
- *  Supported in hsmp protocol version-5.
+ *  Supported in hsmp protocol version 5 and 7.
  *
  *  @param[in] sock_ind Socket index
  *
@@ -956,7 +956,7 @@ esmi_status_t esmi_socket_lclk_dpm_level_get(uint8_t sock_ind, uint8_t nbio_id,
  *
  *  2 => Limit at gen5 rate
  *
- *  Supported only on hsmp protocol version-5
+ *  Supported only on hsmp protocol version 5 and 7.
  *
  *  @param[in] sock_ind Socket index.
  *
@@ -978,7 +978,7 @@ esmi_status_t esmi_pcie_link_rate_set(uint8_t sock_ind, uint8_t rate_ctrl, uint8
  *  max <= min.
  *  DF pstate range can be set from both HSMP and APML, the most
  *  recent of the two is enforced.
- *  Supported only on hsmp protocol version-5
+ *  Supported only on hsmp protocol version 5 and 7.
  *
  *  @param[in] sock_ind a socket index.
  *
@@ -1004,7 +1004,7 @@ esmi_status_t esmi_df_pstate_range_set(uint8_t sock_ind, uint8_t max_pstate, uin
  *  @brief Get IO bandwidth on IO link.
  *
  *  @details This function returns the IO Aggregate bandwidth for the given link id.
- *  Supported only on hsmp protocol version-5
+ *  Supported only on hsmp protocol version 5 and 7.
  *
  *  @param[in] sock_ind Socket index.
  *
@@ -1025,7 +1025,7 @@ esmi_status_t esmi_current_io_bandwidth_get(uint8_t sock_ind, struct link_id_bw_
  *
  *  @details This function will read xGMI bandwidth in Mbps for the specified link
  *  and bandwidth type in a multi socket system.
- *  Supported only on hsmp protocol version-5
+ *  Supported only on hsmp protocol version 5 and 7.
  *
  *  @param[in] link  structure containing link_id(Link encoding values of given link) and bwtype
  *  info.

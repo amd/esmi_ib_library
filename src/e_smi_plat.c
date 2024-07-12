@@ -53,6 +53,18 @@ static bool tbl_mi300[] = { false, true, true, true, true, true, true, true, tru
 			    /* MSGID-0x46 */
 			    true };
 
+/* Turin - hsmp_proto_ver7 */
+/* MSGID1h - MSGID28h */
+static bool tbl_turin[] = { false, true, true, true, true, true, true, true, true, true,
+			    /* MSGID-0xA */
+			    true, true, true, true, true, true, true, true, true, true,
+			    /* MSGID-0x14 */
+			    true, false, true, true, true, true, true, true, true, true,
+			    /* MSGID-0x1e */
+			    true, true, true, true, true, false, false, false, true,
+			    /* MSGID-0x27-0x28 */
+			    true, true };
+
 bool *lut = NULL;
 int lut_size = 0;
 
@@ -66,6 +78,10 @@ static struct link_encoding proto_ver5_encoding[] = { {"P0", BIT(0)}, {"P1", BIT
 static struct link_encoding proto_ver6_encoding[] = { {"P2", 0x3}, {"P3", 0x4}, {"G0", 0x8}, {"G1", 0x9},
 						      {"G2", 0xA}, {"G3", 0xB}, {"G4", 0xC}, {"G5", 0xD},
 						      {"G6", 0xE}, {"G7", 0xF}, {NULL, -1} };
+
+#define PCI_GEN5_RATE_CTRL		0x2
+#define DF_PSTATE_MAX_LIMIT		0x2
+#define GMI3_LINK_WIDTH_LIMIT		0x2
 
 /* Assign platform specific values from the documentation */
 void init_platform_info(struct system_metrics *sm)
@@ -83,22 +99,31 @@ void init_platform_info(struct system_metrics *sm)
 			sm->lencode = NULL;
 			break;
 		case HSMP_PROTO_VER5:
-			sm->df_pstate_max_limit = 2;
-			sm->gmi3_link_width_limit = 2;
-			sm->pci_gen5_rate_ctl = 2;
+			sm->df_pstate_max_limit = DF_PSTATE_MAX_LIMIT;
+			sm->gmi3_link_width_limit = GMI3_LINK_WIDTH_LIMIT;
+			sm->pci_gen5_rate_ctl = PCI_GEN5_RATE_CTRL;
 			sm->lencode = proto_ver5_encoding;
-			lut = tbl_genoa;
-			lut_size = ARRAY_SIZE(tbl_genoa);
+			if (sm->cpu_family == 0x1A && sm->cpu_model <= 0x1F) {
+				lut = tbl_turin;
+				lut_size = ARRAY_SIZE(tbl_turin);
+			} else {
+				lut = tbl_genoa;
+				lut_size = ARRAY_SIZE(tbl_genoa);
+			}
 			break;
 		case HSMP_PROTO_VER6:
 			lut = tbl_mi300;
 			lut_size = ARRAY_SIZE(tbl_mi300);
 			sm->lencode = proto_ver6_encoding;
 			break;
+		case HSMP_PROTO_VER7:
 		default:
-			lut = tbl_mi300;
-			lut_size = ARRAY_SIZE(tbl_mi300);
-			sm->lencode = proto_ver6_encoding;
+			sm->df_pstate_max_limit = DF_PSTATE_MAX_LIMIT;
+			sm->gmi3_link_width_limit = GMI3_LINK_WIDTH_LIMIT;
+			sm->pci_gen5_rate_ctl = PCI_GEN5_RATE_CTRL;
+			sm->lencode = proto_ver5_encoding;
+			lut = tbl_turin;
+			lut_size = ARRAY_SIZE(tbl_turin);
 			break;
 	}
 }
