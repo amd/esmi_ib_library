@@ -1673,6 +1673,102 @@ static int epyc_get_pwr_efficiency_mode(uint8_t sock_ind)
 	return ret;
 }
 
+static int epyc_set_xgmi_pstate_range(uint8_t min, uint8_t max)
+{
+	esmi_status_t ret;
+
+	ret = esmi_xgmi_pstate_range_set(min, max);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to set xGMI pstate range, Err[%d]: %s\n",
+			ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	printf("xGMI pstate range is set successfully\n");
+
+	return ret;
+
+}
+
+static int epyc_get_cpu_iso_freq_policy(uint8_t sock_ind)
+{
+	esmi_status_t ret;
+	bool val;
+
+	ret = esmi_cpurail_isofreq_policy_get(sock_ind, &val);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get Cpu Iso frequency policy for socket [%d], Err[%d]: %s\n",
+			sock_ind, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	printf("--------------------------------------\n");
+	printf("| Current Cpu Iso frequency policy is %d |\n", val);
+	printf("--------------------------------------\n");
+
+	return ret;
+}
+
+static int epyc_set_cpu_iso_freq_policy(uint8_t sock_ind, uint8_t input)
+{
+	esmi_status_t ret;
+	bool val;
+
+	if (input > 1) {
+		printf("Input value should be 0 or 1\n");
+		return ESMI_INVALID_INPUT;
+	}
+	val = input;
+	ret = esmi_cpurail_isofreq_policy_set(sock_ind, &val);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to set Cpu Iso frequency policy for socket [%d], Err[%d]: %s\n",
+			sock_ind, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	printf("Cpu Iso frequency policy is set successfully to value :%d\n", val);
+
+	return ret;
+}
+
+static int epyc_set_dfc_ctrl(uint8_t sock_ind, uint8_t input)
+{
+	esmi_status_t ret;
+	bool val;
+
+	if (input > 1) {
+		printf("Input value should be 0 or 1\n");
+		return ESMI_INVALID_INPUT;
+	}
+	val = input;
+	ret = esmi_dfc_enable_set(sock_ind, &val);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to set Data Fabric C-state enable control for socket [%d] Err[%d]: %s\n",
+			sock_ind, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	printf("Data Fabric C-state enable control is set successfully to %d\n", val);
+
+	return ret;
+}
+
+static int epyc_get_dfc_ctrl(uint8_t sock_ind)
+{
+	esmi_status_t ret;
+	bool val;
+
+	ret = esmi_dfc_ctrl_setting_get(sock_ind, &val);
+	if (ret != ESMI_SUCCESS) {
+		printf("Failed to get Data Fabric C-state enable control for socket [%d] Err[%d]: %s\n",
+			sock_ind, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	printf("----------------------------------------------------\n");
+	printf("| Data Fabric C-state enable control value is %d |\n", val);
+	printf("----------------------------------------------------\n");
+
+	return ret;
+
+}
+
+
 static char* const feat_comm[] = {
 	"Output Option<s>:",
 	"  -h, --help\t\t\t\t\t\t\tShow this help message",
@@ -1753,12 +1849,17 @@ static char* const feat_ver5_F19_M00_0F_set[] = {
 static char* const feat_ver5_F1A_M00_1F_get[] = {
 	"  --showxgmibw [LINK<P1,P3,G0-G3>] [BW<AGG_BW,RD_BW,WR_BW>]\tShow xGMI bandwidth for a given socket,"
 	" linkname and bwtype",
-	"  --showcurrpwrefficiencymode [SOCKET]\t\t\t\tShow current power effciency mode"
+	"  --showcurrpwrefficiencymode [SOCKET]\t\t\t\tShow current power effciency mode",
+	"  --showcpurailisofreqpolicy [SOCKET]\t\t\t\tShow current CPU ISO frequency policy",
+	"  --showdfcstatectrl [SOCKET]\t\t\t\t\tShow current DF C-state status",
 };
 
 static char* const feat_ver5_F1A_M00_1F_set[] = {
 	"  --setpowerefficiencymode [SOCKET] [MODE<0-5>]\t\t\tSet power efficiency mode"
 	" for a given socket",
+	"  --setxgmipstaterange [MAX<0,1>] [MIN<0,1>]\t\t\tSet xgmi pstate range",
+	"  --setcpurailisofreqpolicy [SOCKET] [VAL<0,1>]\t\t\tSet CPU ISO frequency policy",
+	"  --dfcctrl [SOCKET] [VAL<0,1>]\t\t\t\t\tEnable or disable DF c-state"
 };
 
 static char* const feat_ver5_set[] = {
@@ -2095,7 +2196,7 @@ static int parsesmi_args(int argc,char **argv)
 	char *link;
 	char *link_name;
 	char *bw_type;
-	uint8_t ctrl, mode;
+	uint8_t ctrl, mode, value;
 	uint64_t input_data;
 
 	//Specifying the expected options
@@ -2139,6 +2240,11 @@ static int parsesmi_args(int argc,char **argv)
 		{"version",			no_argument,		0,	'V'},
 		{"writemsrallowlist",		no_argument,		0,	'W'},
 		{"showcurrpwrefficiencymode", 	required_argument, 	0, 	'O'},
+		{"showcpurailisofreqpolicy", 	required_argument, 	0, 	'K'},
+		{"showdfcstatectrl", 		required_argument, 	0, 	'M'},
+		{"setxgmipstaterange", 		required_argument, 	0, 	'E'},
+		{"setcpurailisofreqpolicy", 	required_argument, 	0, 	'F'},
+		{"dfcctrl", 			required_argument, 	0, 	'P'},
 		{0,			0,			0,	0},
 	};
 
@@ -2166,6 +2272,9 @@ static int parsesmi_args(int argc,char **argv)
 				case 'X':
 				case 'W':
 				case 'n':
+				case 'E':
+				case 'F':
+				case 'P':
 					args[0] = sudostr;
 					args[1] = argv[0];
 					for (i = 0; i < argc; i++) {
@@ -2231,6 +2340,11 @@ static int parsesmi_args(int argc,char **argv)
 	    opt == 'Q' ||
 	    opt == 'J' ||
 	    opt == 'O' ||
+	    opt == 'K' ||
+	    opt == 'F' ||
+	    opt == 'P' ||
+	    opt == 'M' ||
+	    opt == 'E' ||
 	    opt == 'N') {
 		if (is_string_number(optarg)) {
 			printf("Option '-%c' require a valid numeric value"
@@ -2256,6 +2370,9 @@ static int parsesmi_args(int argc,char **argv)
 	    opt == 'n' ||
 	    opt == 'N' ||
 	    opt == 'Y' ||
+	    opt == 'F' ||
+	    opt == 'P' ||
+	    opt == 'E' ||
 	    opt == 'b') {
 		// make sure optind is valid  ... or another option
 		if (optind >= argc) {
@@ -2557,6 +2674,29 @@ static int parsesmi_args(int argc,char **argv)
 		case 'O' :
 			sock_id = atoi(optarg);
 			ret = epyc_get_pwr_efficiency_mode(sock_id);
+			break;
+		case 'E' :
+			min = atoi(optarg);
+			max = atoi(argv[optind++]);
+			ret = epyc_set_xgmi_pstate_range(min, max);
+			break;
+		case 'F' :
+			sock_id = atoi(optarg);
+			value = atoi(argv[optind++]);
+			ret = epyc_set_cpu_iso_freq_policy(sock_id, value);
+			break;
+		case 'P' :
+			sock_id = atoi(optarg);
+			value = atoi(argv[optind++]);
+			ret = epyc_set_dfc_ctrl(sock_id, value);
+			break;
+		case 'M' :
+			sock_id = atoi(optarg);
+			ret = epyc_get_dfc_ctrl(sock_id);
+			break;
+		case 'K' :
+			sock_id = atoi(optarg);
+			ret = epyc_get_cpu_iso_freq_policy(sock_id);
 			break;
 		case 'A' :
 			ret = show_smi_all_parameters();
