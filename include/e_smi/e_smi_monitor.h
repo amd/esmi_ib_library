@@ -78,6 +78,7 @@ struct system_metrics {
 	uint8_t gmi3_link_width_limit;	// gmi3 maximum link width
 	uint8_t pci_gen5_rate_ctl;
 	struct link_encoding *lencode;	// holds platform specifc link encodings
+	uint8_t max_pwr_eff_mode;	// maximum allowed power efficiency mode
 };
 
 /**

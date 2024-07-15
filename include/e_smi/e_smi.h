@@ -538,6 +538,20 @@ esmi_status_t esmi_socket_power_cap_set(uint32_t socket_idx, uint32_t pcap);
  *  mode. With higher memory and fabric load, the system becomes similar in performance
  *  to the default high performance mode.
  *
+ *  4 = Balanced Core Performance Mode: This mode biases toward consistent core performance across varying core
+ *  utilization levels, by preventing active cores from using the power budget of inactive cores. This mode allows
+ *  core "boosting" as in the default high performance mode, but does not allow core boost to take advantage of the
+ *  power budget of inactive cores, resulting in a more efficient operating point for the active cores. The memory
+ *  subsystem and Infinity Fabric behavior is unaffected. There may be a performance impact under light core
+ *  utilization conditions compared to the default high performance mode. With high core utilization levels, the
+ *  performance is similar to the default high performance mode.
+ *
+ *  5 = Balanced Core and Memory Performance Mode.
+ *  This mode combines the Balanced Memory Performance and the
+ *  Balanced Core Performance mode and may result in lower performance under light loads compared to the default
+ *  high performance mode, but with significant increase in efficiency under light loads. Performance in this mode
+ *  will be similar to the default high performance mode as the system load increases.
+ *
  *  @param[in] sock_ind A socket index.
  *
  *  @param[in] mode Power efficiency mode to be set.
@@ -832,7 +846,7 @@ esmi_status_t esmi_xgmi_width_set(uint8_t min, uint8_t max);
  *
  *  2 => Full width
  *
- *  Supported only on hsmp protocol version5 and 7.
+ *  Supported only on hsmp protocol version 5 and 7.
  *
  *  @param[in] sock_ind Socket index.
  *

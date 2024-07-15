@@ -82,6 +82,8 @@ static struct link_encoding proto_ver6_encoding[] = { {"P2", 0x3}, {"P3", 0x4}, 
 #define PCI_GEN5_RATE_CTRL		0x2
 #define DF_PSTATE_MAX_LIMIT		0x2
 #define GMI3_LINK_WIDTH_LIMIT		0x2
+#define MAX_PWR_EFF_MODE_FAM0x19	0x3
+#define MAX_PWR_EFF_MODE_FAM0x1A	0x5
 
 /* Assign platform specific values from the documentation */
 void init_platform_info(struct system_metrics *sm)
@@ -106,9 +108,11 @@ void init_platform_info(struct system_metrics *sm)
 			if (sm->cpu_family == 0x1A && sm->cpu_model <= 0x1F) {
 				lut = tbl_turin;
 				lut_size = ARRAY_SIZE(tbl_turin);
+				sm->max_pwr_eff_mode = MAX_PWR_EFF_MODE_FAM0x1A;
 			} else {
 				lut = tbl_genoa;
 				lut_size = ARRAY_SIZE(tbl_genoa);
+				sm->max_pwr_eff_mode = MAX_PWR_EFF_MODE_FAM0x19;
 			}
 			break;
 		case HSMP_PROTO_VER6:
@@ -124,6 +128,7 @@ void init_platform_info(struct system_metrics *sm)
 			sm->lencode = proto_ver5_encoding;
 			lut = tbl_turin;
 			lut_size = ARRAY_SIZE(tbl_turin);
+			sm->max_pwr_eff_mode = MAX_PWR_EFF_MODE_FAM0x1A;
 			break;
 	}
 }
