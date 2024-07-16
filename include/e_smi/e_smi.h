@@ -248,6 +248,99 @@ esmi_status_t esmi_socket_energy_get(uint32_t socket_idx, uint64_t *penergy);
  */
 esmi_status_t esmi_all_energies_get(uint64_t *penergy);
 
+/**
+ *  @brief Get the RAPL units through HSMP mailbox.
+ *
+ *  @param[in] socket_idx a socket index
+ *
+ *  @param[inout] tu Input buffer to return the time units.
+ *  @param[inout] esu Input buffer to return the energy units.
+ *  actual energy will be calculated by multiplying the
+ *  energy counter value with (1/2)^ESU
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_rapl_units_hsmp_mailbox_get(uint32_t sock_ind, uint8_t *tu, uint8_t *esu);
+
+/**
+ *  @brief Get the socket energy counter values for a given socket through mailbox.
+ *
+ *  @details Updates the @p counter0 and @p counter1 with lower 32 bit and upper 32 bit of
+ *  socket energy counter respectively.
+ *  Please note these units need to be multiplied with energy units to get actual energy
+ *  consumption.
+ *
+ *  @param[in] socket_idx a socket index
+ *
+ *  @param[inout] counter0 Input buffer to return the lower 32 bit of socket energy counter.
+ *  @param[inout] counter1 Input buffer to return the upper 32 bit of socket energy counter.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_rapl_package_counter_hsmp_mailbox_get(uint32_t sock_ind, uint32_t *counter1,
+							 uint32_t *counter0);
+/**
+ *  @brief Get the core energy counter values for a given socket through mailbox.
+ *
+ *  @details Updates the @p counter0 and @p counter1 with lower 32 bit and upper 32 bit of
+ *  core energy counter respectively.
+ *  Please note these units need to be multiplied with energy units to get actual energy
+ *  consumption.
+ *
+ *  @param[in] core_ind a core index
+ *
+ *  @param[inout] counter0 Input buffer to return the lower 32 bit of core energy.
+ *  @param[inout] counter1 Input buffer to return the upper 32 bit of core energy.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_rapl_core_counter_hsmp_mailbox_get(uint32_t core_ind, uint32_t *counter1,
+						      uint32_t *counter0);
+
+/**
+ *  @brief Get the core energy for a given core through HSMP mailbox.
+ *
+ *  @details Given a core index @p core_ind, this function will calculate
+ *  the energy of that particular cpu by multiplying counter values obtained from
+ *  esmi_rapl_core_counter_hsmp_mailbox_get() with ESU values from
+ *  esmi_rapl_units_hsmp_mailbox_get()(counter value * 1/2^ESU)
+ *  and updates the @p penergy in micro Joules.
+ *
+ *  @param[in] core_ind is a core index
+ *
+ *  @param[inout] penergy Input buffer to return the core energy.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_core_energy_hsmp_mailbox_get(uint32_t core_ind, uint64_t *penergy);
+
+/**
+ *  @brief Get the socket energy for a given socket through mailbox.
+ *
+ *  @details Given a socket index @p socket_idx, this function will calculate
+ *  the energy of that particular socket by multiplying counter values obtained from
+ *  esmi_rapl_package_counter_hsmp_mailbox_get() with ESU values from
+ *  esmi_rapl_units_hsmp_mailbox_get()(counter value * 1/2^ESU) and
+ *  returns it in @p penergy in micro joules.
+ *
+ *  @param[in] socket_idx a socket index
+ *
+ *  @param[inout] penergy Input buffer to return the socket energy.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_package_energy_hsmp_mailbox_get(uint32_t sock_ind, uint64_t *penergy);
+
 /** @} */  // end of EnergyQuer
 
 /****************************************************************************/

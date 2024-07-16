@@ -54,7 +54,7 @@ static bool tbl_mi300[] = { false, true, true, true, true, true, true, true, tru
 			    true };
 
 /* Turin - hsmp_proto_ver7 */
-/* MSGID1h - MSGID28h */
+/* MSGID1h - MSGID32h */
 static bool tbl_turin[] = { false, true, true, true, true, true, true, true, true, true,
 			    /* MSGID-0xA */
 			    true, true, true, true, true, true, true, true, true, true,
@@ -63,7 +63,9 @@ static bool tbl_turin[] = { false, true, true, true, true, true, true, true, tru
 			    /* MSGID-0x1e */
 			    true, true, true, true, true, false, false, false, true,
 			    /* MSGID-0x27-0x28 */
-			    true, true };
+			    true, true, false, false, false, false, false, false, false,
+			    /* MSGID-0x30-0x32 */
+			    true, true, true };
 
 bool *lut = NULL;
 int lut_size = 0;

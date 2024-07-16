@@ -7,6 +7,7 @@
 #include <cpuid.h>
 #include <dirent.h>
 #include <errno.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -40,6 +41,11 @@ extern bool *lut;
 extern int lut_size;
 
 #define check_sup(x)    ((x >= lut_size) || !lut[x])
+
+#define TU_POS 16
+#define ESU_POS 8
+#define TU_BITS 4
+#define ESU_BITS 5
 
 /*
  * To Calculate maximum possible number of cores and sockets,
@@ -529,6 +535,144 @@ esmi_status_t esmi_number_of_sockets_get(uint32_t *sockets)
 /*
  * Energy Monitor functions
  *
+ * Function to get Rapl units from HSMP mailbox command.
+ */
+esmi_status_t esmi_rapl_units_hsmp_mailbox_get(uint32_t sock_ind, uint8_t *tu, uint8_t *esu)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
+
+	msg.msg_id	= HSMP_GET_RAPL_UNITS;
+	if (check_sup(msg.msg_id))
+		return ESMI_NO_HSMP_MSG_SUP;
+
+	CHECK_HSMP_INPUT();
+
+	if (!tu || !esu)
+		return ESMI_INVALID_INPUT;
+
+	msg.response_sz	= 1;
+	msg.sock_ind	= sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret) {
+		*tu = (msg.args[0] >> TU_POS) & (BIT(TU_BITS) - 1);
+		*esu = (msg.args[0] >> ESU_POS) & (BIT(ESU_BITS) - 1);
+	}
+
+	return errno_to_esmi_status(ret);
+}
+
+/*
+ * Function to get Rapl core counter from HSMP mailbox command.
+ */
+esmi_status_t esmi_rapl_core_counter_hsmp_mailbox_get(uint32_t core_ind,
+						      uint32_t *counter1, uint32_t *counter0)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
+
+	msg.msg_id	= HSMP_GET_RAPL_CORE_COUNTER;
+	if (check_sup(msg.msg_id))
+		return ESMI_NO_HSMP_MSG_SUP;
+
+	CHECK_HSMP_INPUT();
+
+	if (!counter0 || !counter1)
+		return ESMI_INVALID_INPUT;
+
+	msg.response_sz	= 2;
+	msg.num_args	= 1;
+	msg.args[0] 	= psm->map[core_ind].apic_id;
+	msg.sock_ind	= psm->map[core_ind].sock_id;
+	ret = hsmp_xfer(&msg, O_RDWR);
+	if (!ret) {
+		*counter0 = msg.args[0];
+		*counter1 = msg.args[1];
+	}
+
+	return errno_to_esmi_status(ret);
+}
+
+/*
+ * Function to get Rapl package counter from HSMP mailbox command.
+ */
+esmi_status_t esmi_rapl_package_counter_hsmp_mailbox_get(uint32_t sock_ind,
+							 uint32_t *counter1, uint32_t *counter0)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
+
+	msg.msg_id	= HSMP_GET_RAPL_PACKAGE_COUNTER;
+	if (check_sup(msg.msg_id))
+		return ESMI_NO_HSMP_MSG_SUP;
+
+	CHECK_HSMP_INPUT();
+
+	if (!counter0 || !counter1)
+		return ESMI_INVALID_INPUT;
+
+	msg.response_sz	= 2;
+	msg.sock_ind	= sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret) {
+		*counter0 = msg.args[0];
+		*counter1 = msg.args[1];
+	}
+
+	return errno_to_esmi_status(ret);
+}
+
+/*
+ * Function to get core energy from HSMP mailbox commands.
+ */
+esmi_status_t esmi_core_energy_hsmp_mailbox_get(uint32_t core_ind, uint64_t *penergy)
+{
+	int ret;
+	uint8_t tu, esu;
+	uint32_t counter1, counter0;
+
+	if (!penergy)
+		return ESMI_INVALID_INPUT;
+
+	ret = esmi_rapl_units_hsmp_mailbox_get(psm->map[core_ind].sock_id, &tu, &esu);
+	if (ret)
+		return ret;
+
+	ret = esmi_rapl_core_counter_hsmp_mailbox_get(core_ind, &counter1, &counter0);
+	if (ret)
+		return ret;
+
+	*penergy = (((uint64_t)counter1 << 32) | counter0) * pow(0.5, (double)esu) * 1000000;
+
+	return 0;
+}
+
+/*
+ * Function to get socket energy from HSMP mailbox commands.
+ */
+esmi_status_t esmi_package_energy_hsmp_mailbox_get(uint32_t sock_ind, uint64_t *penergy)
+{
+	int ret;
+	uint8_t tu, esu;
+	uint32_t counter1, counter0;
+
+	if (!penergy)
+		return ESMI_INVALID_INPUT;
+
+	ret = esmi_rapl_units_hsmp_mailbox_get(sock_ind, &tu, &esu);
+	if (ret)
+		return ret;
+
+	ret = esmi_rapl_package_counter_hsmp_mailbox_get(sock_ind, &counter1, &counter0);
+	if (ret)
+		return ret;
+
+	*penergy = (((uint64_t)counter1 << 32) | counter0) * pow(0.5, (double)esu) * 1000000;
+
+	return 0;
+}
+
+/*
  * Function to get the enenrgy of the core with provided core index
  */
 esmi_status_t esmi_core_energy_get(uint32_t core_ind, uint64_t *penergy)
