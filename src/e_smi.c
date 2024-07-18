@@ -1747,7 +1747,7 @@ esmi_status_t esmi_pwr_efficiency_mode_set(uint8_t sock_ind, uint8_t mode)
 	if (sock_ind >= psm->total_sockets)
 		return ESMI_INVALID_INPUT;
 
-	if (mode > 3)
+	if (mode > psm->max_pwr_eff_mode)
 		return ESMI_INVALID_INPUT;
 
 	msg.num_args	= 1;
