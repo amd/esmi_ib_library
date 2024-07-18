@@ -1776,7 +1776,7 @@ esmi_status_t esmi_pwr_efficiency_mode_get(uint8_t sock_ind, uint8_t *mode)
 	msg.response_sz = 1;
 	msg.sock_ind	= sock_ind;
 	msg.args[0]	= BIT(31);
-	ret = hsmp_xfer(&msg, O_RDWR);
+	ret = hsmp_xfer(&msg, O_RDONLY);
 	/* bits 0-2 contain current mode */
 	if (!ret)
 		*mode =  msg.args[0] & (BIT(3) - 1);
