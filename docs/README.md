@@ -56,9 +56,9 @@ The RPM and DEB packages can be created with the following steps (continued from
 `$ make package`
 
 # Kernel version dependency
-Family 0x19 model 00-0fh a0-afh are supported from v5.16-rc7 onwards
-Family 0x19 model 90-9fh are supported from v6.6-rc1 onwards
-Family 0x1A model 00-1fh are supported from v6.5-rc5 onwards
+* Family 0x19 model 00-0fh a0-afh are supported from v5.16-rc7 onwards
+* Family 0x19 model 90-9fh are supported from v6.6-rc1 onwards
+* Family 0x1A model 00-1fh are supported from v6.5-rc5 onwards
 
 # Kernel driver dependencies
 The E-SMI Library depends on the following device drivers from Linux to manage the system management features.
@@ -72,20 +72,20 @@ The power metrics, boostlimits and other features are managed by the SMU(System 
   It should be available at
   * /usr/include/asm/ on RHEL systems
   * /usr/include/x86_64-linux-gnu/asm/ on Ubuntu systems.
-  If its not present, it can be copied from amd_hsmp/ github repo or from the kernel source arch/x86/include/uapi/asm/amd_hsmp.h
+  If its not present, it can be copied from [amd_hsmp](https://github.com/amd/amd_hsmp.git) github repo or from the kernel source arch/x86/include/uapi/asm/amd_hsmp.h
 * There is always a dependency between E-smi and amd_hsmp driver versions.
   The new features of E-smi work only if there is a matching HSMP driver.
 ## amd_hsmp/msr_safe/amd_energy/msr
 One of these drivers is needed to monitor energy counters.
 * AMD family 19h, model 00-0fh and 30-3fh
   * These processors support energy monitoring through 32 bit RAPL MSR registers.
-  *`amd_energy` driver, an out of tree kernel module, hosted at [amd_energy](https://github.com/amd/amd_energy) can report per core and per socket counters via the HWMON sysfs entries.
+  * amd_energy driver, an out of tree kernel module, hosted at [amd_energy](https://github.com/amd/amd_energy) can report per core and per socket counters via the HWMON sysfs entries.
   * This driver provides accumulation of energy for avoiding wrap around problem.
   * This is the only supported energy driver for 32bit RAPLS
 * AMD family 19h, model 10-1fh, a0-afh and 90-9fh, AMD family 0x1A, model 00-1fh
   * These processors support energy monitoring through 64 bit RAPL MSR registers.
   * Because of 64 bit registers, there is no accumulation of energy needed.
-  * For these processors either  [msr_safe](https://github.com/LLNL/msr-safe.git) [amd_energy](https://github.com/amd/amd_energy) or kernel's default msr driver can be used.
+  * For these processors either  [msr_safe](https://github.com/LLNL/msr-safe.git),  [amd_energy](https://github.com/amd/amd_energy) or kernel's default msr driver can be used.
 * AMD family 1Ah, model 0x00-0x1f support RAPL reading using HSMP mailbox.
   * For these processors either amd_hsmp driver or msr_safe driver or amd_energy driver or msr driver can be used.
 
@@ -94,14 +94,14 @@ One of these drivers is needed to monitor energy counters.
     * If amd_hsmp driver is not present/not supports energy reading, and msr-safe driver is present, this is used for reading energy.
       Msr-safe driver needs allowlist file to be written to "/dev/cpu/msr_allowlist" for allowing the read of those specific msr registers.
       Please follow below steps or use the tool option "writemsrallowlist" to write the allowlist file.
-      Create "amd_allowlist" file with below contents and run the command "sudo su" and "cat amd_allowlist > /dev/cpu/msr_allowlist"
-      * # MSR # Write Mask # Comment
+      Create "amd_allowlist" file with below contents and run the command "sudo su" and "cat amd_allowlist > /dev/cpu/msr_allowlist".
       * 0xC0010299 0x0000000000000000 # "ENERGY_PWR_UNIT_MSR"
       * 0xC001029A 0x0000000000000000 # "ENERGY_CORE_MSR"
       * 0xC001029B 0x0000000000000000 # "ENERGY_PKG_MSR"
+      * Note: The first column above indicates MSR register address and 2nd column indicates write mask and the third coulmn is name of the register.
     * If msr_safe driver is not present, amd_energy driver is present, this is used for reading energy.
     * If msr_safe driver or amd_energy driver not present, msr driver will be used for reading energy.
-  * Any one of msr_safe/amd_energy/msr driver is sufficient
+    * Any one of msr_safe/amd_energy/msr driver is sufficient
 
 # BIOS dependency
 * To get HSMP working. PCIe interface needs to be enabled in the BIOS. On the reference BIOS please follow the sequence below for enabling HSMP.
@@ -114,13 +114,13 @@ One of these drivers is needed to monitor energy counters.
 
   If the above HSMP support option is disabled, the related E-SMI APIs will return -ETIMEDOUT.
   The latest BIOS supports probing of HSMP driver through ACPI device.
-  The ACPI supported amd driver version is 2.2
+  The ACPI supported [amd_hsmp](https://github.com/amd/amd_hsmp.git) driver version is 2.2
 
 # Supported hardware
-AMD Zen3 based CPU Family `19h` Models `0h-Fh` and `30h-3Fh`.\n
-AMD Zen4 based CPU Family `19h` Models `10h-1Fh` and `A0-AFh`.\n
-AMD Zen4 based CPU Family `19h` Models `90-9Fh`.\n
-AMD Zen4 based CPU Family `1Ah` Models `00-1Fh`.\n
+* AMD Zen3 based CPU Family `19h` Models `0h-Fh` and `30h-3Fh`.
+* AMD Zen4 based CPU Family `19h` Models `10h-1Fh` and `A0-AFh`.
+* AMD Zen4 based CPU Family `19h` Models `90-9Fh`.
+* AMD Zen4 based CPU Family `1Ah` Models `00-1Fh`.
 
 # Additional required software for building
 In order to build the E-SMI library, the following components are required. Note that the software versions listed are what is being used in development. Earlier versions are not guaranteed to work:
