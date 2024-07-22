@@ -251,7 +251,7 @@ esmi_status_t esmi_all_energies_get(uint64_t *penergy);
 /**
  *  @brief Get the RAPL units through HSMP mailbox.
  *
- *  @param[in] socket_idx a socket index
+ *  @param[in] sock_ind a socket index
  *
  *  @param[inout] tu Input buffer to return the time units.
  *  @param[inout] esu Input buffer to return the energy units.
@@ -272,7 +272,7 @@ esmi_status_t esmi_rapl_units_hsmp_mailbox_get(uint32_t sock_ind, uint8_t *tu, u
  *  Please note these units need to be multiplied with energy units to get actual energy
  *  consumption.
  *
- *  @param[in] socket_idx a socket index
+ *  @param[in] sock_ind a socket index
  *
  *  @param[inout] counter0 Input buffer to return the lower 32 bit of socket energy counter.
  *  @param[inout] counter1 Input buffer to return the upper 32 bit of socket energy counter.
@@ -325,13 +325,13 @@ esmi_status_t esmi_core_energy_hsmp_mailbox_get(uint32_t core_ind, uint64_t *pen
 /**
  *  @brief Get the socket energy for a given socket through mailbox.
  *
- *  @details Given a socket index @p socket_idx, this function will calculate
+ *  @details Given a socket index @p sock_ind, this function will calculate
  *  the energy of that particular socket by multiplying counter values obtained from
  *  esmi_rapl_package_counter_hsmp_mailbox_get() with ESU values from
  *  esmi_rapl_units_hsmp_mailbox_get()(counter value * 1/2^ESU) and
  *  returns it in @p penergy in micro joules.
  *
- *  @param[in] socket_idx a socket index
+ *  @param[in] sock_ind a socket index
  *
  *  @param[inout] penergy Input buffer to return the socket energy.
  *
@@ -495,7 +495,7 @@ esmi_status_t esmi_current_freq_limit_core_get(uint32_t core_id, uint32_t *freq)
  *
  *  @details This function gets the CpuRailIsoFreqPolicy.
  *
- *  @param[in] socket_idx a socket index
+ *  @param[in] sock_ind a socket index
  *
  *  @param[in] val Input buffer containing boolean value which indicates whether all cores on both
  *  rails have same frequency limit or different frequency limit.
@@ -514,7 +514,7 @@ esmi_status_t esmi_cpurail_isofreq_policy_get(uint8_t sock_ind, bool *val);
  *  @details This function gets DF C-state enabling control.
  *  DF C-state is a low power state for IOD.
  *
- *  @param[in] socket_idx a socket index
+ *  @param[in] sock_ind a socket index
  *
  *  @param[in] val Input buffer holds a boolean which indicates whether DFC is enabled or disabled.
  *  Enable DFC - 1
@@ -719,7 +719,7 @@ esmi_status_t esmi_pwr_efficiency_mode_set(uint8_t sock_ind, uint8_t mode);
  *  For other limiters specific to CPU power rails (e.g. TDC), this policy allows or disables
  *  independent core clocks per rail(VDDCR_CPU0 or VDDCR_CPU1).
  *
- *  @param[in] socket_idx a socket index
+ *  @param[in] sock_ind a socket index
  *
  *  @param[in] val Input buffer to contian a boolean which indicates whether all cores on both
  *  rails have same frequency limit or different frequency limit.
@@ -738,7 +738,7 @@ esmi_status_t esmi_cpurail_isofreq_policy_set(uint8_t sock_ind, bool *val);
  *  @details This function sets DF C-state enabling control.
  *  DF C-state is a low power state for IOD.
  *
- *  @param[in] socket_idx a socket index
+ *  @param[in] sock_ind a socket index
  *
  *  @param[in] val Input buffer holds a boolean which indicates whether to
  *  disable DFC or to enable DFC.
@@ -1212,7 +1212,7 @@ esmi_status_t esmi_df_pstate_range_set(uint8_t sock_ind, uint8_t max_pstate, uin
  *  @retval None-zero is returned upon failure.
  *
  */
-esmi_status_t esmi_xgmi_pstate_range_set(uint8_t max_state, uint8_t min_state);
+esmi_status_t esmi_xgmi_pstate_range_set(uint8_t max_pstate, uint8_t min_pstate);
 
 /** @} */  // end of PStateCont
 
@@ -1323,8 +1323,8 @@ esmi_status_t esmi_dram_address_metrics_table_get(uint8_t sock_ind, uint64_t *dr
  *  @details
  *  [31:0] = input value
  *
- *  @param[in] sock_ind :Socket index.
- *  @param[in/out] data : input buffer to send input value and to get the output value
+ *  @param[in] sock_ind Socket index.
+ *  @param[inout] data  input buffer to send input value and to get the output value
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval Non-zero is returned upon failure.
