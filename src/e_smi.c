@@ -1245,7 +1245,7 @@ esmi_status_t esmi_socket_lclk_dpm_level_set(uint32_t sock_ind, uint8_t nbio_id,
 		return ESMI_INVALID_INPUT;
 	if (nbio_id > 3)
 		return ESMI_INVALID_INPUT;
-	if ((min > max) || (min > 3) || (max > 3))
+	if ((min > max) || (max > psm->max_dpm_level))
 		return ESMI_INVALID_INPUT;
 
 	dpm_val = (nbio_id << 16) | (max << 8) | min;

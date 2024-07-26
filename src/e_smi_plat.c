@@ -86,6 +86,8 @@ static struct link_encoding proto_ver6_encoding[] = { {"P2", 0x3}, {"P3", 0x4}, 
 #define GMI3_LINK_WIDTH_LIMIT		0x2
 #define MAX_PWR_EFF_MODE_FAM0x19	0x3
 #define MAX_PWR_EFF_MODE_FAM0x1A	0x5
+#define MAX_DPM_LEVEL			0x3
+#define MAX_DPM_LEVEL_MI300		0x2
 
 /* Assign platform specific values from the documentation */
 void init_platform_info(struct system_metrics *sm)
@@ -96,17 +98,20 @@ void init_platform_info(struct system_metrics *sm)
 			lut = tbl_milan;
 			lut_size = ARRAY_SIZE(tbl_milan);
 			sm->lencode = NULL;
+			sm->max_dpm_level = MAX_DPM_LEVEL;
 			break;
 		case HSMP_PROTO_VER4:
 			lut = tbl_trento;
 			lut_size = ARRAY_SIZE(tbl_trento);
 			sm->lencode = NULL;
+			sm->max_dpm_level = MAX_DPM_LEVEL;
 			break;
 		case HSMP_PROTO_VER5:
 			sm->df_pstate_max_limit = DF_PSTATE_MAX_LIMIT;
 			sm->gmi3_link_width_limit = GMI3_LINK_WIDTH_LIMIT;
 			sm->pci_gen5_rate_ctl = PCI_GEN5_RATE_CTRL;
 			sm->lencode = proto_ver5_encoding;
+			sm->max_dpm_level = MAX_DPM_LEVEL;
 			if (sm->cpu_family == 0x1A && sm->cpu_model <= 0x1F) {
 				lut = tbl_turin;
 				lut_size = ARRAY_SIZE(tbl_turin);
@@ -122,6 +127,7 @@ void init_platform_info(struct system_metrics *sm)
 			lut = tbl_mi300;
 			lut_size = ARRAY_SIZE(tbl_mi300);
 			sm->lencode = proto_ver6_encoding;
+			sm->max_dpm_level = MAX_DPM_LEVEL_MI300;
 			break;
 		case HSMP_PROTO_VER7:
 		default:
@@ -133,6 +139,7 @@ void init_platform_info(struct system_metrics *sm)
 			lut_size = ARRAY_SIZE(tbl_turin);
 			sm->max_pwr_eff_mode = MAX_PWR_EFF_MODE_FAM0x1A;
 			sm->hsmp_rapl_reading = true;
+			sm->max_dpm_level = MAX_DPM_LEVEL;
 			break;
 	}
 }

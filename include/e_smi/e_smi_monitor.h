@@ -81,6 +81,7 @@ struct system_metrics {
 	struct link_encoding *lencode;	// holds platform specifc link encodings
 	uint8_t max_pwr_eff_mode;	// maximum allowed power efficiency mode
 	bool hsmp_rapl_reading;		// RAPL register reading from HSMP mailbox
+	uint8_t max_dpm_level;		// maximum allowed dpm level
 };
 
 /**
