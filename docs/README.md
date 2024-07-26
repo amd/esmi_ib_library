@@ -37,6 +37,11 @@ Building the library as a static(.a) along with shared libraries(.so) is achieve
 
 * `$ make`
 
+**Building the library and tool using clang compiler**
+* `$ cmake -DUSE_CLANG=1 ../`
+* `$ make`
+
+
  The built library `libe_smi64_static.a`, `libe_smi64.so.X.Y` and `esmi_tool` will appear in the `build` directory
 
 * `$ sudo make install`
@@ -125,6 +130,8 @@ One of these drivers is needed to monitor energy counters.
 # Additional required software for building
 In order to build the E-SMI library, the following components are required. Note that the software versions listed are what is being used in development. Earlier versions are not guaranteed to work:
 * CMake (v3.5.0)
+* gcc, g++, make
+* build-essential
 
 In order to build the latest documentation, the following are required:
 
@@ -373,7 +380,8 @@ Following are the value ranges and other information needed for passing it to to
 
 	  NBIOID : 0 - 3
 
-	  MIN : MAX : 0 - 3 with MIN <= MAX
+	  MI300A:  MIN : MAX : 0 - 2 with MIN <= MAX
+	  Other platforms: MIN : MAX : 0 - 3 with MIN <= MAX
 
 6. 	--setpcielinkratecontrol [SOCKET] [CTL]
 
