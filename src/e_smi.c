@@ -19,7 +19,7 @@
 #include <e_smi/e_smi.h>
 #include <e_smi/e_smi_monitor.h>
 
-static const struct system_metrics *psm = NULL;
+static struct system_metrics *psm = NULL;
 
 struct cpu_mapping {
 	int proc_id;
@@ -238,7 +238,7 @@ static esmi_status_t create_msr_monitor(void)
 /*
  * Check whether hsmp character device file exists
  */
-static esmi_status_t create_hsmp_monitor(struct system_metrics *sm)
+static esmi_status_t create_hsmp_monitor()
 {
 	if (!access(HSMP_CHAR_DEVFILE_NAME, F_OK))
 		return ESMI_SUCCESS;
@@ -260,7 +260,7 @@ static void parse_lines(char **str, FILE *fp, uint32_t *val, const char *cmp_str
 	}
 }
 
-static esmi_status_t create_cpu_mappings(struct system_metrics *sm)
+static esmi_status_t create_cpu_mappings(struct system_metrics *psm)
 {
 	size_t size = CPU_INFO_LINE_SIZE;
 	int i = 0;
@@ -271,25 +271,29 @@ static esmi_status_t create_cpu_mappings(struct system_metrics *sm)
 	str = malloc(CPU_INFO_LINE_SIZE);
 	if (!str)
 		return ESMI_NO_MEMORY;
-
-	sm->map = malloc(sm->total_cores * sizeof(struct cpu_mapping));
-	if (!sm->map) {
-		free(str);
-		return ESMI_NO_MEMORY;
+	/* If create_cpu_mappings() is called multiple times
+	 * dont allocate the memory again.
+	 */
+	if (!psm->map) {
+		psm->map = malloc(psm->total_cores * sizeof(struct cpu_mapping));
+		if (!psm->map) {
+			free(str);
+			return ESMI_NO_MEMORY;
+		}
 	}
 
 	fp = fopen(CPU_INFO_PATH, "r");
 	if (!fp) {
 		free(str);
-		free(sm->map);
+		free(psm->map);
 		return ESMI_FILE_ERROR;
 	}
 	while (getline(&str, &size, fp) != -1) {
 		if ((tok = strtok(str, delim1)) && (!strncmp(tok, proc_str, strlen(proc_str)))) {
 			tok  = strtok(NULL, delim2);
-			sm->map[i].proc_id = atoi(tok);
-			parse_lines(&str, fp, &sm->map[i].sock_id, node_str);
-			parse_lines(&str, fp, &sm->map[i].apic_id, apic_str);
+			psm->map[i].proc_id = atoi(tok);
+			parse_lines(&str, fp, &psm->map[i].sock_id, node_str);
+			parse_lines(&str, fp, &psm->map[i].apic_id, apic_str);
 			i++;
 		}
 	}
@@ -301,35 +305,35 @@ static esmi_status_t create_cpu_mappings(struct system_metrics *sm)
 	return ESMI_SUCCESS;
 }
 
-static esmi_status_t detect_packages(struct system_metrics *psysm)
+static esmi_status_t detect_packages(struct system_metrics *psm)
 {
 	uint32_t eax, ebx, ecx,edx;
 	int max_cores_socket, ret;
 
-	if (NULL == psysm) {
+	if (NULL == psm) {
 		return ESMI_IO_ERROR;
 	}
 	if (!__get_cpuid(1, &eax, &ebx, &ecx, &edx)) {
 		return ESMI_IO_ERROR;
 	}
-	psysm->cpu_family = ((eax >> 8) & 0xf) + ((eax >> 20) & 0xff);
-	psysm->cpu_model = ((eax >> 16) & 0xf) * 0x10 + ((eax >> 4) & 0xf);
+	psm->cpu_family = ((eax >> 8) & 0xf) + ((eax >> 20) & 0xff);
+	psm->cpu_model = ((eax >> 16) & 0xf) * 0x10 + ((eax >> 4) & 0xf);
 
 	if (!__get_cpuid(0x08000001e, &eax, &ebx, &ecx, &edx)) {
 		return ESMI_IO_ERROR;
 	}
-	psysm->threads_per_core = ((ebx >> 8) & 0xff) + 1;
+	psm->threads_per_core = ((ebx >> 8) & 0xff) + 1;
 
 	ret = read_index(CPU_COUNT_PATH);
 	if(ret < 0) {
 		return ESMI_IO_ERROR;
 	}
-	psysm->total_cores = ret + 1;
+	psm->total_cores = ret + 1;
 
 	/* fam 0x1A, model0x00-0x1f are dense sockets and support more than 255 threads,
 	 * On these systems, number of threads is detected by reading
          * Core::X86::Cpuid::SizeId[NC]+1 */
-	if (psysm->cpu_family == 0x1A && psysm->cpu_model >= 0x10 && psysm->cpu_model <= 0x1f) {
+	if (psm->cpu_family == 0x1A && psm->cpu_model >= 0x10 && psm->cpu_model <= 0x1f) {
 		if (!__get_cpuid(0x80000008, &eax, &ebx, &ecx, &edx))
 			return ESMI_IO_ERROR;
 		max_cores_socket = (ecx & 0xfff) + 1;
@@ -340,7 +344,7 @@ static esmi_status_t detect_packages(struct system_metrics *psysm)
 	}
 
 	/* Number of sockets in the system */
-	psysm->total_sockets = psysm->total_cores / max_cores_socket;
+	psm->total_sockets = psm->total_cores / max_cores_socket;
 
 	return ESMI_SUCCESS;
 }
@@ -364,30 +368,30 @@ static bool check_for_64bit_rapl_reg(struct system_metrics *psysm)
 	return ret;
 }
 
-static void create_energy_monitor(struct system_metrics *sm)
+static void create_energy_monitor(struct system_metrics *psm)
 {
-	if (check_for_64bit_rapl_reg(sm)) {
-		if (sm->hsmp_status == ESMI_INITIALIZED
-		    && sm->hsmp_rapl_reading)
+	if (check_for_64bit_rapl_reg(psm)) {
+		if (psm->hsmp_status == ESMI_INITIALIZED
+		    && psm->hsmp_rapl_reading)
 			return;
 
 		if (create_msr_safe_monitor() == ESMI_SUCCESS) {
-			sm->msr_safe_status = ESMI_INITIALIZED;
+			psm->msr_safe_status = ESMI_INITIALIZED;
 			return;
 		}
 
 		if (create_amd_energy_monitor() == ESMI_SUCCESS) {
-			sm->energy_status = ESMI_INITIALIZED;
+			psm->energy_status = ESMI_INITIALIZED;
 			return;
 		}
 
 		if (create_msr_monitor() == ESMI_SUCCESS) {
-			sm->msr_status = ESMI_INITIALIZED;
+			psm->msr_status = ESMI_INITIALIZED;
 			return;
 		}
 	} else {
 		if (create_amd_energy_monitor() == ESMI_SUCCESS)
-			sm->energy_status = ESMI_INITIALIZED;
+			psm->energy_status = ESMI_INITIALIZED;
 	}
 
 	return;
@@ -400,24 +404,32 @@ static void create_energy_monitor(struct system_metrics *sm)
 esmi_status_t esmi_init()
 {
 	esmi_status_t ret;
-	static struct system_metrics sm;
 
-	sm.init_status = ESMI_NOT_INITIALIZED;
-	sm.energy_status = ESMI_NOT_INITIALIZED;
-	sm.msr_status = ESMI_NOT_INITIALIZED;
-	sm.msr_safe_status = ESMI_NOT_INITIALIZED;
-	sm.hsmp_status = ESMI_NOT_INITIALIZED;
+	/* esmi_init() ideally should be accompanied with esmi_exit()
+	 * but if someone calls it multiple times without esmi_exit()
+	 * then, still it should not cause a problem of memory leak.
+	 */
+	if (!psm) {
+		psm = calloc(1, sizeof(*psm));
+		if (!psm)
+			return ESMI_NO_MEMORY;
+	}
+	psm->init_status = ESMI_NOT_INITIALIZED;
+	psm->energy_status = ESMI_NOT_INITIALIZED;
+	psm->msr_status = ESMI_NOT_INITIALIZED;
+	psm->msr_safe_status = ESMI_NOT_INITIALIZED;
+	psm->hsmp_status = ESMI_NOT_INITIALIZED;
 
-	ret = detect_packages(&sm);
+	ret = detect_packages(psm);
 	if (ret != ESMI_SUCCESS) {
 		return ret;
 	}
-	if (sm.cpu_family < 0x19)
+	if (psm->cpu_family < 0x19)
 		return ESMI_NOT_SUPPORTED;
 
-	ret = create_hsmp_monitor(&sm);
+	ret = create_hsmp_monitor();
 	if (ret == ESMI_SUCCESS) {
-		ret = create_cpu_mappings(&sm);
+		ret = create_cpu_mappings(psm);
 		if (ret != ESMI_SUCCESS)
 			return ret;
 
@@ -427,27 +439,30 @@ esmi_status_t esmi_init()
 		msg.sock_ind = 0;
 		ret = hsmp_xfer(&msg, O_RDONLY);
 		if (ret == ESMI_SUCCESS) {
-			sm.hsmp_status = ESMI_INITIALIZED;
-			sm.hsmp_proto_ver = msg.args[0];
-			init_platform_info(&sm);
+			psm->hsmp_status = ESMI_INITIALIZED;
+			psm->hsmp_proto_ver = msg.args[0];
+			init_platform_info(psm);
 		}
 	}
 
-	create_energy_monitor(&sm);
+	create_energy_monitor(psm);
 
-	if (sm.energy_status && sm.msr_status && sm.msr_safe_status && sm.hsmp_status)
-		sm.init_status = ESMI_NO_DRV;
+	if (psm->energy_status && psm->msr_status && psm->msr_safe_status && psm->hsmp_status)
+		psm->init_status = ESMI_NO_DRV;
 	else
-		sm.init_status = ESMI_INITIALIZED;
-	psm = &sm;
+		psm->init_status = ESMI_INITIALIZED;
 
-	return sm.init_status;
+	return psm->init_status;
 }
 
 void esmi_exit(void)
 {
-	if (psm && psm->map) {
-		free(psm->map);
+	if (psm) {
+		if (psm->map) {
+			free(psm->map);
+			psm->map = NULL;
+		}
+		free(psm);
 		psm = NULL;
 	}
 
