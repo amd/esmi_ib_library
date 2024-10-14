@@ -2145,6 +2145,11 @@ static esmi_status_t init_proto_version_func_pointers()
 		break;
 	case 7:
 	default:
+		if (proto_ver > 7) {
+			printf(MAG "This version of the library does not fully support your platform.\n");
+			printf(MAG "defaulting to highest supported platform feature set, may support common features across platform.\n");
+			printf(MAG "Please upgrade the library.\n\n" RESET);
+		}
 		size = ARRAY_SIZE(feat_comm) + ARRAY_SIZE(feat_ver2_get) +
 		       ARRAY_SIZE(feat_ver2_set) + ARRAY_SIZE(feat_ver5_get) +
 		       ARRAY_SIZE(feat_ver5_set) + ARRAY_SIZE(feat_ver3) +
