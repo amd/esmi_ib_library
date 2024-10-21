@@ -26,6 +26,12 @@ set(E_SMI_COMPONENT "lib${E_SMI}")
 set(E_SMI_TARGET "${E_SMI}64")
 set(E_SMI_STATIC "${E_SMI_TARGET}_static")
 
+if(${USE_CLANG})
+	set(CMAKE_C_COMPILER "/usr/bin/clang")
+	set(CMAKE_CXX_COMPILER "/usr/bin/clang++")
+	set(CMAKE_C_FLAGS "-O3 -march=native -flto")
+endif()
+
 ################# Determine the library version #########################
 ## Setup the package version based on git tags.
 set(PKG_VERSION_GIT_TAG_PREFIX "esmi_pkg_ver")
