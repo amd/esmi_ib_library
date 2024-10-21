@@ -115,6 +115,8 @@ static int write_msr_allowlist_file()
 		close(fd);
 	}
 	printf("Successfully added msr allowlist.\n");
+
+	return ESMI_SUCCESS;
 }
 
 static esmi_status_t epyc_get_coreenergy(uint32_t core_id)
