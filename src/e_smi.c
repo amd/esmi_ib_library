@@ -246,7 +246,7 @@ static esmi_status_t create_hsmp_monitor()
 	return ESMI_NO_HSMP_DRV;
 }
 
-static void parse_lines(char **str, FILE *fp, uint32_t *val, const char *cmp_str)
+static void parse_lines(char **str, FILE *fp, int *val, const char *cmp_str)
 {
 	size_t size = CPU_INFO_LINE_SIZE;
 	char *tok;
@@ -747,7 +747,7 @@ esmi_status_t esmi_socket_energy_get(uint32_t sock_ind, uint64_t *penergy)
 {
 	esmi_status_t status;
 	esmi_status_t ret;
-	int core_ind;
+	uint32_t core_ind;
 
 	CHECK_ENERGY_GET_INPUT(penergy);
 	if (sock_ind >= psm->total_sockets) {
