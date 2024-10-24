@@ -33,6 +33,14 @@ static const char *bw_string[3] = {"aggregate", "read", "write"}; //!< bandwidth
  */
 
 /**
+ * @brief HSMP Driver major and minor version numbers
+ */
+struct hsmp_driver_version {
+        uint32_t major;		//!< Major version number
+        uint32_t minor;		//!< Minor version number
+};
+
+/**
  * @brief Deconstruct raw uint32_t into SMU firmware major and minor version numbers
  */
 struct smu_fw_version {
@@ -348,6 +356,17 @@ esmi_status_t esmi_package_energy_hsmp_mailbox_get(uint32_t sock_ind, uint64_t *
  *  Below functions to get HSMP System Statistics.
  *  @{
 */
+
+/**
+ *  @brief Get the HSMP Driver version
+ *
+ *  @details This function will return the HSMP Driver version at @p hsmp_driver_ver
+ *  Supported on all hsmp protocol versions
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *
+ */
+esmi_status_t esmi_hsmp_driver_version_get(struct hsmp_driver_version *hsmp_driver_ver);
 
 /**
  *  @brief Get the SMU Firmware Version

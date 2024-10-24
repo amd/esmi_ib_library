@@ -19,6 +19,10 @@
 #include <e_smi/e_smi.h>
 #include <e_smi/e_smi_monitor.h>
 
+#define HSMP_DRIVER_VERSION_FILE1 "/sys/module/hsmp_common/version"
+#define HSMP_DRIVER_VERSION_FILE2 "/sys/module/amd_hsmp/version"
+#define MAX_BUFFER_SIZE 256
+
 static struct system_metrics *psm = NULL;
 
 struct cpu_mapping {
@@ -809,6 +813,58 @@ esmi_status_t esmi_all_energies_get(uint64_t *penergy)
 		ret = batch_read_msr_drv(MSR_TYPE, penergy, cpus);
 
 	return errno_to_esmi_status(ret);
+}
+
+/*
+ * Function to get the hsmp driver version.
+ */
+esmi_status_t esmi_hsmp_driver_version_get(struct hsmp_driver_version *hsmp_driver_ver)
+{
+	FILE *hsmp_driver_ver_file  = NULL;
+	FILE *hsmp_driver_ver_file1 = NULL;
+	FILE *hsmp_driver_ver_file2 = NULL;
+	char line_buffer[MAX_BUFFER_SIZE] = {0};
+	char delimiter[] = ".";
+	char* token = NULL;
+
+	CHECK_HSMP_GET_INPUT(hsmp_driver_ver);
+
+	hsmp_driver_ver->major = 0;
+	hsmp_driver_ver->minor = 0;
+
+	//Open version file
+	hsmp_driver_ver_file1 = fopen(HSMP_DRIVER_VERSION_FILE1, "r");
+	if(NULL != hsmp_driver_ver_file1) {
+		hsmp_driver_ver_file = hsmp_driver_ver_file1;
+	} else {
+		hsmp_driver_ver_file2 = fopen(HSMP_DRIVER_VERSION_FILE2, "r");
+		if(NULL != hsmp_driver_ver_file2) {
+			hsmp_driver_ver_file = hsmp_driver_ver_file2;
+		} else {
+			return ESMI_FILE_NOT_FOUND;
+		}
+	}
+
+	//Read first line from version file, which will have the version number
+	if(!fgets(line_buffer, MAX_BUFFER_SIZE, hsmp_driver_ver_file)) {
+		return ESMI_FILE_ERROR;
+	}
+
+	//Fetch major version
+	token = strtok(line_buffer, delimiter);
+	if(token) {
+		hsmp_driver_ver->major = atoi(token);
+	}
+
+	//Fetch minor version
+	token = strtok(NULL, delimiter);
+	if(token) {
+		hsmp_driver_ver->minor = atoi(token);
+	}
+
+	fclose(hsmp_driver_ver_file);
+
+	return ESMI_SUCCESS;
 }
 
 esmi_status_t esmi_smu_fw_version_get(struct smu_fw_version *smu_fw)
