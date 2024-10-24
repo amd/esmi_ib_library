@@ -276,6 +276,25 @@ static esmi_status_t epyc_get_smu_fw_version(void)
 	return ESMI_SUCCESS;
 }
 
+static esmi_status_t epyc_get_hsmp_driver_version(void)
+{
+        struct hsmp_driver_version hsmp_driver_ver;
+        esmi_status_t ret;
+
+        ret = esmi_hsmp_driver_version_get(&hsmp_driver_ver);
+        if (ret != ESMI_SUCCESS) {
+                printf("Failed to get HSMP Driver Version, Err[%d]: %s\n",
+                        ret, esmi_get_err_msg(ret));
+                return ret;
+        }
+        printf("\n------------------------------------------");
+        printf("\n| HSMP Driver Version   |  %u.%u \t\t |\n",
+                hsmp_driver_ver.major, hsmp_driver_ver.minor);
+        printf("------------------------------------------\n");
+
+        return ESMI_SUCCESS;
+}
+
 static esmi_status_t epyc_get_hsmp_proto_version(void)
 {
 	uint32_t hsmp_proto_ver;
@@ -1791,6 +1810,7 @@ static char* const feat_ver2_get[] = {
 	"  --showcorebl [CORE]\t\t\t\t\t\tShow Boostlimit for a given CPU (MHz)",
 	"  --showsockc0res [SOCKET]\t\t\t\t\tShow c0_residency for a given socket (%%)",
 	"  --showsmufwver\t\t\t\t\t\tShow SMU FW Version",
+	"  --showhsmpdriverver\t\t\t\t\t\tShow HSMP Driver Version",
 	"  --showhsmpprotover\t\t\t\t\t\tShow HSMP Protocol Version",
 	"  --showprochotstatus\t\t\t\t\t\tShow HSMP PROCHOT status for all sockets",
 	"  --showclocks\t\t\t\t\t\t\tShow Clock Metrics (MHz) for all sockets",
@@ -2215,6 +2235,7 @@ static int parsesmi_args(int argc,char **argv)
 		{"showsockenergy",	no_argument,		0,	's'},
 		{"showsockpower",	no_argument,		0,	'p'},
 		{"showsmufwver",	no_argument,		0,	'f'},
+		{"showhsmpdriverver",	no_argument,		0,	'o'},
 		{"showcorebl",		required_argument,	0,	'L'},
 		{"setpowerlimit",	required_argument,	0,	'C'},
 		{"setcorebl",		required_argument,	0,	'a'},
@@ -2513,6 +2534,10 @@ static int parsesmi_args(int argc,char **argv)
 		case 'f' :
 			/* Get SMU Firmware version */
 			ret = epyc_get_smu_fw_version();
+			break;
+		case 'o' :
+			/* Get HSMP driver version */
+			ret = epyc_get_hsmp_driver_version();
 			break;
 		case 'v' :
 			/* Get HSMP protocol version */
