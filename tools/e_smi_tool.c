@@ -1895,7 +1895,7 @@ static char* const feat_ver6_set[] = {
 	" limit for a given Socket (MHz)",
 	"  --setxgmiwidth [MIN<0-2>] [MAX<0-2>]\t\t\t\tSet xgmi link width"
 	" in a multi socket system (MAX >= MIN)",
-	"  --setlclkdpmlevel [SOCKET] [NBIOID<0-3>] [MIN<0-3>] [MAX<0-3>]Set lclk dpm level"
+	"  --setlclkdpmlevel [SOCKET] [NBIOID<0-3>] [MIN<0-2>] [MAX<0-2>]Set lclk dpm level"
 	" for a given nbio in a given socket (MAX >= MIN)",
 };
 
