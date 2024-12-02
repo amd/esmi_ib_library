@@ -669,12 +669,15 @@ static esmi_status_t epyc_setcoreperf(uint32_t core_id, uint32_t boostlimit)
 			core_id);
 		return ret;
 	}
-	if (blimit < boostlimit)
+	if (blimit < boostlimit) {
+		printf("Maximum allowed boost limit is: %u MHz\n", blimit);
 		printf("Core[%d] boostlimit set to max boost limit: %u MHz\n", core_id, blimit);
-	else if (blimit > boostlimit)
+	} else if (blimit > boostlimit) {
+		printf("Minimum allowed boost limit is: %u MHz\n", blimit);
 		printf("Core[%d] boostlimit set to min boost limit: %u MHz\n", core_id, blimit);
-	else
+	} else {
 		printf("Core[%d] boostlimit set to %u MHz successfully\n", core_id, blimit);
+	}
 
 	return ESMI_SUCCESS;
 }
