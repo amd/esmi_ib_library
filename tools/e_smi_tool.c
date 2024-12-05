@@ -1680,11 +1680,6 @@ static int epyc_get_pwr_efficiency_mode(uint8_t sock_ind)
 	uint8_t val;
 
 	ret = esmi_pwr_efficiency_mode_get(sock_ind, &val);
-	if (ret == ESMI_INVALID_INPUT) {
-		printf("option showcurrpwrefficiencymode supported only with amd_hsmp driver version >= 2.4\n"
-			"Please check the driver version\n");
-		return ret;
-	}
 	if (ret != ESMI_SUCCESS) {
 		printf("Failed to get power efficiency mode for socket [%d] Err[%d]: %s\n",
 			sock_ind, ret, esmi_get_err_msg(ret));
