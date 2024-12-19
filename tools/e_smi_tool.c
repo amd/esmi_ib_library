@@ -2378,8 +2378,8 @@ static int parsesmi_args(int argc,char **argv)
 	    opt == 'E' ||
 	    opt == 'N') {
 		if (is_string_number(optarg)) {
-			printf("Option '-%c' require a valid numeric value"
-					" as an argument\n\n", opt);
+			printf("Option '--%s' requires a valid numeric value"
+					" as an argument\n\n", long_options[long_index].name);
 			show_usage(argv[0]);
 			return ESMI_INVALID_INPUT;
 		}
@@ -2407,15 +2407,15 @@ static int parsesmi_args(int argc,char **argv)
 	    opt == 'b') {
 		// make sure optind is valid  ... or another option
 		if (optind >= argc) {
-			printf(MAG "\nOption '-%c' require TWO arguments"
-			 " <index>  <set_value>\n\n" RESET, opt);
+			printf(MAG "\nOption '--%s' requires TWO arguments"
+			 " <index>  <set_value>\n\n" RESET, long_options[long_index].name);
 			show_usage(argv[0]);
 			return ESMI_INVALID_INPUT;
 		}
 		if (opt != 'g' && opt != 'H' && opt != 'T' && opt != 'N') {
 			if (is_string_number(argv[optind])) {
-				printf(MAG "Option '-%c' requires 2nd argument as valid"
-				       " numeric value\n\n" RESET, opt);
+				printf(MAG "Option '--%s' requires 2nd argument as valid"
+				       " numeric value\n\n" RESET, long_options[long_index].name);
 				show_usage(argv[0]);
 				return ESMI_INVALID_INPUT;
 			}
@@ -2456,16 +2456,16 @@ static int parsesmi_args(int argc,char **argv)
 	if (opt == 'l') {
 		// make sure optind is valid  ... or another option
 		if ((optind + 2) >= argc ) {
-			printf("\nOption '-%c' requires FOUR arguments"
-			 " <socket> <nbioid> <min_value> <max_value>\n\n", opt);
+			printf("\nOption '--%s' requires FOUR arguments"
+			 " <socket> <nbioid> <min_value> <max_value>\n\n", long_options[long_index].name);
 			show_usage(argv[0]);
 			return ESMI_INVALID_INPUT;
 		}
 
 		if (is_string_number(argv[optind]) || is_string_number(argv[optind + 1])
 		    || is_string_number(argv[optind + 2])) {
-			printf("Option '-%c' requires 2nd, 3rd, 4th argument as valid"
-					" numeric value\n\n", opt);
+			printf("Option '--%s' requires 2nd, 3rd, 4th argument as valid"
+					" numeric value\n\n", long_options[long_index].name);
 			show_usage(argv[0]);
 			return ESMI_INVALID_INPUT;
 		}
@@ -2479,8 +2479,8 @@ static int parsesmi_args(int argc,char **argv)
 	if ((opt == 'B') || (opt == 'i'))
 	{
 		if ((optind >= argc) || (*optarg == '-') || (*argv[optind] == '-')) {
-			printf("\nOption '-%c' requires two valid arguments"
-			 " <arg1> <arg2>\n\n", opt);
+			printf("\nOption '--%s' requires two valid arguments"
+			 " <arg1> <arg2>\n\n", long_options[long_index].name);
 			show_usage(argv[0]);
 			return ESMI_INVALID_INPUT;
 		}
@@ -2502,15 +2502,15 @@ static int parsesmi_args(int argc,char **argv)
 		// make sure optind is valid  ... or another option
 		if ((optind + 1) >= argc || *argv[optind] == '-'
 		    || *argv[optind + 1] == '-') {
-			printf("\nOption '-%c' requires THREE arguments"
-			 " <socket> <min_value> <max_value>\n\n", opt);
+			printf("\nOption '--%s' requires THREE arguments"
+			 " <socket> <min_value> <max_value>\n\n", long_options[long_index].name);
 			show_usage(argv[0]);
 			return ESMI_INVALID_INPUT;
 		}
 
 		if (is_string_number(argv[optind]) || is_string_number(argv[optind + 1])) {
-			printf("Option '-%c' requires 2nd, 3rd, as valid"
-					" numeric value\n\n", opt);
+			printf("Option '--%s' requires 2nd, 3rd, as valid"
+					" numeric value\n\n", long_options[long_index].name);
 			show_usage(argv[0]);
 			return ESMI_INVALID_INPUT;
 		}
