@@ -190,7 +190,7 @@ static void ddr_bw_get(uint32_t *err_bits)
 	snprintf(pct_str, SHOWLINESZ, "\n| \tDDR Utilized Percent(%%)\t |");
 	for (i = 0; i < sys_info.sockets; i++) {
 		printf("                  |");
-		ret = esmi_ddr_bw_get(&ddr);
+		ret = esmi_ddr_bw_get(i, &ddr);
 		bw_len = strlen(bw_str);
 		pct_len = strlen(pct_str);
 		max_len = strlen(max_str);
