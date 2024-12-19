@@ -1361,7 +1361,7 @@ esmi_status_t esmi_socket_lclk_dpm_level_get(uint8_t sock_ind, uint8_t nbio_id,
 	return errno_to_esmi_status(ret);
 }
 
-esmi_status_t esmi_ddr_bw_get(struct ddr_bw_metrics *ddr_bw)
+esmi_status_t esmi_ddr_bw_get(uint8_t sock_ind, struct ddr_bw_metrics *ddr_bw)
 {
 	struct hsmp_message msg = { 0 };
 	esmi_status_t ret;
@@ -1373,8 +1373,11 @@ esmi_status_t esmi_ddr_bw_get(struct ddr_bw_metrics *ddr_bw)
 
 	CHECK_HSMP_GET_INPUT(ddr_bw);
 
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
 	msg.response_sz = 1;
-	msg.sock_ind = 0;
+	msg.sock_ind = sock_ind;
 	ret = hsmp_xfer(&msg, O_RDONLY);
 	if (ret)
 		return errno_to_esmi_status(ret);

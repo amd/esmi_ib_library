@@ -893,6 +893,9 @@ esmi_status_t esmi_socket_boostlimit_set(uint32_t socket_idx,
  *  Supported only on hsmp protocol version >= 3
  *
  *  @details This function will return the DDR Bandwidth metrics @p ddr_bw
+ *  for DDR connected to a socket.
+ *
+ *  @param[in] sock_ind a socket index provided.
  *
  *  @param[inout] ddr_bw Input buffer to return the DDR bandwidth metrics,
  *  contains max_bw, utilized_bw and utilized_pct.
@@ -901,7 +904,7 @@ esmi_status_t esmi_socket_boostlimit_set(uint32_t socket_idx,
  *  @retval None-zero is returned upon failure.
  *
  */
-esmi_status_t esmi_ddr_bw_get(struct ddr_bw_metrics *ddr_bw);
+esmi_status_t esmi_ddr_bw_get(uint8_t sock_ind, struct ddr_bw_metrics *ddr_bw);
 
 /** @} */  // end of ddrQuer
 
