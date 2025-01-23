@@ -59,7 +59,7 @@ set(${E_SMI}_VERSION_MINOR "${VERSION_MINOR}")
 message("SOVERSION: ${SO_VERSION_STRING}")
 
 set(DEB_INC "/usr/include/x86_64-linux-gnu/asm/amd_hsmp.h")
-set(RHEL_INC "/usr/include/amd_hsmp.h")
+set(RHEL_INC "/usr/include/asm/amd_hsmp.h")
 string(ASCII 27 Esc)
 set(Magenta "${Esc}[35m")
 
@@ -74,14 +74,14 @@ set(CPACK_PACKAGING_INSTALL_PREFIX "/opt/e-sms"
 
 project(${E_SMI_TARGET})
 
-if (NOT EXISTS ${DEB_INC} AND NOT EXISTS ${RHEL_INC})
-	message(FATAL_ERROR "amd_hsmp.h is missing. Its needed for E-smi compilation. "
-		"Clone https://github.com/amd/amd_hsmp.git and copy the header to "
-		"${DEB_INC} on debian system and to ${RHEL_INC} on RHEL system.")
-else()
-	message(${Magenta} "amd_hsmp.h needed for compilation, exists in include path.\n"
-		"Please make sure its the updated version. Refer to the amd_hsmp driver section in "
-		"README.md for more info.")
+set(E_SMI_HSMP_INC "${PROJECT_SOURCE_DIR}/include/asm/amd_hsmp.h")
+
+if (NOT EXISTS ${E_SMI_HSMP_INC})
+	if (NOT EXISTS ${DEB_INC} AND NOT EXISTS ${RHEL_INC})
+		message(FATAL_ERROR "amd_hsmp.h is missing. Its needed for E-smi compilation.")
+	else()
+		message(${Magenta} "amd_hsmp.h is not available locally, its used from standard installation path.")
+	endif()
 endif()
 
 # Create a configure file to get version info from within library
@@ -125,7 +125,7 @@ endif ()
 set(SRC_DIR "src")
 set(INC_DIR "include/e_smi")
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+include_directories([BEFORE] [SYSTEM] ${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(SMI_SRC_LIST ${SMI_SRC_LIST} "${SRC_DIR}/e_smi.c")
 set(SMI_SRC_LIST ${SMI_SRC_LIST} "${SRC_DIR}/e_smi_monitor.c")
 set(SMI_SRC_LIST ${SMI_SRC_LIST} "${SRC_DIR}/e_smi_utils.c")
