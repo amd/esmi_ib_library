@@ -36,7 +36,6 @@ static char *filenames[MONITOR_TYPE_MAX] = { energy_file,
 int find_energy(char *devname, char *hwmon_name)
 {
 	char *c;
-	int i = 0;
 	DIR *pdir;
 	struct dirent *pdentry;
 	char name[FILESIZ];

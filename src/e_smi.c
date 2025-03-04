@@ -1111,7 +1111,6 @@ esmi_status_t esmi_prochot_status_get(uint32_t sock_ind, uint32_t *prochot)
 {
 	struct hsmp_message msg = { 0 };
 	esmi_status_t ret;
-	char hot[9];
 
 	msg.msg_id = HSMP_GET_PROC_HOT;
 	if (check_sup(msg.msg_id))
@@ -1140,7 +1139,6 @@ esmi_status_t esmi_xgmi_width_set(uint8_t min, uint8_t max)
 	struct hsmp_message msg = { 0 };
 	esmi_status_t ret;
 	uint16_t width;
-	int drv_val;
 	int i;
 
 	CHECK_HSMP_INPUT();
@@ -1222,7 +1220,6 @@ esmi_status_t esmi_fclk_mclk_get(uint32_t sock_ind,
 {
 	struct hsmp_message msg = { 0 };
 	esmi_status_t ret;
-	uint64_t clk;
 
 	msg.msg_id = HSMP_GET_FCLK_MCLK;
 	if (check_sup(msg.msg_id))
@@ -1334,7 +1331,6 @@ esmi_status_t esmi_socket_lclk_dpm_level_get(uint8_t sock_ind, uint8_t nbio_id,
 {
 	struct hsmp_message msg = { 0 };
 	esmi_status_t ret;
-	uint32_t dpm_val;
 
 	msg.msg_id	= HSMP_GET_NBIO_DPM_LEVEL;
 	if (check_sup(msg.msg_id))
@@ -1643,7 +1639,6 @@ esmi_status_t esmi_socket_freq_range_get(uint8_t sock_ind, uint16_t *fmax, uint1
 
 static int validate_link_name(char *name, int *encode_val)
 {
-	esmi_status_t ret;
 	int i = 0;
 
 	if (!psm->lencode)
@@ -1744,7 +1739,7 @@ esmi_status_t esmi_current_xgmi_bw_get(struct link_id_bw_type link,
 static esmi_status_t validate_max_min_values(uint8_t max_value, uint8_t min_value,
 					     uint8_t max_limit)
 {
-	if (max_value > max_limit | max_value < min_value)
+	if ((max_value > max_limit) | (max_value < min_value))
 		return ESMI_INVALID_INPUT;
 
 	return ESMI_SUCCESS;
