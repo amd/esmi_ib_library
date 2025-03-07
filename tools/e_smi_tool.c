@@ -881,7 +881,7 @@ static esmi_status_t epyc_get_io_bandwidth_info(uint32_t sock_id, char *link)
 	return ret;
 }
 
-static esmi_status_t epyc_get_xgmi_bandwidth_info(char *link, char *bw_type)
+static esmi_status_t epyc_get_xgmi_bandwidth_info(uint32_t sock_id, char *link, char *bw_type)
 {
 	struct link_id_bw_type xgmi_link;
 	esmi_status_t ret;
@@ -897,7 +897,7 @@ static esmi_status_t epyc_get_xgmi_bandwidth_info(char *link, char *bw_type)
 
 	xgmi_link.link_name = link;
 	xgmi_link.bw_type = 1 << bw_ind;
-	ret = esmi_current_xgmi_bw_get(xgmi_link, &bw);
+	ret = esmi_current_xgmi_bw_get(sock_id, xgmi_link, &bw);
 	if (ret != ESMI_SUCCESS) {
 		printf("Failed to get xgmi bandwidth width, Err[%d]: %s\n",
 			ret, esmi_get_err_msg(ret));
@@ -1838,7 +1838,7 @@ static char* const feat_ver5_get[] = {
 };
 
 static char* const feat_ver5_F19_M00_0F_get[] = {
-	"  --showxgmibw [LINK<P0-P3,G0-G3>] [BW<AGG_BW,RD_BW,WR_BW>]\tShow xGMI bandwidth for a given socket,"
+	"  --showxgmibw [SOCKET] [LINK<P0-P3,G0-G3>] [BW<AGG_BW,RD_BW,WR_BW>]\tShow xGMI bandwidth for a given socket,"
 	" linkname and bwtype"
 };
 
@@ -1848,7 +1848,7 @@ static char* const feat_ver5_F19_M00_0F_set[] = {
 };
 
 static char* const feat_ver5_F1A_M00_1F_get[] = {
-	"  --showxgmibw [LINK<P1,P3,G0-G3>] [BW<AGG_BW,RD_BW,WR_BW>]\tShow xGMI bandwidth for a given socket,"
+	"  --showxgmibw [SOCKET] [LINK<P1,P3,G0-G3>] [BW<AGG_BW,RD_BW,WR_BW>]\tShow xGMI bandwidth for a given socket,"
 	" linkname and bwtype",
 	"  --showcurrpwrefficiencymode [SOCKET]\t\t\t\tShow current power effciency mode",
 	"  --showcpurailisofreqpolicy [SOCKET]\t\t\t\tShow current CPU ISO frequency policy",
@@ -1875,7 +1875,7 @@ static char* const feat_ver5_set[] = {
 static char* const feat_ver6_get[] = {
 	"  --showcclkfreqlimit [CORE]\t\t\t\t\tShow current clock frequency limit(MHz) for a given core",
 	"  --showsvipower \t\t\t\t\t\tShow svi based power telemetry of all rails for all sockets",
-	"  --showxgmibw [LINK<G0-G7>] [BW<AGG_BW,RD_BW,WR_BW>]\t\tShow xGMI bandwidth for a given socket,"
+	"  --showxgmibw [SOCKET] [LINK<G0-G7>] [BW<AGG_BW,RD_BW,WR_BW>]\t\tShow xGMI bandwidth for a given socket,"
 	" linkname and bwtype",
 	"  --showiobw [SOCKET] [LINK<P2,P3,G0-G7>]\t\t\tShow IO aggregate bandwidth for a given socket and"
 	" linkname",
@@ -2450,7 +2450,7 @@ static int parsesmi_args(int argc,char **argv)
 		}
 	}
 
-	if ((opt == 'B') || (opt == 'i'))
+	if (opt == 'B')
 	{
 		if ((optind >= argc) || (*optarg == '-') || (*argv[optind] == '-')) {
 			printf("\nOption '--%s' requires two valid arguments"
@@ -2464,13 +2464,24 @@ static int parsesmi_args(int argc,char **argv)
 				return ESMI_INVALID_INPUT;
 			}
 		}
+	}
+
+	if (opt == 'i')
+	{
+		if (((optind + 1) >= argc) || (*optarg == '-') || (*argv[optind + 1] == '-')) {
+			printf("\nOption '--%s' requires three valid arguments"
+			 " <socket> <Link> <BW>\n\n", long_options[long_index].name);
+			show_usage(argv[0]);
+			return ESMI_INVALID_INPUT;
+		}
 		if (opt == 'i') {
-			if (!is_string_number(optarg) || !is_string_number(argv[optind])) {
-				printf("Please provide valid link names.\n");
+			if (is_string_number(optarg) || !is_string_number(argv[optind]) || !is_string_number(argv[optind + 1])) {
+				printf("Please provide valid arguments <socket> <Link> <BW>.\n");
 				return ESMI_INVALID_INPUT;
 			}
 		}
 	}
+
 
 	if ((opt == 'X') || (opt == 'n')) {
 		// make sure optind is valid  ... or another option
@@ -2613,9 +2624,10 @@ static int parsesmi_args(int argc,char **argv)
 			break;
 		case 'i' :
 			/* Get xgmi bandiwdth info on specified link */
+			sock_id = atoi(optarg);
+			link_name = argv[optind++];
 			bw_type = argv[optind++];
-			link_name = optarg;
-			epyc_get_xgmi_bandwidth_info(link_name, bw_type);
+			epyc_get_xgmi_bandwidth_info(sock_id, link_name, bw_type);
 			break;
 		case 'B' :
 			/* Get io bandiwdth info on specified link */
