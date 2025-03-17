@@ -125,7 +125,7 @@ One of these drivers is needed to monitor energy counters.
 * AMD Zen3 based CPU Family `19h` Models `0h-Fh` and `30h-3Fh`.
 * AMD Zen4 based CPU Family `19h` Models `10h-1Fh` and `A0-AFh`.
 * AMD Zen4 based CPU Family `19h` Models `90-9Fh`.
-* AMD Zen4 based CPU Family `1Ah` Models `00-1Fh`.
+* AMD Zen5 based CPU Family `1Ah` Models `00-1Fh`.
 
 # Additional required software for building
 In order to build the E-SMI library, the following components are required. Note that the software versions listed are what is being used in development. Earlier versions are not guaranteed to work:
