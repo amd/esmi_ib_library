@@ -59,7 +59,7 @@ set(${E_SMI}_VERSION_MINOR "${VERSION_MINOR}")
 message("SOVERSION: ${SO_VERSION_STRING}")
 
 set(DEB_INC "/usr/include/x86_64-linux-gnu/asm/amd_hsmp.h")
-set(RHEL_INC "/usr/include/amd_hsmp.h")
+set(RHEL_INC "/usr/include/asm/amd_hsmp.h")
 string(ASCII 27 Esc)
 set(Magenta "${Esc}[35m")
 
