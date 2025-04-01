@@ -19,8 +19,6 @@
 
 #define BIT(N)	(1 << N)		//!< macro for mask
 
-static const char *bw_string[3] = {"aggregate", "read", "write"}; //!< bandwidth types for io/xgmi links
-
 /** \file e_smi.h
  *  Main header file for the E-SMI library.
  *  All required function, structure, enum, etc. definitions should be defined

@@ -43,6 +43,8 @@
 #define NUM_OF_64BITS		(sizeof(uint64_t) * 8)
 #define KILO			pow(10,3)
 
+static const char *bw_string[3] = {"aggregate", "read", "write"}; //!< bandwidth types for io/xgmi links
+
 static struct epyc_sys_info {
 	uint32_t sockets;
 	uint32_t cpus;
@@ -212,12 +214,6 @@ static void ddr_bw_get(uint32_t *err_bits)
 
 static int epyc_get_ddr_bw(void)
 {
-	uint32_t i;
-	struct ddr_bw_metrics ddr;
-	char bw_str[SHOWLINESZ] = {};
-	char pct_str[SHOWLINESZ] = {};
-	uint32_t bw_len;
-	uint32_t pct_len;
 	uint32_t err_bits = 0;
 
 	print_socket_header();
@@ -260,7 +256,6 @@ static esmi_status_t epyc_get_smu_fw_version(void)
 {
 	struct smu_fw_version smu_fw;
 	esmi_status_t ret;
-	uint32_t fclk, mclk;
 
 	ret = esmi_smu_fw_version_get(&smu_fw);
 	if (ret != ESMI_SUCCESS) {
@@ -368,7 +363,6 @@ static void get_sock_freq_limit(uint32_t *err_bits, char **freq_src)
 	uint16_t limit;
 	int ret;
 	int i;
-	uint8_t index;
 	int size = ARRAY_SIZE(freqlimitsrcnames);
 
 	printf("\n| Current Active Freq limit\t |");
@@ -782,7 +776,6 @@ static esmi_status_t epyc_get_dimm_thermal(uint8_t sock_id, uint8_t dimm_addr)
 {
 	struct dimm_thermal d_sensor;
 	esmi_status_t ret;
-	float temp;
 
 	ret = esmi_dimm_thermal_sensor_get(sock_id, dimm_addr, &d_sensor);
 	if (ret) {
@@ -869,7 +862,6 @@ static esmi_status_t epyc_get_io_bandwidth_info(uint32_t sock_id, char *link)
 {
 	esmi_status_t ret;
 	uint32_t bw;
-	int index = -1;
 	struct link_id_bw_type io_link;
 
 	io_link.link_name = link;
@@ -894,7 +886,6 @@ static esmi_status_t epyc_get_xgmi_bandwidth_info(char *link, char *bw_type)
 	struct link_id_bw_type xgmi_link;
 	esmi_status_t ret;
 	uint32_t bw;
-	int id;
 	int bw_ind = -1;
 
 	find_bwtype_index(bw_type, &bw_ind);
@@ -974,12 +965,6 @@ static esmi_status_t epyc_set_df_pstate_range(uint8_t sock_id, uint8_t max_pstat
 		max_pstate, min_pstate);
 	return ret;
 }
-
-static char *width_string[] = {
-	"quarter",
-	"half",
-	"full"
-};
 
 static esmi_status_t epyc_set_gmi3_link_width(uint8_t sock_id, uint8_t min, uint8_t max)
 {
@@ -1207,7 +1192,7 @@ static esmi_status_t show_cpu_energy_all(void)
 {
 	int i;
 	uint64_t *input;
-	uint32_t cpus, threads;
+	uint32_t cpus;
 	esmi_status_t ret;
 
 	cpus = sys_info.cpus/sys_info.threads_per_core;
@@ -1243,7 +1228,7 @@ static esmi_status_t show_cpu_boostlimit_all(void)
 {
 	int i;
 	uint32_t boostlimit;
-	uint32_t cpus, threads;
+	uint32_t cpus;
 	esmi_status_t ret;
 
 	cpus = sys_info.cpus/sys_info.threads_per_core;
@@ -1270,7 +1255,7 @@ static esmi_status_t show_cpu_boostlimit_all(void)
 static esmi_status_t show_core_clocks_all()
 {
 	esmi_status_t ret;
-	uint32_t cpus, threads;
+	uint32_t cpus;
 	uint32_t cclk;
 	int i;
 
@@ -1309,9 +1294,6 @@ static void cpu_ver5_metrics(uint32_t *err_bits)
 static int show_cpu_metrics(uint32_t *err_bits)
 {
 	esmi_status_t ret;
-	uint32_t i, core_id;
-	uint64_t core_input = 0;
-	uint32_t boostlimit = 0;
 
 	printf("\n\n--------------------------------------------------------------------"
 		"---------------------------------------------");
@@ -1369,7 +1351,6 @@ static int test_hsmp_mailbox(uint8_t sock_id, uint32_t input_data)
 static int show_smi_all_parameters(void)
 {
 	char *freq_src[ARRAY_SIZE(freqlimitsrcnames) * sys_info.sockets];
-	esmi_status_t ret;
 	int i;
 	uint32_t err_bits = 0;
 
@@ -2216,9 +2197,7 @@ static int parsesmi_args(int argc,char **argv)
 	char sudostr[] = "sudo";
 	uint8_t min, max;
 	uint8_t nbio_id;
-	uint8_t dimm_addr;
 	char *end;
-	char *link;
 	char *link_name;
 	char *bw_type;
 	uint8_t ctrl, mode, value;
