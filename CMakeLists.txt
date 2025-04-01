@@ -167,12 +167,21 @@ if ("${ENABLE_STATIC_LIB}" STREQUAL 1)
 endif ()
 
 ## Add the install directives for the runtime library.
+if (${CMAKE_INSTALL_PREFIX} STREQUAL /opt/e-sms)
 install(TARGETS ${E_SMI_TARGET}
           LIBRARY DESTINATION ${E_SMI}/lib COMPONENT ${E_SMI_COMPONENT})
 install(FILES ${SOURCE_DIR}/include/e_smi/e_smi.h
                                         DESTINATION e_smi/include/e_smi)
 install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/${SMI_TOOL}
 					DESTINATION ${E_SMI}/bin)
+else ()
+install(TARGETS ${E_SMI_TARGET}
+          LIBRARY DESTINATION lib COMPONENT ${E_SMI_COMPONENT})
+install(FILES ${SOURCE_DIR}/include/e_smi/e_smi.h
+                                        DESTINATION include/e_smi)
+install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/${SMI_TOOL}
+					DESTINATION bin)
+endif()
 
 # Generate Doxygen documentation
 find_package(Doxygen)

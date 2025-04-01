@@ -46,7 +46,10 @@ Building the library as a static(.a) along with shared libraries(.so) is achieve
 
 * `$ sudo make install`
 
- Library file, header and tool are installed at /opt/e-sms
+ By default library file, header and tool are installed at /opt/e-sms.
+ To change the default installation path, build with cmake -DCMAKE_INSTALL_PREFIX=xxxx.
+ Library will be installed at xxxx/lib, tool will be installed at xxxx/bin, header will be installed at xxxx/include and doc will be installed at xxxx/e-sms/doc.
+ Example: If -DCMAKE_INSTALL_PREFIX=/usr/local then esmi lib, esmi_tool binary and headers are installed at /usr/local/lib, /usr/local/bin, /usr/local/include respectively.
 
 `Note:`
  Library is dependent on amd_hsmp.h header and without this, compilation will break. Please follow the instruction in "Kernel dependencies" section
