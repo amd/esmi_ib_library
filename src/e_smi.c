@@ -1707,7 +1707,7 @@ esmi_status_t esmi_current_io_bandwidth_get(uint8_t sock_ind, struct link_id_bw_
 	return errno_to_esmi_status(ret);
 }
 
-esmi_status_t esmi_current_xgmi_bw_get(struct link_id_bw_type link,
+esmi_status_t esmi_current_xgmi_bw_get(uint8_t sock_ind, struct link_id_bw_type link,
 				       uint32_t *xgmi_bw)
 {
 	struct hsmp_message msg = { 0 };
@@ -1720,6 +1720,9 @@ esmi_status_t esmi_current_xgmi_bw_get(struct link_id_bw_type link,
 
 	CHECK_HSMP_GET_INPUT(xgmi_bw);
 
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
 	if(validate_link_name(link.link_name, &encode_val))
 		return ESMI_INVALID_INPUT;
 
@@ -1729,6 +1732,7 @@ esmi_status_t esmi_current_xgmi_bw_get(struct link_id_bw_type link,
 	msg.response_sz = 1;
 	msg.num_args	= 1;
 	msg.args[0]	= link.bw_type | encode_val << 8;
+	msg.sock_ind	= sock_ind;
 	ret = hsmp_xfer(&msg, O_RDONLY);
 	if (!ret)
 		*xgmi_bw = msg.args[0];

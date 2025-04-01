@@ -1269,6 +1269,7 @@ esmi_status_t esmi_current_io_bandwidth_get(uint8_t sock_ind, struct link_id_bw_
  *  and bandwidth type in a multi socket system.
  *  Supported only on hsmp protocol version 5 and 7.
  *
+ *  @param[in] sock_ind Socket index.
  *  @param[in] link  structure containing link_id(Link encoding values of given link) and bwtype
  *  info.
  *
@@ -1278,7 +1279,7 @@ esmi_status_t esmi_current_io_bandwidth_get(uint8_t sock_ind, struct link_id_bw_
  *  @retval None-zero is returned upon failure.
  *
  */
-esmi_status_t esmi_current_xgmi_bw_get(struct link_id_bw_type link,
+esmi_status_t esmi_current_xgmi_bw_get(uint8_t sock_ind, struct link_id_bw_type link,
 				       uint32_t *xgmi_bw);
 
 /** @} */  // end of BwQuer
