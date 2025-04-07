@@ -1822,7 +1822,7 @@ static char* const feat_ver4[] = {
 };
 
 static char* const feat_ver5_get[] = {
-	"  --showdimmtemprange [SOCKET] [DIMM_ADDR]\t\t\tShow dimm temperature range and"
+	"  --showdimmtemprange [SOCKET] [DIMM_ADDR]\t\t\tShow dimm temperature range,"
 	" refresh rate for a given socket and dimm address",
 	"  --showdimmthermal [SOCKET] [DIMM_ADDR]\t\t\tShow dimm thermal values for a given socket"
 	" and dimm address",
@@ -1838,7 +1838,7 @@ static char* const feat_ver5_get[] = {
 };
 
 static char* const feat_ver5_F19_M00_0F_get[] = {
-	"  --showxgmibw [SOCKET] [LINK<P0-P3,G0-G3>] [BW<AGG_BW,RD_BW,WR_BW>]\tShow xGMI bandwidth for a given socket,"
+	"  --showxgmibw [SOCKET] [LINK<P0-P3,G0-G3>] [BW<AGG_BW,RD_BW,WR_BW>] Show xGMI bandwidth for a given socket,"
 	" linkname and bwtype"
 };
 
