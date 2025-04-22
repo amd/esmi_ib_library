@@ -151,7 +151,7 @@ When E-SMI is no longer being used, `esmi_exit()` should be called. This provide
 
 Below is a simple "Hello World" type program that display the Average Power of Sockets.
 
-```
+```c
 #include <stdio.h>
 #include <stdint.h>
 #include <e_smi/e_smi.h>
