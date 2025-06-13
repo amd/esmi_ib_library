@@ -17,6 +17,9 @@
 #include <limits.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <time.h>
+#include <sys/time.h>
+#include <string.h>
 
 #include <e_smi/e_smi.h>
 
@@ -45,6 +48,31 @@
 
 static const char *bw_string[3] = {"aggregate", "read", "write"}; //!< bandwidth types for io/xgmi links
 
+static int flag;
+static double initial_delay_in_secs = 0;
+static double loop_delay_in_secs    = 0;
+static bool loop_delay_in_secs_passed = false;
+static int loop_count		    = 0;
+static char* log_file_name   = NULL;
+static char* stoploop_file_name   = NULL;
+static char* log_file_header = NULL;
+static char* log_file_data   = NULL;
+static bool create_log_header = false;
+
+typedef enum {
+	DONT_PRINT_RESULTS = 0,
+	PRINT_RESULTS,
+	PRINT_RESULTS_AS_CSV,
+	PRINT_RESULTS_AS_JSON
+}print_results_t;
+static print_results_t print_results = PRINT_RESULTS;
+
+typedef enum {
+	DONT_LOG_TO_FILE = 0,
+	LOG_TO_FILE
+}log_to_file_t;
+static log_to_file_t log_to_file = DONT_LOG_TO_FILE;
+
 static struct epyc_sys_info {
 	uint32_t sockets;
 	uint32_t cpus;
@@ -56,8 +84,32 @@ static struct epyc_sys_info {
 	void (*show_addon_clock_metrics)(uint32_t *, char **);
 } sys_info;
 
+static void sleep_in_milliseconds(unsigned milliseconds)
+{
+	usleep(milliseconds * 1000); // takes microseconds
+}
+
+void append_string(char **buffer, const char *new_str) {
+	size_t current_length = *buffer ? strlen(*buffer) : 0;
+	size_t new_str_length = strlen(new_str);
+	size_t new_length = current_length + new_str_length + 1; // +1 for null terminator
+
+	// Reallocate buffer to the new size
+	char *new_buffer = realloc(*buffer, new_length);
+	if (new_buffer == NULL) {
+		return;
+	}
+
+	// Append the new string
+	strcpy(new_buffer + current_length, new_str);
+
+	// Update the buffer pointer
+	*buffer = new_buffer;
+}
+
 static void print_socket_footer()
 {
+	if(print_results != PRINT_RESULTS) return;
 	int i;
 
 	printf("\n----------------------------------");
@@ -68,6 +120,7 @@ static void print_socket_footer()
 
 static void print_socket_header()
 {
+	if(print_results != PRINT_RESULTS) return;
 	int i;
 
 	print_socket_footer();
@@ -80,6 +133,7 @@ static void print_socket_header()
 
 static void err_bits_print(uint32_t err_bits)
 {
+	if(print_results != PRINT_RESULTS) return;
 	int i;
 
 	printf("\n");
@@ -136,11 +190,27 @@ static esmi_status_t epyc_get_coreenergy(uint32_t core_id)
 		}
 		return ret;
 	}
-	printf("-------------------------------------------------");
-	printf("\n| core[%03d] energy  | %17.3lf Joules \t|\n",
-		core_id, (double)core_input/1000000);
-	printf("-------------------------------------------------\n");
 
+	if(print_results == PRINT_RESULTS) {
+		printf("-------------------------------------------------");
+		printf("\n| core[%d] energy  | %17.3lf Joules \t|\n",
+			core_id, (double)core_input/1000000);
+		printf("-------------------------------------------------\n");
+	}
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+		printf("Core,CoreEnergy(Joules)\n%d,%.3f\n", core_id, (double)core_input/1000000);
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+		printf("\n\t{\n\t\t\"Core\":%d,\n\t\t\"CoreEnergy(Joules)\":%.3f\n\t},", core_id, (double)core_input/1000000);
+
+	if(log_to_file) {
+		char temp_string[300];
+		if(create_log_header) {
+			sprintf(temp_string, "Core%d:CoreEnergy(Joules),", core_id);
+			append_string(&log_file_header, temp_string);
+		}
+		sprintf(temp_string, "%.3f,", (double)core_input/1000000);
+		append_string(&log_file_data, temp_string);
+	}
 	return ESMI_SUCCESS;
 }
 
@@ -152,18 +222,47 @@ static int epyc_get_sockenergy(void)
 	uint32_t err_bits = 0;
 
 	print_socket_header();
-	printf("\n| Energy (K Joules)\t\t |");
+	if(print_results == PRINT_RESULTS)
+		printf("\n| Energy (K Joules)\t\t |");
+
 	for (i = 0; i < sys_info.sockets; i++) {
+		char temp_string[300];
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Socket%d:SocketEnergy(KJoules),", i);
+			append_string(&log_file_header, temp_string);
+		}
+
 		ret = esmi_socket_energy_get(i, &pkg_input);
 		if (!ret) {
-			printf(" %-17.3lf|", (double)pkg_input/1000000000);
+			if(print_results == PRINT_RESULTS)
+				printf(" %-17.3lf|", (double)pkg_input/1000000000);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,SocketEnergy(KJoules)\n%d,%.3f\n", i, (double)pkg_input/1000000000);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"SocketEnergy(KJoules)\":%.3f\n\t},", i, (double)pkg_input/1000000000);
+
+			if(log_to_file) {
+				sprintf(temp_string, "%.3f,", (double)pkg_input/1000000000);
+				append_string(&log_file_data, temp_string);
+			}
 		} else {
 			err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
+			if(print_results == PRINT_RESULTS)
+				printf(" NA (Err: %-2d)     |", ret);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,SocketEnergy(KJoules)\n%d,NA (Err:%d)\n", i, ret);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"SocketEnergy(KJoules)\":\"NA (Err:%d)\"\n\t},", i, ret);
+
+			if(log_to_file) {
+				sprintf(temp_string, "NA (Err:%d),", ret);
+				append_string(&log_file_data, temp_string);
+			}
 		}
 	}
 	print_socket_footer();
-	printf("\n");
+	if(print_results == PRINT_RESULTS)
+		printf("\n");
 	err_bits_print(err_bits);
 
 	if ((err_bits >> ESMI_PERMISSION) & 0x1)
@@ -186,12 +285,22 @@ static void ddr_bw_get(uint32_t *err_bits)
 	uint32_t i, ret;
 	uint32_t max_len;
 
-	printf("\n| DDR Bandwidth\t\t\t |");
+	if(print_results == PRINT_RESULTS)
+		printf("\n| DDR Bandwidth\t\t\t |");
+
 	snprintf(max_str, SHOWLINESZ, "\n| \tDDR Max BW (GB/s)\t |");
 	snprintf(bw_str, SHOWLINESZ, "\n| \tDDR Utilized BW (GB/s)\t |");
 	snprintf(pct_str, SHOWLINESZ, "\n| \tDDR Utilized Percent(%%)\t |");
 	for (i = 0; i < sys_info.sockets; i++) {
-		printf("                  |");
+		char temp_string[300];
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Socket%x:DDRMaxBw(GB/s),Socket%x:DDRUtilizedBw(GB/s),Socket%x:DDRUtilizedPercent(%%),", i, i, i);
+			append_string(&log_file_header, temp_string);
+		}
+
+		if(print_results == PRINT_RESULTS)
+			printf("                  |");
+
 		ret = esmi_ddr_bw_get(i, &ddr);
 		bw_len = strlen(bw_str);
 		pct_len = strlen(pct_str);
@@ -200,16 +309,37 @@ static void ddr_bw_get(uint32_t *err_bits)
 			snprintf(max_str + max_len, SHOWLINESZ - max_len, " %-17d|", ddr.max_bw);
 			snprintf(bw_str + bw_len, SHOWLINESZ - bw_len, " %-17d|", ddr.utilized_bw);
 			snprintf(pct_str + pct_len, SHOWLINESZ - pct_len, " %-17d|", ddr.utilized_pct);
+			if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,DDRMaxBw(GB/s),DDRUtilizedBw(GB/s),DDRUtilizedPercent(%%)\n%d,%d,%d,%d\n", i, ddr.max_bw, ddr.utilized_bw, ddr.utilized_pct);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"DDRMaxBw(GB/s)\":%d,\n\t\t\"DDRUtilizedBw(GB/s)\":%d,\n\t\t\"DDRUtilizedPercent(%%)\":%d\n\t},", i, ddr.max_bw, ddr.utilized_bw, ddr.utilized_pct);
+
+			if(log_to_file) {
+				sprintf(temp_string, "%d,%d,%d,", ddr.max_bw, ddr.utilized_bw, ddr.utilized_pct);
+				append_string(&log_file_data, temp_string);
+			}
 		} else {
 			*err_bits |= 1 << ret;
 			snprintf(max_str + max_len, SHOWLINESZ - max_len, " NA (Err: %-2d)     |", ret);
 			snprintf(bw_str + bw_len, SHOWLINESZ - bw_len, " NA (Err: %-2d)     |", ret);
 			snprintf(pct_str + pct_len, SHOWLINESZ - pct_len, " NA (Err: %-2d)     |", ret);
+			if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,DDRMaxBw(GB/s),DDRUtilizedBw(GB/s),DDRUtilizedPercent(%%)\n%d,NA (Err:%d),NA (Err:%d),NA (Err:%d)\n", i, ddr.max_bw, ddr.utilized_bw, ddr.utilized_pct);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"DDRMaxBw(GB/s)\":\"NA (Err:%d)\",\n\t\t\"DDRUtilizedBw(GB/s)\":\"NA (Err:%d)\"\n\t\t\"DDRUtilizedPercent(%%)\":\"NA (Err:%d)\"\n\t},", i, ret, ret, ret);
+
+			if(log_to_file) {
+				sprintf(temp_string, "NA (Err:%d),NA (Err:%d),NA (Err:%d),", ret, ret, ret);
+				append_string(&log_file_data, temp_string);
+			}
 		}
 	}
-	printf("%s", max_str);
-	printf("%s", bw_str);
-	printf("%s", pct_str);
+	if(print_results == PRINT_RESULTS)
+	{
+		printf("%s", max_str);
+		printf("%s", bw_str);
+		printf("%s", pct_str);
+	}
 }
 
 static int epyc_get_ddr_bw(void)
@@ -235,14 +365,42 @@ static int epyc_get_temperature(void)
 	uint32_t err_bits = 0;
 
 	print_socket_header();
-	printf("\n| Temperature\t\t\t |");
+	if(print_results == PRINT_RESULTS)
+		printf("\n| Temperature\t\t\t |");
+
 	for (i = 0; i < sys_info.sockets; i++) {
+		char temp_string[300];
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Socket%x:Temperature('C),", i);
+			append_string(&log_file_header, temp_string);
+		}
+
 		ret = esmi_socket_temperature_get(i, &tmon);
 		if (!ret) {
-			printf(" %3.3f°C\t    |", (double)tmon/1000);
+			if(print_results == PRINT_RESULTS)
+				printf(" %3.3f°C\t    |", (double)tmon/1000);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,Temperature('C)\n%d,%.3f\n", i, (double)tmon/1000);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"Temperature('C)\":%.3f\n\t},", i, (double)tmon/1000);
+
+			if(log_to_file) {
+				sprintf(temp_string, "%3.3f,", (double)tmon/1000);
+				append_string(&log_file_data, temp_string);
+			}
 		} else {
 			err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
+			if(print_results == PRINT_RESULTS)
+				printf(" NA (Err: %-2d)     |", ret);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,Temperature('C)\n%d,NA (Err:%d)\n", i, ret);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"Temperature('C)\":\"NA (Err:%d)\"\n\t},", i, ret);
+
+			if(log_to_file) {
+				sprintf(temp_string, "NA (Err:%d),",ret);
+				append_string(&log_file_data, temp_string);
+			}
 		}
 	}
 	print_socket_footer();
@@ -263,10 +421,29 @@ static esmi_status_t epyc_get_smu_fw_version(void)
 			ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("\n------------------------------------------");
-	printf("\n| SMU FW Version   |  %u.%u.%u \t\t |\n",
-		smu_fw.major, smu_fw.minor, smu_fw.debug);
-	printf("------------------------------------------\n");
+
+	if(print_results == PRINT_RESULTS)
+	{
+		printf("\n------------------------------------------");
+		printf("\n| SMU FW Version   |  %u.%u.%u \t\t |\n",
+			smu_fw.major, smu_fw.minor, smu_fw.debug);
+		printf("------------------------------------------\n");
+	}
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+		printf("Socket,SMUFWversion\n0,%u.%u.%u\n", smu_fw.major, smu_fw.minor, smu_fw.debug);
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+		printf("\n\t{\n\t\t\"Socket\":0,\n\t\t\"SMUFWVersion\":%u.%u.%u\n\t},", smu_fw.major, smu_fw.minor, smu_fw.debug);
+
+	if(log_to_file) {
+		char temp_string[300];
+		if(create_log_header) {
+			sprintf(temp_string, "Socket0:SMUFWVersion,");
+			append_string(&log_file_header, temp_string);
+		}
+
+		sprintf(temp_string, "%u.%u.%u,", smu_fw.major, smu_fw.minor, smu_fw.debug);
+		append_string(&log_file_data, temp_string);
+	}
 
 	return ESMI_SUCCESS;
 }
@@ -282,12 +459,30 @@ static esmi_status_t epyc_get_hsmp_driver_version(void)
                         ret, esmi_get_err_msg(ret));
                 return ret;
         }
-        printf("\n------------------------------------------");
-        printf("\n| HSMP Driver Version   |  %u.%u \t\t |\n",
-                hsmp_driver_ver.major, hsmp_driver_ver.minor);
-        printf("------------------------------------------\n");
+	if(print_results == PRINT_RESULTS)
+	{
+			printf("\n------------------------------------------");
+			printf("\n| HSMP Driver Version   |  %u.%u \t\t |\n",
+					hsmp_driver_ver.major, hsmp_driver_ver.minor);
+			printf("------------------------------------------\n");
+	}
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+		printf("Socket,HSMPDriverVersion\n0,%u.%u\n", hsmp_driver_ver.major, hsmp_driver_ver.minor);
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+		printf("\n\t{\n\t\t\"Socket\":0,\n\t\t\"HSMPDriverVersion\":%u.%u\n\t},", hsmp_driver_ver.major, hsmp_driver_ver.minor);
 
-        return ESMI_SUCCESS;
+	if(log_to_file) {
+		char temp_string[300];
+		if(create_log_header) {
+			sprintf(temp_string, "Socket0:HsmpDriverVersion,");
+			append_string(&log_file_header, temp_string);
+		}
+
+		sprintf(temp_string, "%u.%u,", hsmp_driver_ver.major, hsmp_driver_ver.minor);
+		append_string(&log_file_data, temp_string);
+	}
+
+	return ESMI_SUCCESS;
 }
 
 static esmi_status_t epyc_get_hsmp_proto_version(void)
@@ -301,9 +496,27 @@ static esmi_status_t epyc_get_hsmp_proto_version(void)
 			ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("\n---------------------------------");
-	printf("\n| HSMP Protocol Version  | %u\t|\n", hsmp_proto_ver);
-	printf("---------------------------------\n");
+	if(print_results == PRINT_RESULTS)
+	{
+		printf("\n---------------------------------");
+		printf("\n| HSMP Protocol Version  | %u\t|\n", hsmp_proto_ver);
+		printf("---------------------------------\n");
+	}
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+		printf("Socket,HSMPProtocolVersion\n0,%u\n", hsmp_proto_ver);
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+		printf("\n\t{\n\t\t\"Socket\":0,\n\t\t\"HsmpProtocolVersion\":%u\n\t},", hsmp_proto_ver);
+
+	if(log_to_file) {
+		char temp_string[300];
+		if(create_log_header) {
+			sprintf(temp_string, "Socket0:HsmpProtocolVersion,");
+			append_string(&log_file_header, temp_string);
+		}
+
+		sprintf(temp_string, "%u,", hsmp_proto_ver);
+		append_string(&log_file_data, temp_string);
+	}
 
 	return ESMI_SUCCESS;
 }
@@ -317,18 +530,46 @@ static int epyc_get_prochot_status(void)
 
 	print_socket_header();
 
-	printf("\n| ProchotStatus:\t\t |");
+	if(print_results == PRINT_RESULTS)
+		printf("\n| ProchotStatus:\t\t |");
+
 	for (i = 0; i < sys_info.sockets; i++) {
+		char temp_string[300];
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Socket%x:ProchotStatus,", i);
+			append_string(&log_file_header, temp_string);
+		}
+
 		ret = esmi_prochot_status_get(i, &prochot);
 		if (!ret) {
-			printf(" %-17s|", prochot? "active" : "inactive");
+			if(print_results == PRINT_RESULTS)
+				printf(" %-17s|", prochot? "active" : "inactive");
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,ProchotStatus\n%d,%s\n", i, prochot? "active" : "inactive");
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"ProchotStatus\":%s\n\t},", i, prochot? "\"active\"" : "\"inactive\"");
+
+			if(log_to_file) {
+				sprintf(temp_string, "%s,", prochot? "active" : "inactive");
+				append_string(&log_file_data, temp_string);
+			}
 		} else {
 			err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
+			if(print_results == PRINT_RESULTS)
+				printf(" NA (Err: %-2d)     |", ret);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,ProchotStatus\n%d,NA (Err:%d)\n", i, ret);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"ProchotStatus\":\"NA (Err:%d)\"\n\t},", i, ret);
+
+			if(log_to_file) {
+				sprintf(temp_string, "NA (Err:%d),", ret);
+				append_string(&log_file_data, temp_string);
+			}
 		}
 	}
 	print_socket_footer();
-	printf("\n");
+	if(print_results == PRINT_RESULTS) printf("\n");
 	err_bits_print(err_bits);
 	if (err_bits > 1)
 		return ESMI_MULTI_ERROR;
@@ -343,14 +584,55 @@ static void display_freq_limit_src_names(char **freq_src)
 
 	for (i = 0; i < sys_info.sockets; i++) {
 		j = 0;
-		printf("*%d Frequency limit source names: \n", i);
+		char temp_string[300];
+		if(print_results == PRINT_RESULTS)
+			printf("*%d Frequency limit source names: \n", i);
+		else if(print_results == PRINT_RESULTS_AS_CSV)
+			printf("Socket,FrequencyLimitSource\n%d,",i);
+		else if(print_results == PRINT_RESULTS_AS_JSON)
+			printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"FrequencyLimitSource\":\"", i);
+
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Socket%d:FrequencyLimitSource,", i);
+			append_string(&log_file_header, temp_string);
+		}
+
 		while (freq_src[j + (i * ARRAY_SIZE(freqlimitsrcnames))]) {
-			printf(" %s\n", freq_src[j +(i * ARRAY_SIZE(freqlimitsrcnames))]);
+			if(print_results == PRINT_RESULTS)
+				printf(" %s\n", freq_src[j +(i * ARRAY_SIZE(freqlimitsrcnames))]);
+			else if((print_results == PRINT_RESULTS_AS_CSV) || (print_results == PRINT_RESULTS_AS_JSON))
+				printf("%s:", freq_src[j +(i * ARRAY_SIZE(freqlimitsrcnames))]);
+
+			if(log_to_file)
+			{
+				sprintf(temp_string, "%s:", freq_src[j +(i * ARRAY_SIZE(freqlimitsrcnames))]);
+				append_string(&log_file_data, temp_string);
+			}
 			j++;
 		}
 		if (j == 0)
-			printf(" %s\n", "Reserved");
-		printf("\n");
+		{
+			if(print_results == PRINT_RESULTS)
+				printf(" %s\n", "Reserved");
+			else if((print_results == PRINT_RESULTS_AS_CSV) || (print_results == PRINT_RESULTS_AS_JSON))
+				printf("%s:", "Reserved");
+
+			if(log_to_file)
+			{
+				sprintf(temp_string, "%s:", "Reserved");
+				append_string(&log_file_data, temp_string);
+			}
+		}
+		if((print_results == PRINT_RESULTS) || (print_results == PRINT_RESULTS_AS_CSV))
+			printf("\n");
+		else if(print_results == PRINT_RESULTS_AS_JSON)
+			printf("\"\n\t},");
+
+		if(log_to_file)
+		{
+			sprintf(temp_string, "%s", ",");
+			append_string(&log_file_data, temp_string);
+		}
 	}
 
 }
@@ -365,26 +647,59 @@ static void get_sock_freq_limit(uint32_t *err_bits, char **freq_src)
 	int i;
 	int size = ARRAY_SIZE(freqlimitsrcnames);
 
-	printf("\n| Current Active Freq limit\t |");
+	if(print_results == PRINT_RESULTS)
+		printf("\n| Current Active Freq limit\t |");
+
 	snprintf(str1, SHOWLINESZ, "\n| \t Freq limit (MHz) \t |");
 	snprintf(str2, SHOWLINESZ, "\n| \t Freq limit source \t |");
 
 	for (i = 0; i < sys_info.sockets; i++) {
+		char temp_string[300];
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Socket%d:ActiveFrequencyLimit(MHz),", i);
+			append_string(&log_file_header, temp_string);
+		}
+
 		len1 = strlen(str1);
 		len2 = strlen(str2);
-		printf("                  |");
+		if(print_results == PRINT_RESULTS) printf("                  |");
 		ret = esmi_socket_current_active_freq_limit_get(i, &limit, freq_src + (i * size));
 		if (!ret) {
 			snprintf(str1 + len1, SHOWLINESZ - len1, " %-17u|", limit);
 			snprintf(str2 + len2, SHOWLINESZ - len2, " Refer below[*%d]  |", i);
+
+			if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,ActiveFrequencyLimit(MHz)\n%d,%u\n", i, limit);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"ActiveFrequencyLimit(MHz)\":%u\n\t},", i, limit);
+
+			if(log_to_file)
+			{
+				sprintf(temp_string, "%u,", limit);
+				append_string(&log_file_data, temp_string);
+			}
 		} else {
 			*err_bits |= 1 << ret;
 			snprintf(str1 + len1, SHOWLINESZ - len1, " NA (Err: %-2d)     |", ret);
 			snprintf(str2 + len2, SHOWLINESZ - len2, " NA (Err: %-2d)     |", ret);
+
+			if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,ActiveFrequencyLimit(MHz)\n%d,NA (Err:%d)\n", i, ret);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"ActiveFrequencyLimit(MHz)\":\"NA (Err:%d)\"\n\t},", i, ret);
+
+			if(log_to_file)
+			{
+				sprintf(temp_string, "NA (Err:%d),", ret);
+				append_string(&log_file_data, temp_string);
+			}
 		}
 	}
-	printf("%s", str1);
-	printf("%s", str2);
+	if(print_results == PRINT_RESULTS)
+	{
+		printf("%s", str1);
+		printf("%s", str2);
+	}
 	print_src = true;
 }
 
@@ -397,25 +712,58 @@ static void get_sock_freq_range(uint32_t *err_bits)
 	uint16_t fmin;
 	int ret, i;
 
-	printf("\n| Socket frequency range\t |");
+	if(print_results == PRINT_RESULTS)
+		printf("\n| Socket frequency range\t |");
+
 	snprintf(str1, SHOWLINESZ, "\n| \t Fmax (MHz)\t\t |");
 	snprintf(str2, SHOWLINESZ, "\n| \t Fmin (MHz)\t\t |");
 	for (i = 0; i < sys_info.sockets; i++) {
-		printf("                  |");
+		char temp_string[300];
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Socket%d:Fmax(MHz),Socket%d:Fmin(MHz),", i, i);
+			append_string(&log_file_header, temp_string);
+		}
+
+		if(print_results == PRINT_RESULTS) printf("                  |");
 		len1 = strlen(str1);
 		len2 = strlen(str2);
 		ret = esmi_socket_freq_range_get(i, &fmax, &fmin);
 		if (!ret) {
 			snprintf(str1 + len1, SHOWLINESZ -len1, " %-17u|", fmax);
 			snprintf(str2 + len2, SHOWLINESZ - len2 , " %-17u|", fmin);
+
+			if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,Fmax(MHz),Fmin(MHz)\n%d,%u,%u\n", i, fmax, fmin);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"Fmax(MHz)\":%u,\n\t\t\"Fmin(MHz)\":%u\n\t},", i, fmax, fmin);
+
+			if(log_to_file)
+			{
+				sprintf(temp_string, "%u,%u,", fmax,fmin);
+				append_string(&log_file_data, temp_string);
+			}
 		} else {
 			*err_bits |= 1 << ret;
 			snprintf(str1 + len1, SHOWLINESZ -len1, " NA (Err: %-2d)     |", ret);
 			snprintf(str2 + len2, SHOWLINESZ - len2, " NA (Err: %-2d)     |", ret);
+
+			if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,Fmax(MHz),Fmin(MHz)\n%d,NA (Err:%d),NA (Err:%d)\n", i, ret, ret);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"Fmax(MHz)\":\"NA (Err:%d)\",\n\t\t\"Fmin(MHz)\":\"NA (Err:%d)\"\n\t},", i, ret, ret);
+
+			if(log_to_file)
+			{
+				sprintf(temp_string, "NA (Err:%d),NA (Err:%d),", ret, ret);
+				append_string(&log_file_data, temp_string);
+			}
 		}
 	}
-	printf("%s", str1);
-	printf("%s", str2);
+	if(print_results == PRINT_RESULTS)
+	{
+		printf("%s", str1);
+		printf("%s", str2);
+	}
 }
 
 static int epyc_get_clock_freq(void)
@@ -432,37 +780,97 @@ static int epyc_get_clock_freq(void)
 		freq_src[i] = NULL;
 
 	print_socket_header();
-	printf("\n| fclk (Mhz)\t\t\t |");
+	if(print_results == PRINT_RESULTS)
+		printf("\n| fclk (Mhz)\t\t\t |");
+
 	snprintf(str, SHOWLINESZ, "\n| mclk (Mhz)\t\t\t |");
 	for (i = 0; i < sys_info.sockets; i++) {
+		char temp_string[300];
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Socket%d:Fclk(MHz),Socket%d:Mclk(MHz),", i, i);
+			append_string(&log_file_header, temp_string);
+		}
 		len = strlen(str);
 		ret = esmi_fclk_mclk_get(i, &fclk, &mclk);
 		if (!ret) {
-			printf(" %-17d|", fclk);
+			if(print_results == PRINT_RESULTS)
+				printf(" %-17d|", fclk);
 			snprintf(str + len, SHOWLINESZ - len, " %-17d|", mclk);
+
+			if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,Fclk(MHz),Mclk(MHz)\n%d,%d,%d\n", i, fclk, mclk);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"Fclk(MHz)\":%d,\n\t\t\"Mclk(MHz)\":%d\n\t},", i, fclk, mclk);
+
+			if(log_to_file)
+			{
+				sprintf(temp_string, "%d,%d,", fclk, mclk);
+				append_string(&log_file_data, temp_string);
+			}
 		} else {
 			err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
+			if(print_results == PRINT_RESULTS)
+				printf(" NA (Err: %-2d)     |", ret);
 			snprintf(str + len, SHOWLINESZ - len, " NA (Err: %-2d)     |", ret);
+
+			if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,Fclk(MHz),Mclk(MHz)\n%d,NA (Err:%d),NA (Err:%d)\n", i, ret, ret);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"Fclk(MHz)\":\"NA (Err:%d)\",\n\t\t\"Mclk(MHz)\":\"NA (Err:%d)\"\n\t},", i, ret, ret);
+
+			if(log_to_file)
+			{
+				sprintf(temp_string, "NA (Err:%d),NA (Err:%d),", ret, ret);
+				append_string(&log_file_data, temp_string);
+			}
 		}
 	}
-	printf("%s", str);
+	if(print_results == PRINT_RESULTS) printf("%s", str);
 
-	printf("\n| cclk (Mhz)\t\t\t |");
+	if(print_results == PRINT_RESULTS)
+		printf("\n| cclk (Mhz)\t\t\t |");
+
 	for (i = 0; i < sys_info.sockets; i++) {
+		char temp_string[300];
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Socket%d:CclkLimit(MHz),", i);
+			append_string(&log_file_header, temp_string);
+		}
 		ret = esmi_cclk_limit_get(i, &cclk);
 		if (!ret) {
-			printf(" %-17d|", cclk);
+			if(print_results == PRINT_RESULTS)
+				printf(" %-17d|", cclk);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,CclkLimit(MHz)\n%d,%d\n", i, cclk);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"CclkLimit(MHz)\":%d\n\t},", i, cclk);
+
+			if(log_to_file)
+			{
+				sprintf(temp_string, "%d,", cclk);
+				append_string(&log_file_data, temp_string);
+			}
 		} else {
 			err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
+			if(print_results == PRINT_RESULTS)
+				printf(" NA (Err: %-2d)     |", ret);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,CclkLimit(MHz)\n%d,%d\n", i, cclk);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"CclkLimit(MHz)\":\"NA (Err:%d)\"\n\t},", i, ret);
+
+			if(log_to_file)
+			{
+				sprintf(temp_string, "NA (Err:%d),", ret);
+				append_string(&log_file_data, temp_string);
+			}
 		}
 	}
 	if (sys_info.show_addon_clock_metrics)
 		sys_info.show_addon_clock_metrics(&err_bits, freq_src);
 
 	print_socket_footer();
-	printf("\n");
+	if(print_results == PRINT_RESULTS) printf("\n");
 	err_bits_print(err_bits);
 	if (print_src)
 		display_freq_limit_src_names(freq_src);
@@ -539,6 +947,7 @@ static esmi_status_t epyc_get_lclk_dpm_level(uint32_t sock_id, uint8_t nbio_id)
 {
 	struct dpm_level nbio;
 	esmi_status_t ret;
+	char temp_string[300];
 
 	ret = esmi_socket_lclk_dpm_level_get(sock_id, nbio_id, &nbio);
 	if (ret != ESMI_SUCCESS) {
@@ -547,12 +956,28 @@ static esmi_status_t epyc_get_lclk_dpm_level(uint32_t sock_id, uint8_t nbio_id)
 			sock_id, nbio_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
+	if(log_to_file && create_log_header) {
+		sprintf(temp_string, "Socket%d:NbioId%d:MinLclkDpmLevel,Socket%d:NbioId%d:MaxLclkDpmLevel,", sock_id, nbio_id, sock_id, nbio_id);
+		append_string(&log_file_header, temp_string);
+	}
 
-	printf("\n------------------------------------\n");
-	printf("| \tMIN\t | %5u\t   |\n", nbio.min_dpm_level);
-	printf("| \tMAX\t | %5u\t   |\n", nbio.max_dpm_level);
-	printf("------------------------------------\n");
+	if(print_results == PRINT_RESULTS)
+	{
+		printf("\n------------------------------------\n");
+		printf("| \tMIN\t | %5u\t   |\n", nbio.min_dpm_level);
+		printf("| \tMAX\t | %5u\t   |\n", nbio.max_dpm_level);
+		printf("------------------------------------\n");
+	}
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+		printf("Socket,NbioId,MinLclkDpmLevel,MaxLclkDpmLevel\n%d,%d,%d,%d\n", sock_id, nbio_id, nbio.min_dpm_level, nbio.max_dpm_level);
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+		printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"NbiodId\":%d,\n\t\t\"MinLclkDpmLevel\":%d,\n\t\t\"MaxLclkDpmLevel\":%d\n\t},", sock_id, nbio_id, nbio.min_dpm_level, nbio.max_dpm_level);
 
+	if(log_to_file)
+	{
+		sprintf(temp_string, "%d,%d,", nbio.min_dpm_level, nbio.max_dpm_level);
+		append_string(&log_file_data, temp_string);
+	}
 	return ret;
 }
 
@@ -562,42 +987,124 @@ static int epyc_get_socketpower(void)
 	uint32_t i;
 	uint32_t power = 0, powerlimit = 0, powermax = 0;
 	uint32_t err_bits = 0;
+	char temp_string[300];
 
 	print_socket_header();
-	printf("\n| Power (Watts)\t\t\t |");
+	if(print_results == PRINT_RESULTS)
+		printf("\n| Power (Watts)\t\t\t |");
+
 	for (i = 0; i < sys_info.sockets; i++) {
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Socket%d:Power(Watts),", i);
+			append_string(&log_file_header, temp_string);
+		}
+
 		ret = esmi_socket_power_get(i, &power);
 		if (!ret) {
-			printf(" %-17.3f|", (double)power/1000);
+			if(print_results == PRINT_RESULTS)
+				printf(" %-17.3f|", (double)power/1000);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,Power(Watts)\n%d,%.3f\n", i, (double)power/1000);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"Power(Watts)\":%.3f\n\t},", i, (double)power/1000);
+
+			if(log_to_file) {
+				sprintf(temp_string, "%.3f,", (double)power/1000);
+				append_string(&log_file_data, temp_string);
+			}
 		} else {
 			err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
+			if(print_results == PRINT_RESULTS)
+				printf(" NA (Err: %-2d)     |", ret);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,Power(Watts)\n%d,NA (Err:%d)\n", i, ret);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"Power(Watts)\":\"NA (Err:%d)\"\n\t},", i, ret);
+
+			if(log_to_file) {
+				sprintf(temp_string, "NA (Err:%d),", ret);
+				append_string(&log_file_data, temp_string);
+			}
 		}
 	}
 
-	printf("\n| PowerLimit (Watts)\t\t |");
+	if(print_results == PRINT_RESULTS)
+		printf("\n| PowerLimit (Watts)\t\t |");
+
 	for (i = 0; i < sys_info.sockets; i++) {
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Socket%d:PowerLimit(Watts),", i);
+			append_string(&log_file_header, temp_string);
+		}
+
 		ret = esmi_socket_power_cap_get(i, &powerlimit);
 		if (!ret) {
-			printf(" %-17.3f|", (double)powerlimit/1000);
+			if(print_results == PRINT_RESULTS)
+				printf(" %-17.3f|", (double)powerlimit/1000);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,PowerLimit(Watts)\n%d,%.3f\n", i, (double)powerlimit/1000);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"PowerLimit(Watts)\":%.3f\n\t},", i, (double)powerlimit/1000);
+
+			if(log_to_file) {
+				sprintf(temp_string, "%.3f,", (double)powerlimit/1000);
+				append_string(&log_file_data, temp_string);
+			}
 		} else {
 			err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
+			if(print_results == PRINT_RESULTS)
+				printf(" NA (Err: %-2d)     |", ret);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,PowerLimit(Watts)\n%d,NA (Err:%d)\n", i, ret);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"PowerLimit(Watts)\":\"NA (Err:%d)\"\n\t},", i, ret);
+
+			if(log_to_file) {
+				sprintf(temp_string, "NA (Err:%d),", ret);
+				append_string(&log_file_data, temp_string);
+			}
 		}
 	}
 
-	printf("\n| PowerLimitMax (Watts)\t\t |");
+	if(print_results == PRINT_RESULTS)
+		printf("\n| PowerLimitMax (Watts)\t\t |");
+
 	for (i = 0; i < sys_info.sockets; i++) {
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Socket%d:PowerLimitMax(Watts),", i);
+			append_string(&log_file_header, temp_string);
+		}
 		ret = esmi_socket_power_cap_max_get(i, &powermax);
 		if (!ret) {
-			printf(" %-17.3f|", (double)powermax/1000);
+			if(print_results == PRINT_RESULTS)
+				printf(" %-17.3f|", (double)powermax/1000);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,PowerLimitMax(Watts)\n%d,%.3f\n", i, (double)powermax/1000);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"PowerLimitMax(Watts)\":%.3f\n\t},", i, (double)powermax/1000);
+
+			if(log_to_file) {
+				sprintf(temp_string, "%.3f,", (double)powermax/1000);
+				append_string(&log_file_data, temp_string);
+			}
 		} else {
 			err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
+			if(print_results == PRINT_RESULTS)
+				printf(" NA (Err: %-2d)     |", ret);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,PowerLimitMax(Watts)\n%d,NA (Err:%d)\n", i, ret);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"PowerLimitMax(Watts)\":\"NA (Err:%d)\"\n\t},", i, ret);
+
+			if(log_to_file) {
+				sprintf(temp_string, "NA (Err:%d),", ret);
+				append_string(&log_file_data, temp_string);
+			}
 		}
 	}
 	print_socket_footer();
-	printf("\n");
+	if(print_results == PRINT_RESULTS)
+		printf("\n");
 	err_bits_print(err_bits);
 	if (err_bits > 1)
 		return ESMI_MULTI_ERROR;
@@ -608,6 +1115,7 @@ static esmi_status_t epyc_get_coreperf(uint32_t core_id)
 {
 	esmi_status_t ret;
 	uint32_t boostlimit = 0;
+	char temp_string[300];
 	/* Get the boostlimit value for a given core */
 	ret = esmi_core_boostlimit_get(core_id, &boostlimit);
 	if (ret != ESMI_SUCCESS) {
@@ -615,9 +1123,27 @@ static esmi_status_t epyc_get_coreperf(uint32_t core_id)
 			core_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("--------------------------------------------------\n");
-	printf("| core[%03d] boostlimit (MHz)\t | %-10u \t |\n", core_id, boostlimit);
-	printf("--------------------------------------------------\n");
+
+	if(log_to_file && create_log_header) {
+		sprintf(temp_string, "Core%d:BoostLimit(MHz),", core_id);
+		append_string(&log_file_header, temp_string);
+	}
+
+	if(print_results == PRINT_RESULTS) {
+		printf("--------------------------------------------------\n");
+		printf("| core[%03d] boostlimit (MHz)\t | %-10u \t |\n", core_id, boostlimit);
+		printf("--------------------------------------------------\n");
+	}
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+		printf("Core,BoostLimit(MHz)\n%d,%d\n", core_id, boostlimit);
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+		printf("\n\t{\n\t\t\"Core\":%d,\n\t\t\"BoostLimit(MHz)\":%d\n\t},", core_id, boostlimit);
+
+	if(log_to_file)
+	{
+		sprintf(temp_string, "%d,", boostlimit);
+		append_string(&log_file_data, temp_string);
+	}
 
 	return ESMI_SUCCESS;
 }
@@ -712,6 +1238,7 @@ static esmi_status_t epyc_get_sockc0_residency(uint32_t sock_id)
 {
 	esmi_status_t ret;
 	uint32_t residency = 0;
+	char temp_string[300];
 
 	ret = esmi_socket_c0_residency_get(sock_id, &residency);
 	if (ret != ESMI_SUCCESS) {
@@ -719,10 +1246,26 @@ static esmi_status_t epyc_get_sockc0_residency(uint32_t sock_id)
 			sock_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("--------------------------------------\n");
-	printf("| socket[%02d] c0_residency   | %2u %%   |\n", sock_id, residency);
-	printf("--------------------------------------\n");
 
+	if(log_to_file && create_log_header) {
+		sprintf(temp_string, "Socket%x:C0Residency(%%),", sock_id);
+		append_string(&log_file_header, temp_string);
+	}
+
+	if(print_results == PRINT_RESULTS) {
+		printf("--------------------------------------\n");
+		printf("| socket[%02d] c0_residency   | %2u %%   |\n", sock_id, residency);
+		printf("--------------------------------------\n");
+	}
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+		printf("Socket,C0Residency(%%)\n%d,%d\n", sock_id, residency);
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+		printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"C0Residency(%%)\":%d\n\t},", sock_id, residency);
+
+	if(log_to_file) {
+		sprintf(temp_string, "%x,", residency);
+		append_string(&log_file_data, temp_string);
+	}
 	return ESMI_SUCCESS;
 }
 
@@ -730,6 +1273,7 @@ static esmi_status_t epyc_get_dimm_temp_range_refresh_rate(uint8_t sock_id, uint
 {
 	struct temp_range_refresh_rate rate;
 	esmi_status_t ret;
+	char temp_string[300];
 
 	ret = esmi_dimm_temp_range_and_refresh_rate_get(sock_id, dimm_addr, &rate);
 	if (ret) {
@@ -738,12 +1282,29 @@ static esmi_status_t epyc_get_dimm_temp_range_refresh_rate(uint8_t sock_id, uint
 		return ret;
 	}
 
-	printf("---------------------------------------");
-	printf("\n| Temp Range\t\t |");
-	printf(" %-10u |", rate.range);
-	printf("\n| Refresh rate\t\t |");
-	printf(" %-10u |", rate.ref_rate);
-	printf("\n---------------------------------------\n");
+	if(log_to_file && create_log_header) {
+		sprintf(temp_string, "Socket%d:DimmAddress0x%x:TempRange,Socket%d:DimmAddress0x%x:TempRangeRefreshRate,", sock_id, dimm_addr, sock_id, dimm_addr);
+		append_string(&log_file_header, temp_string);
+	}
+
+	if(print_results == PRINT_RESULTS) {
+		printf("---------------------------------------");
+		printf("\n| Temp Range\t\t |");
+		printf(" %-10u |", rate.range);
+		printf("\n| Refresh rate\t\t |");
+		printf(" %-10u |", rate.ref_rate);
+		printf("\n---------------------------------------\n");
+	}
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+		printf("Socket,DimmAddress,TempRange,TempRangeRefreshRate\n%d,0x%x,%u,%u\n", sock_id, dimm_addr, rate.range, rate.ref_rate);
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+		printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"DimmAddress\":0x%x,\n\t\t\"TempRange\":%d,\n\t\t\"TempRangeRefreshRate\":%d\n\t},", sock_id, dimm_addr, rate.range, rate.ref_rate);
+
+	if(log_to_file)
+	{
+		sprintf(temp_string, "%u,%u,", rate.range, rate.ref_rate);
+		append_string(&log_file_data, temp_string);
+	}
 
 	return ret;
 }
@@ -752,6 +1313,7 @@ static esmi_status_t epyc_get_dimm_power(uint8_t sock_id, uint8_t dimm_addr)
 {
 	esmi_status_t ret;
 	struct dimm_power d_power;
+	char temp_string[300];
 
 	ret = esmi_dimm_power_consumption_get(sock_id, dimm_addr, &d_power);
 	if (ret) {
@@ -760,14 +1322,31 @@ static esmi_status_t epyc_get_dimm_power(uint8_t sock_id, uint8_t dimm_addr)
 		return ret;
 	}
 
-	printf("---------------------------------------");
-	printf("\n| Power(mWatts)\t\t |");
-	printf(" %-10u |", d_power.power);
-	printf("\n| Power update rate(ms)\t |");
-	printf(" %-10u |", d_power.update_rate);
-	printf("\n| Dimm address \t\t |");
-	printf(" 0x%-8x |", d_power.dimm_addr);
-	printf("\n---------------------------------------\n");
+	if(log_to_file && create_log_header) {
+		sprintf(temp_string, "Socket%d:DimmAddress0x%x:Power(mWatts),Socket%d:DimmAddress0x%x:PowerUpdateRate(ms),", sock_id, dimm_addr, sock_id, dimm_addr);
+		append_string(&log_file_header, temp_string);
+	}
+
+	if(print_results == PRINT_RESULTS) {
+		printf("---------------------------------------");
+		printf("\n| Power(mWatts)\t\t |");
+		printf(" %-10u |", d_power.power);
+		printf("\n| Power update rate(ms)\t |");
+		printf(" %-10u |", d_power.update_rate);
+		printf("\n| Dimm address \t\t |");
+		printf(" 0x%-8x |", d_power.dimm_addr);
+		printf("\n---------------------------------------\n");
+	}
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+		printf("Socket,DimmAddress,Power(mWatts),PowerUpdateRate(ms)\n%d,0x%x,%u,%u\n", sock_id, d_power.dimm_addr, d_power.power, d_power.update_rate);
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+		printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"DimmAddress\":0x%x,\n\t\t\"Power(mWatts)\":%d,\n\t\t\"PowerUpdateRate(ms)\":%d\n\t},", sock_id, d_power.dimm_addr, d_power.power, d_power.update_rate);
+
+	if(log_to_file)
+	{
+		sprintf(temp_string, "%u,%u,", d_power.power, d_power.update_rate);
+		append_string(&log_file_data, temp_string);
+	}
 
 	return ret;
 }
@@ -776,6 +1355,7 @@ static esmi_status_t epyc_get_dimm_thermal(uint8_t sock_id, uint8_t dimm_addr)
 {
 	struct dimm_thermal d_sensor;
 	esmi_status_t ret;
+	char temp_string[300];
 
 	ret = esmi_dimm_thermal_sensor_get(sock_id, dimm_addr, &d_sensor);
 	if (ret) {
@@ -783,14 +1363,32 @@ static esmi_status_t epyc_get_dimm_thermal(uint8_t sock_id, uint8_t dimm_addr)
 			" Err[%d]: %s\n", sock_id, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("------------------------------------------");
-	printf("\n| Temperature(°C)\t |");
-	printf(" %-10.3f\t |", d_sensor.temp);
-	printf("\n| Update rate(ms)\t |");
-	printf(" %-10u\t |", d_sensor.update_rate);
-	printf("\n| Dimm address returned\t |");
-	printf(" 0x%-8x\t |", d_sensor.dimm_addr);
-	printf("\n------------------------------------------\n");
+
+	if(log_to_file && create_log_header) {
+		sprintf(temp_string, "Socket%d:DimmAddress0x%x:Temperature(°C),Socket%d:DimmAddress0x%x:TemperatureUpdateRate(ms),", sock_id, dimm_addr, sock_id, dimm_addr);
+		append_string(&log_file_header, temp_string);
+	}
+
+	if(print_results == PRINT_RESULTS) {
+		printf("------------------------------------------");
+		printf("\n| Temperature(°C)\t |");
+		printf(" %-10.3f\t |", d_sensor.temp);
+		printf("\n| Update rate(ms)\t |");
+		printf(" %-10u\t |", d_sensor.update_rate);
+		printf("\n| Dimm address returned\t |");
+		printf(" 0x%-8x\t |", d_sensor.dimm_addr);
+		printf("\n------------------------------------------\n");
+	}
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+		printf("Socket,DimmAddress,Temperature(°C),TemperatureUpdateRate(ms)\n%d,0x%x,%.3f,%u\n", sock_id, d_sensor.dimm_addr, d_sensor.temp, d_sensor.update_rate);
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+		printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"DimmAddress\":0x%x,\n\t\t\"Temperature(°C)\":%.3f,\n\t\t\"TemperatureUpdateRate(ms)\":%d\n\t},", sock_id, d_sensor.dimm_addr, d_sensor.temp, d_sensor.update_rate);
+
+	if(log_to_file)
+	{
+		sprintf(temp_string, "%.3f,%u,", d_sensor.temp, d_sensor.update_rate);
+		append_string(&log_file_data, temp_string);
+	}
 
 	return ret;
 }
@@ -807,9 +1405,25 @@ static esmi_status_t epyc_get_curr_freq_limit_core(uint32_t core_id)
 		return ret;
 	}
 
-	printf("--------------------------------------------------------------");
-	printf("\n| CPU[%03d] core clock current frequency limit (MHz) : %u\t|\n", core_id, cclk);
-	printf("--------------------------------------------------------------\n");
+	if(print_results == PRINT_RESULTS) {
+		printf("--------------------------------------------------------------");
+		printf("\n| CPU[%03d] core clock current frequency limit (MHz) : %u\t|\n", core_id, cclk);
+		printf("--------------------------------------------------------------\n");
+	}
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+		printf("Core,CoreFrequencyLimit(MHz)\n%d,%u\n", core_id, cclk);
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+		printf("\n\t{\n\t\t\"Core\":%d,\n\t\t\"CoreFrequencyLimit(MHz)\":%u\n\t},", core_id, cclk);
+
+	if(log_to_file) {
+		char temp_string[300];
+		if(create_log_header) {
+			sprintf(temp_string, "Core%d:CoreFrequencyLimit(MHz),", core_id);
+			append_string(&log_file_header, temp_string);
+		}
+		sprintf(temp_string, "%u,", cclk);
+		append_string(&log_file_data, temp_string);
+	}
 	return ret;
 }
 
@@ -821,14 +1435,42 @@ static int epyc_get_power_telemetry()
 	uint32_t err_bits = 0;
 
 	print_socket_header();
-	printf("\n| SVI Power Telemetry (mWatts) \t |");
+	if(print_results == PRINT_RESULTS)
+		printf("\n| SVI Power Telemetry (Watts) \t |");
+
 	for (i = 0; i < sys_info.sockets; i++) {
+		char temp_string[300];
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Socket%d:SVIPowerTelemetry(Watts),", i);
+			append_string(&log_file_header, temp_string);
+		}
+
 		ret = esmi_pwr_svi_telemetry_all_rails_get(i, &power);
 		if(!ret) {
-			printf(" %-17.3f|", (double)power/1000);
+			if(print_results == PRINT_RESULTS)
+				printf(" %-17.3f|", (double)power/1000);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,SVIPowerTelemetry(Watts)\n%d,%.3f\n", i, (double)power/1000);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"SVIPowerTelemetry(Watts)\":%.3f\n\t},", i, (double)power/1000);
+
+			if(log_to_file) {
+				sprintf(temp_string, "%.3f,", (double)power/1000);
+				append_string(&log_file_data, temp_string);
+			}
 		} else {
 			err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
+			if(print_results == PRINT_RESULTS)
+				printf(" NA (Err: %-2d)     |", ret);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,SVIPowerTelemetry(Watts)\n%d,NA (Err:%d)\n", i, ret);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"SVIPowerTelemetry(Watts)\":\"NA (Err:%d)\"\n\t},", i, ret);
+
+			if(log_to_file) {
+				sprintf(temp_string, "NA (Err:%d),", ret);
+				append_string(&log_file_data, temp_string);
+			}
 		}
 	}
 
@@ -863,6 +1505,7 @@ static esmi_status_t epyc_get_io_bandwidth_info(uint32_t sock_id, char *link)
 	esmi_status_t ret;
 	uint32_t bw;
 	struct link_id_bw_type io_link;
+	char temp_string[300];
 
 	io_link.link_name = link;
 	/* Aggregate bw = 1 */
@@ -874,9 +1517,26 @@ static esmi_status_t epyc_get_io_bandwidth_info(uint32_t sock_id, char *link)
 		return ret;
 	}
 
-	printf("\n-----------------------------------------------------------\n");
-	printf("| Current IO Aggregate bandwidth of link %s | %6u Mbps |\n", link, bw);
-	printf("-----------------------------------------------------------\n");
+	if(log_to_file && create_log_header) {
+		sprintf(temp_string, "Socket%d:Link%s:CurrentIOAggregateBandwidth(Mbps),", sock_id, link);
+		append_string(&log_file_header, temp_string);
+	}
+
+	if(print_results == PRINT_RESULTS) {
+		printf("\n-----------------------------------------------------------\n");
+		printf("| Current IO Aggregate bandwidth of link %s | %6u Mbps |\n", link, bw);
+		printf("-----------------------------------------------------------\n");
+	}
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+		printf("Socket,Link,CurrentAggregateIOBandwidth(Mbps)\n%d,%s,%u\n", sock_id, link, bw);
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+		printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"Link\":%s,\n\t\t\"CurrentIOAggregateBandwidth(Mbps)\":%u\n\t},", sock_id, link, bw);
+
+	if(log_to_file)
+	{
+		sprintf(temp_string, "%u,", bw);
+		append_string(&log_file_data, temp_string);
+	}
 
 	return ret;
 }
@@ -887,6 +1547,7 @@ static esmi_status_t epyc_get_xgmi_bandwidth_info(uint32_t sock_id, char *link, 
 	esmi_status_t ret;
 	uint32_t bw;
 	int bw_ind = -1;
+	char temp_string[300];
 
 	find_bwtype_index(bw_type, &bw_ind);
 	if (bw_ind == -1) {
@@ -904,9 +1565,26 @@ static esmi_status_t epyc_get_xgmi_bandwidth_info(uint32_t sock_id, char *link, 
 		return ret;
 	}
 
-	printf("\n-------------------------------------------------------------\n");
-	printf("| Current %s bandwidth of xGMI link %s | %6u Mbps |\n", bw_string[bw_ind], link, bw);
-	printf("-------------------------------------------------------------\n");
+	if(log_to_file && create_log_header) {
+		sprintf(temp_string, "Socket%d:Link%s:Bw%s:XgmiBandwidth(Mbps),", sock_id, link, bw_type);
+		append_string(&log_file_header, temp_string);
+	}
+
+	if(print_results == PRINT_RESULTS) {
+		printf("\n-------------------------------------------------------------\n");
+		printf("| Current %s bandwidth of xGMI link %s | %6u Mbps |\n", bw_string[bw_ind], link, bw);
+		printf("-------------------------------------------------------------\n");
+	}
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+		printf("Socket,Link,Bw,XgmiBandwidth(Mbps)\n%d,%s,%s,%u\n", sock_id, link, bw_type, bw);
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+		printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"Link\":\"%s\",\n\t\t\"Bw\":\"%s\",\n\t\t\"XgmiBandwidth(Mbps)\":%u\n\t},", sock_id, link, bw_type, bw);
+
+	if(log_to_file)
+	{
+		sprintf(temp_string, "%u,", bw);
+		append_string(&log_file_data, temp_string);
+	}
 
 	return ret;
 }
@@ -993,20 +1671,43 @@ static esmi_status_t epyc_get_curr_freq_limit_socket(uint32_t sock_id)
 		return ret;
 	}
 
-	printf("----------------------------------------------------------------");
-	printf("\n| SOCKET[%d] core clock current frequency limit (MHz) : %u\t|\n", sock_id, cclk);
-	printf("----------------------------------------------------------------\n");
+	if(print_results == PRINT_RESULTS) {
+		printf("----------------------------------------------------------------");
+		printf("\n| SOCKET[%d] core clock current frequency limit (MHz) : %u\t|\n", sock_id, cclk);
+		printf("----------------------------------------------------------------\n");
+	}
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+		printf("Socket,SocketCclkFrequencyLimit(MHz)\n%d,%u\n", sock_id, cclk);
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+		printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"SocketCclkFrequencyLimit(MHz)\":%u\n\t},", sock_id, cclk);
+
+	if(log_to_file) {
+		char temp_string[300];
+		if(create_log_header) {
+			sprintf(temp_string, "Socket%d:SocketCclkFrequencyLimit(MHz),", sock_id);
+			append_string(&log_file_header, temp_string);
+		}
+		sprintf(temp_string, "%u,", cclk);
+		append_string(&log_file_data, temp_string);
+	}
+
 	return ret;
 }
 
 static void show_smi_message(void)
 {
-	printf("\n============================= E-SMI ===================================\n\n");
+	if(print_results == PRINT_RESULTS) 		printf("\n============================= E-SMI ===================================\n\n");
+	else if(print_results == PRINT_RESULTS_AS_JSON) printf("{");
 }
 
 static void show_smi_end_message(void)
 {
-	printf("\n============================= End of E-SMI ============================\n");
+	if(print_results == PRINT_RESULTS)		printf("\n============================= End of E-SMI ============================\n");
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+	{
+		printf("\n\t{\n\t\t\"JSONFormatVersion\":1\n\t}");
+		printf("\n}\n");
+	}
 }
 
 static void no_addon_socket_metrics(uint32_t *err_bits, char **freq_src)
@@ -1069,60 +1770,197 @@ static int show_socket_metrics(uint32_t *err_bits, char **freq_src)
 	uint64_t pkg_input = 0;
 	uint32_t power = 0, powerlimit = 0, powermax = 0;
 	uint32_t c0resi;
+	char temp_string[300];
 
 	print_socket_header();
-	printf("\n| Energy (K Joules)\t\t |");
+	if(print_results == PRINT_RESULTS)
+		printf("\n| Energy (K Joules)\t\t |");
+
 	for (i = 0; i < sys_info.sockets; i++) {
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Socket%d:SocketEnergy(KJoules),", i);
+			append_string(&log_file_header, temp_string);
+		}
+
 		ret = esmi_socket_energy_get(i, &pkg_input);
 		if (!ret) {
-			printf(" %-17.3lf|", (double)pkg_input/1000000000);
+			if(print_results == PRINT_RESULTS)
+				printf(" %-17.3lf|", (double)pkg_input/1000000000);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,SocketEnergy(KJoules)\n%d,%.3f\n", i, (double)pkg_input/1000000000);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"SocketEnergy(KJoules)\":%.3f\n\t},", i, (double)pkg_input/1000000000);
+
+			if(log_to_file) {
+				sprintf(temp_string, "%.3f,", (double)pkg_input/1000000000);
+				append_string(&log_file_data, temp_string);
+			}
 		} else {
 			*err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
+			if(print_results == PRINT_RESULTS)
+				printf(" NA (Err: %-2d)     |", ret);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,SocketEnergy(KJoules)\n%d,NA (Err:%d)\n", i, ret);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"SocketEnergy(KJoules)\":\"NA (Err:%d)\"\n\t},", i, ret);
+
+			if(log_to_file) {
+				sprintf(temp_string, "NA (Err:%d),", ret);
+				append_string(&log_file_data, temp_string);
+			}
 		}
 	}
 
-	printf("\n| Power (Watts)\t\t\t |");
+	if(print_results == PRINT_RESULTS)
+		printf("\n| Power (Watts)\t\t\t |");
+
 	for (i = 0; i < sys_info.sockets; i++) {
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Socket%d:SocketPower(Watts),", i);
+			append_string(&log_file_header, temp_string);
+		}
+
 		ret = esmi_socket_power_get(i, &power);
 		if (!ret) {
-			printf(" %-17.3f|", (double)power/1000);
+
+			if(print_results == PRINT_RESULTS)
+				printf(" %-17.3f|", (double)power/1000);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,SocketPower(Watts)\n%d,%.3f\n", i, (double)power/1000);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"SocketPower(Watts)\":%.3f\n\t},", i, (double)power/1000);
+
+			if(log_to_file) {
+				sprintf(temp_string, "%.3f,", (double)power/1000);
+				append_string(&log_file_data, temp_string);
+			}
 		} else {
 			*err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
+			if(print_results == PRINT_RESULTS)
+				printf(" NA (Err: %-2d)     |", ret);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,SocketPower(Watts)\n%d,NA (Err:%d)\n", i, ret);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"SocketPower(Watts)\":\"NA (Err:%d)\"\n\t},", i, ret);
+
+			if(log_to_file) {
+				sprintf(temp_string, "NA (Err:%d),", ret);
+				append_string(&log_file_data, temp_string);
+			}
 		}
 	}
 
-	printf("\n| PowerLimit (Watts)\t\t |");
+
+	if(print_results == PRINT_RESULTS)
+		printf("\n| PowerLimit (Watts)\t\t |");
+
 	for (i = 0; i < sys_info.sockets; i++) {
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Socket%d:SocketPowerLimit(Watts),", i);
+			append_string(&log_file_header, temp_string);
+		}
+
 		ret = esmi_socket_power_cap_get(i, &powerlimit);
 		if (!ret) {
-			printf(" %-17.3f|", (double)powerlimit/1000);
+			if(print_results == PRINT_RESULTS)
+				printf(" %-17.3f|", (double)powerlimit/1000);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,SocketPowerLimit(Watts)\n%d,%.3f\n", i, (double)powerlimit/1000);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"SocketPowerLimit(Watts)\":%.3f\n\t},", i, (double)powerlimit/1000);
+
+			if(log_to_file) {
+				sprintf(temp_string, "%.3f,", (double)powerlimit/1000);
+				append_string(&log_file_data, temp_string);
+			}
 		} else {
 			*err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
+			if(print_results == PRINT_RESULTS)
+				printf(" NA (Err: %-2d)     |", ret);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,SocketPowerLimit(Watts)\n%d,NA (Err:%d)\n", i, ret);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"SocketPowerLimit(Watts)\":\"NA (Err:%d)\"\n\t},", i, ret);
+
+			if(log_to_file) {
+				sprintf(temp_string, "NA (Err:%d),", ret);
+				append_string(&log_file_data, temp_string);
+			}
 		}
 	}
 
-	printf("\n| PowerLimitMax (Watts)\t\t |");
+	if(print_results == PRINT_RESULTS)
+		printf("\n| PowerLimitMax (Watts)\t\t |");
+
 	for (i = 0; i < sys_info.sockets; i++) {
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Socket%d:SocketPowerLimitiMax(Watts),", i);
+			append_string(&log_file_header, temp_string);
+		}
+
 		ret = esmi_socket_power_cap_max_get(i, &powermax);
 		if(!ret) {
-			printf(" %-17.3f|", (double)powermax/1000);
+			if(print_results == PRINT_RESULTS)
+				printf(" %-17.3f|", (double)powermax/1000);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,SocketPowerLimitMax(Watts)\n%d,%.3f\n", i, (double)powermax/1000);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"SocketPowerLimitMax(Watts)\":%.3f\n\t},", i, (double)powermax/1000);
+
+			if(log_to_file) {
+				sprintf(temp_string, "%.3f,", (double)powermax/1000);
+				append_string(&log_file_data, temp_string);
+			}
 		} else {
 			*err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
+			if(print_results == PRINT_RESULTS)
+				printf(" NA (Err: %-2d)     |", ret);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,SocketPowerLimitMax(Watts)\n%d,NA (Err:%d)\n", i, ret);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"SocketPowerLimitMax(Watts)\":\"NA (Err:%d)\"\n\t},", i, ret);
+
+			if(log_to_file) {
+				sprintf(temp_string, "NA (Err:%d),", ret);
+				append_string(&log_file_data, temp_string);
+			}
 		}
 	}
 
-	printf("\n| C0 Residency (%%)\t\t |");
+	if(print_results == PRINT_RESULTS)
+		printf("\n| C0 Residency (%%)\t\t |");
+
 	for (i = 0; i < sys_info.sockets; i++) {
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Socket%d:SocketC0Residency(%%),", i);
+			append_string(&log_file_header, temp_string);
+		}
 		ret = esmi_socket_c0_residency_get(i, &c0resi);
 		if(!ret) {
-			printf(" %-17u|", c0resi);
+			if(print_results == PRINT_RESULTS)
+				printf(" %-17u|", c0resi);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,SocketC0Residency(%%)\n%d,%u\n", i, c0resi);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"SocketC0Residency(%%)\":%u\n\t},", i, c0resi);
+
+			if(log_to_file) {
+				sprintf(temp_string, "%u,", c0resi);
+				append_string(&log_file_data, temp_string);
+			}
 		} else {
 			*err_bits |= 1 << ret;
-			printf(" NA (Err: %-2d)     |", ret);
+			if(print_results == PRINT_RESULTS)
+				printf(" NA (Err: %-2d)     |", ret);
+			else if(print_results == PRINT_RESULTS_AS_CSV)
+				printf("Socket,SocketC0Residency(%%)\n%d,NA (Err:%d)\n", i, ret);
+			else if(print_results == PRINT_RESULTS_AS_JSON)
+				printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"SocketC0Residency(%%)\":\"NA (Err:%d)\"\n\t},", i, ret);
+
+			if(log_to_file) {
+				sprintf(temp_string, "NA (Err:%d),", ret);
+				append_string(&log_file_data, temp_string);
+			}
 		}
 	}
 	/* proto version specific socket metrics are printed here */
@@ -1175,17 +2013,24 @@ static esmi_status_t cache_system_info(void)
 
 static void show_system_info(void)
 {
-	printf("--------------------------------------\n");
-	printf("| CPU Family		| 0x%-2x (%-3d) |\n", sys_info.family, sys_info.family);
-	printf("| CPU Model		| 0x%-2x (%-3d) |\n", sys_info.model, sys_info.model);
-	printf("| NR_CPUS		| %-8d   |\n", sys_info.cpus);
-	printf("| NR_SOCKETS		| %-8d   |\n", sys_info.sockets);
-	if (sys_info.threads_per_core > 1) {
-		printf("| THREADS PER CORE	| %d (SMT ON) |\n", sys_info.threads_per_core);
-	} else {
-		printf("| THREADS PER CORE	| %d (SMT OFF)|\n", sys_info.threads_per_core);
+	if(print_results == PRINT_RESULTS)
+	{
+		printf("--------------------------------------\n");
+		printf("| CPU Family		| 0x%-2x (%-3d) |\n", sys_info.family, sys_info.family);
+		printf("| CPU Model		| 0x%-2x (%-3d) |\n", sys_info.model, sys_info.model);
+		printf("| NR_CPUS		| %-8d   |\n", sys_info.cpus);
+		printf("| NR_SOCKETS		| %-8d   |\n", sys_info.sockets);
+		if (sys_info.threads_per_core > 1) {
+			printf("| THREADS PER CORE	| %d (SMT ON) |\n", sys_info.threads_per_core);
+		} else {
+			printf("| THREADS PER CORE	| %d (SMT OFF)|\n", sys_info.threads_per_core);
+		}
+		printf("--------------------------------------\n");
 	}
-	printf("--------------------------------------\n");
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+		printf("CpuFamily(Hex),CpuModel(Hex),NumberOfCpus,NumberOfSockets,ThreadsPerCore\n0x%x,0x%x,%d,%d,%d\n", sys_info.family, sys_info.model, sys_info.cpus, sys_info.sockets, sys_info.threads_per_core);
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+		printf("\n\t{\n\t\t\"CpuFamily(Hex)\":\"0x%x\",\n\t\t\"CpuModel(Hex)\":\"0x%x\",\n\t\t\"NumberOfCpus\":%d,\n\t\t\"NumberOfSockets\":%d,\n\t\t\"ThreadsPerCore\":%x\n\t},", sys_info.family, sys_info.model, sys_info.cpus, sys_info.sockets, sys_info.threads_per_core);
 }
 
 static esmi_status_t show_cpu_energy_all(void)
@@ -1194,6 +2039,7 @@ static esmi_status_t show_cpu_energy_all(void)
 	uint64_t *input;
 	uint32_t cpus;
 	esmi_status_t ret;
+	char temp_string[300];
 
 	cpus = sys_info.cpus/sys_info.threads_per_core;
 
@@ -1210,14 +2056,34 @@ static esmi_status_t show_cpu_energy_all(void)
 		free(input);
 		return ret;
 	}
-	printf("\n| CPU energies in Joules:\t\t\t\t\t\t\t\t\t\t\t|");
+	if(print_results == PRINT_RESULTS)
+		printf("\n| CPU energies in Joules:\t\t\t\t\t\t\t\t\t\t\t|");
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+		printf("Core,CoreEnergy(Joules)\n");
+
 	for (i = 0; i < cpus; i++) {
-		if(!(i % 8)) {
-			printf("\n| cpu [%3d] :", i);
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Core%d:CoreEnergy(Joules),", i);
+			append_string(&log_file_header, temp_string);
 		}
-		printf(" %10.3lf", (double)input[i]/1000000);
-		if (i % 8 == 7)
-			printf("\t\t|");
+
+		if(print_results == PRINT_RESULTS) {
+			if(!(i % 8)) {
+				printf("\n| cpu [%3d] :", i);
+			}
+			printf(" %10.3lf", (double)input[i]/1000000);
+			if (i % 8 == 7)
+				printf("\t\t|");
+		}
+		else if(print_results == PRINT_RESULTS_AS_CSV)
+			printf("%d,%.3f\n", i, (double)input[i]/1000000);
+		else if(print_results == PRINT_RESULTS_AS_JSON)
+			printf("\n\t{\n\t\t\"Core\":%d,\n\t\t\"CoreEnergy(Joules)\":%.3f\n\t},", i, (double)input[i]/1000000);
+
+		if(log_to_file) {
+			sprintf(temp_string, "%.3f,", (double)input[i]/1000000);
+			append_string(&log_file_data, temp_string);
+		}
 	}
 	free(input);
 
@@ -1230,23 +2096,50 @@ static esmi_status_t show_cpu_boostlimit_all(void)
 	uint32_t boostlimit;
 	uint32_t cpus;
 	esmi_status_t ret;
+	char temp_string[300];
 
 	cpus = sys_info.cpus/sys_info.threads_per_core;
 
-	printf("\n| CPU boostlimit in MHz:\t\t\t\t\t\t\t\t\t\t\t|");
+	if(print_results == PRINT_RESULTS)
+		printf("\n| CPU boostlimit in MHz:\t\t\t\t\t\t\t\t\t\t\t|");
+
 	for (i = 0; i < cpus; i++) {
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Core%d:CoreBoostLimit(MHz),", i);
+			append_string(&log_file_header, temp_string);
+		}
+
 		boostlimit = 0;
 		ret = esmi_core_boostlimit_get(i, &boostlimit);
-		if(!(i % 16)) {
-			printf("\n| cpu [%3d] :", i);
-		}
-		if (!ret) {
-			printf(" %-5u", boostlimit);
+		if(!ret) {
+			sprintf(temp_string, "%d", boostlimit);
 		} else {
-			printf(" NA   ");
+			sprintf(temp_string, "NA");
 		}
-		if (i % 16 == 15)
-			printf("   |");
+
+		if(print_results == PRINT_RESULTS)
+		{
+			if(!(i % 16)) {
+				printf("\n| cpu [%3d] :", i);
+			}
+			if (!ret) {
+				printf(" %-5u", boostlimit);
+			} else {
+				printf(" NA   ");
+			}
+			if (i % 16 == 15)
+				printf("   |");
+		}
+		else if(print_results == PRINT_RESULTS_AS_CSV)
+			printf("Core,CoreBoostLimit(MHz)\n%d,%s\n", i, temp_string);
+		else if(print_results == PRINT_RESULTS_AS_JSON)
+			printf("\n\t{\n\t\t\"Core\":%d,\n\t\t\"CoreBoostLimit(MHz)\":%s\n\t},", i, temp_string);
+
+		if(log_to_file) {
+			char temp_string_1[300+1];
+			sprintf(temp_string_1, "%s,", temp_string);
+			append_string(&log_file_data, temp_string_1);
+		}
 	}
 
 	return ESMI_SUCCESS;
@@ -1258,23 +2151,50 @@ static esmi_status_t show_core_clocks_all()
 	uint32_t cpus;
 	uint32_t cclk;
 	int i;
+	char temp_string[300];
 
 	cpus = sys_info.cpus/sys_info.threads_per_core;
 
-	printf("\n| CPU core clock current frequency limit in MHz:\t\t\t\t\t\t\t\t\t\t\t|");
+	if(print_results == PRINT_RESULTS)
+		printf("\n| CPU core clock current frequency limit in MHz:\t\t\t\t\t\t\t\t\t\t\t|");
+
+	for (i = 0; i < cpus; i++) {
+		if(log_to_file && create_log_header) {
+			sprintf(temp_string, "Core%d:CoreCclkFrequencyLimit(MHz),", i);
+			append_string(&log_file_header, temp_string);
+		}
+	}
+
 	for (i = 0; i < cpus; i++) {
 		cclk = 0;
 		ret = esmi_current_freq_limit_core_get(i, &cclk);
-		if(!(i % 16)) {
-			printf("\n| cpu [%3d] :", i);
-		}
-		if (!ret) {
-			printf(" %-5u", cclk);
+		if(!ret) {
+			sprintf(temp_string, "%d", cclk);
 		} else {
-			printf(" NA   ");
+			sprintf(temp_string, "NA");
 		}
-		if (i % 16 == 15)
-			printf("   |");
+		if(print_results == PRINT_RESULTS) {
+			if(!(i % 16)) {
+				printf("\n| cpu [%3d] :", i);
+			}
+			if (!ret) {
+				printf(" %-5u", cclk);
+			} else {
+				printf(" NA   ");
+			}
+			if (i % 16 == 15)
+				printf("   |");
+		}
+		else if(print_results == PRINT_RESULTS_AS_CSV)
+			printf("Core,CoreCclkFrequencyLimit(MHz)\n%d,%s\n", i, temp_string);
+		else if(print_results == PRINT_RESULTS_AS_JSON)
+			printf("\n\t{\n\t\t\"Core\":%d,\n\t\t\"CoreCclkFrequencyLimit(MHz)\":%s\n\t},", i, temp_string);
+
+		if(log_to_file) {
+			char temp_string_1[300+1];
+			sprintf(temp_string_1, "%s,", temp_string);
+			append_string(&log_file_data, temp_string_1);
+		}
 	}
 	return ESMI_SUCCESS;
 }
@@ -1283,33 +2203,40 @@ static void cpu_ver5_metrics(uint32_t *err_bits)
 {
 	esmi_status_t ret;
 
-	printf("\n--------------------------------------------------------------------"
-		"---------------------------------------------");
+	if(print_results == PRINT_RESULTS)
+		printf("\n--------------------------------------------------------------------"
+			"---------------------------------------------");
 	ret = show_core_clocks_all();
 	*err_bits |= 1 << ret;
-	printf("\n--------------------------------------------------------------------"
-		"---------------------------------------------");
+
+	if(print_results == PRINT_RESULTS)
+		printf("\n--------------------------------------------------------------------"
+			"---------------------------------------------");
 }
 
 static int show_cpu_metrics(uint32_t *err_bits)
 {
 	esmi_status_t ret;
 
-	printf("\n\n--------------------------------------------------------------------"
-		"---------------------------------------------");
+	if(print_results == PRINT_RESULTS)
+		printf("\n\n--------------------------------------------------------------------"
+			"---------------------------------------------");
 	ret = show_cpu_energy_all();
 	*err_bits |= 1 << ret;
 
-	printf("\n--------------------------------------------------------------------"
-		"---------------------------------------------\n");
+	if(print_results == PRINT_RESULTS) {
+		printf("\n--------------------------------------------------------------------"
+			"---------------------------------------------\n");
 
-	printf("\n--------------------------------------------------------------------"
-		"---------------------------------------------");
+		printf("\n--------------------------------------------------------------------"
+			"---------------------------------------------");
+	}
 	ret = show_cpu_boostlimit_all();
 	*err_bits |= 1 << ret;
 
-	printf("\n--------------------------------------------------------------------"
-		"---------------------------------------------\n");
+	if(print_results == PRINT_RESULTS)
+		printf("\n--------------------------------------------------------------------"
+			"---------------------------------------------\n");
 
 	/* proto version specific cpu metrics are printed here */
 	if (sys_info.show_addon_cpu_metrics)
@@ -1363,7 +2290,8 @@ static int show_smi_all_parameters(void)
 
 	show_cpu_metrics(&err_bits);
 
-	printf("\n");
+	if(print_results == PRINT_RESULTS)
+		printf("\n");
 	if (print_src)
 		display_freq_limit_src_names(freq_src);
 	err_bits_print(err_bits);
@@ -1659,6 +2587,7 @@ static int epyc_get_pwr_efficiency_mode(uint8_t sock_ind)
 {
 	esmi_status_t ret;
 	uint8_t val;
+	char temp_string[300];
 
 	ret = esmi_pwr_efficiency_mode_get(sock_ind, &val);
 	if (ret != ESMI_SUCCESS) {
@@ -1666,9 +2595,27 @@ static int epyc_get_pwr_efficiency_mode(uint8_t sock_ind)
 			sock_ind, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("---------------------------------------\n");
-	printf("| Current power efficiency mode is %d |\n", val);
-	printf("---------------------------------------\n");
+	if(log_to_file && create_log_header) {
+		sprintf(temp_string, "Socket%d:PowerEfficiencyMode,", sock_ind);
+		append_string(&log_file_header, temp_string);
+	}
+
+	if(print_results == PRINT_RESULTS)
+	{
+		printf("---------------------------------------\n");
+		printf("| Current power efficiency mode is %d |\n", val);
+		printf("---------------------------------------\n");
+	}
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+		printf("Socket,PowerEfficiencyMode\n%d,%d\n", sock_ind, val);
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+		printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"PowerEfficiencyMode\":%u\n\t},", sock_ind, val);
+
+	if(log_to_file)
+	{
+		sprintf(temp_string, "%d,", val);
+		append_string(&log_file_data, temp_string);
+	}
 
 	return ret;
 }
@@ -1693,6 +2640,7 @@ static int epyc_get_cpu_iso_freq_policy(uint8_t sock_ind)
 {
 	esmi_status_t ret;
 	bool val;
+	char temp_string[300];
 
 	ret = esmi_cpurail_isofreq_policy_get(sock_ind, &val);
 	if (ret != ESMI_SUCCESS) {
@@ -1700,10 +2648,27 @@ static int epyc_get_cpu_iso_freq_policy(uint8_t sock_ind)
 			sock_ind, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("--------------------------------------\n");
-	printf("| Current Cpu Iso frequency policy is %d |\n", val);
-	printf("--------------------------------------\n");
+	if(log_to_file && create_log_header) {
+		sprintf(temp_string, "Socket%d:CpuIsoFrequencyPolicy,", sock_ind);
+		append_string(&log_file_header, temp_string);
+	}
 
+	if(print_results == PRINT_RESULTS)
+	{
+		printf("--------------------------------------\n");
+		printf("| Current Cpu Iso frequency policy is %d |\n", val);
+		printf("--------------------------------------\n");
+	}
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+		printf("Socket,CpuIsoFrequencyPolicy\n%d,%d\n", sock_ind, val);
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+		printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"CpuIsoFrequencyPolicy\":%u\n\t},", sock_ind, val);
+
+	if(log_to_file)
+	{
+		sprintf(temp_string, "%u,", val);
+		append_string(&log_file_data, temp_string);
+	}
 	return ret;
 }
 
@@ -1753,6 +2718,7 @@ static int epyc_get_dfc_ctrl(uint8_t sock_ind)
 {
 	esmi_status_t ret;
 	bool val;
+	char temp_string[300];
 
 	ret = esmi_dfc_ctrl_setting_get(sock_ind, &val);
 	if (ret != ESMI_SUCCESS) {
@@ -1760,12 +2726,28 @@ static int epyc_get_dfc_ctrl(uint8_t sock_ind)
 			sock_ind, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	printf("----------------------------------------------------\n");
-	printf("| Data Fabric C-state enable control value is %d |\n", val);
-	printf("----------------------------------------------------\n");
+	if(log_to_file && create_log_header) {
+		sprintf(temp_string, "Socket%d:DataFabricCStateEnable,", sock_ind);
+		append_string(&log_file_header, temp_string);
+	}
 
+	if(print_results == PRINT_RESULTS)
+	{
+		printf("----------------------------------------------------\n");
+		printf("| Data Fabric C-state enable control value is %d |\n", val);
+		printf("----------------------------------------------------\n");
+	}
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+		printf("Socket,DataFabricCStateEnable\n%d,%d\n", sock_ind, val);
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+		printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"DataFabricCStateEnable\":%u\n\t},", sock_ind, val);
+
+	if(log_to_file)
+	{
+		sprintf(temp_string, "%u,", val);
+		append_string(&log_file_data, temp_string);
+	}
 	return ret;
-
 }
 
 
@@ -1775,7 +2757,15 @@ static char* const feat_comm[] = {
 	"  -A, --showall\t\t\t\t\t\t\tShow all esmi parameter values",
 	"  -V  --version \t\t\t\t\t\tShow e-smi library version",
 	"  --testmailbox [SOCKET] [VALUE<0-0xFFFFFFFF>]\t\t\tTest HSMP mailbox interface",
-	"  --writemsrallowlist \t\t\t\t\t\tWrite msr-safe allowlist file\n",
+	"  --writemsrallowlist \t\t\t\t\t\tWrite msr-safe allowlist file",
+	"  --json\t\t\t\t\t\t\tPrint output on console as json format[applicable only for get commands]",
+	"  --csv\t\t\t\t\t\t\t\tPrint output on console as csv format[applicable only for get commands]",
+	"  --initialdelay [INITIAL_DELAY] <TIME_RANGE<ms,s,m,h,d>>\tInitial delay before start of execution",
+	"  --loopdelay    [LOOP_DELAY]    <TIME_RANGE<ms,s,m,h,d>>\tLoop delay before executing each loop",
+	"  --loopcount    [LOOP_COUNT]\t\t\t\t\tSet the loop count to the specified value[pass \"-1\" for infinite loop]",
+	"  --stoploop     [STOPLOOP_FILE_NAME]\t\t\t\tSet the StopLoop file name, loop will stop once the stoploop file is available",
+	"  --printonconsole [ENABLE_PRINT<0-1>]\t\t\t\tPrint output on console if set to 1, or 0 to suppress the console output",
+	"  --log [LOG_FILE_NAME]\t\t\t\t\t\tSet the Log file name, in which the data collected need to be logged\n",
 };
 
 static char* const feat_energy[] = {
@@ -1822,7 +2812,7 @@ static char* const feat_ver4[] = {
 };
 
 static char* const feat_ver5_get[] = {
-	"  --showdimmtemprange [SOCKET] [DIMM_ADDR]\t\t\tShow dimm temperature range,"
+	"  --showdimmtemprange [SOCKET] [DIMM_ADDR]\t\t\tShow dimm temperature range and"
 	" refresh rate for a given socket and dimm address",
 	"  --showdimmthermal [SOCKET] [DIMM_ADDR]\t\t\tShow dimm thermal values for a given socket"
 	" and dimm address",
@@ -1902,16 +2892,20 @@ static char* const feat_ver6_set[] = {
 
 static char* const blankline[] = {""};
 
-static char **features;
+static char **features = NULL;
 
 static void show_usage(char *exe_name)
 {
 	int i = 0;
 
-	printf("Usage: %s [Option]... <INPUT>...\n\n", exe_name);
-	while (features[i]) {
-		printf("%s\n", features[i]);
-		i++;
+	printf("Usage: %s [Option]... <INPUT>...\n", exe_name);
+	printf("Help : %s --help\n\n", exe_name);
+	if(features != NULL)
+	{
+		while (features[i]) {
+			printf("%s\n", features[i]);
+			i++;
+		}
 	}
 }
 
@@ -2250,15 +3244,311 @@ static int parsesmi_args(int argc,char **argv)
 		{"setxgmipstaterange", 		required_argument, 	0, 	'E'},
 		{"setcpurailisofreqpolicy", 	required_argument, 	0, 	'F'},
 		{"dfcctrl", 			required_argument, 	0, 	'P'},
-		{0,			0,			0,	0},
+		{"json", 			no_argument,	 	&flag, 	12},
+		{"csv", 			no_argument,	 	&flag, 	13},
+		{"initialdelay", 		required_argument, 	&flag, 	14},
+		{"loopdelay", 			required_argument, 	&flag, 	15},
+		{"loopcount", 			required_argument, 	&flag, 	16},
+		{"printonconsole", 		required_argument, 	&flag, 	17},
+		{"log", 			required_argument, 	&flag, 	18},
+		{"stoploop", 			required_argument, 	&flag, 	19},
+		{0,				0,			0,	0},
 	};
 
 	int long_index = 0;
 	char *helperstring = "+hAV";
 
-	if (getuid() != 0) {
-		while ((opt = getopt_long(argc, argv, helperstring,
-				long_options, &long_index)) != -1) {
+	optind = 0;
+	char* err_string = NULL;
+	int ret_on_err = ESMI_INVALID_INPUT;
+	bool show_usage_on_err = false;
+	while ((opt = getopt_long(argc, argv, helperstring,
+			long_options, &long_index)) != -1)
+	{
+		char temp_string[300];
+		if (opt == ':')
+		{
+			/* missing option argument */
+			sprintf(temp_string, "%s: option '-%c' requires an argument.\n\n", argv[0], opt);
+			append_string(&err_string, temp_string);
+			break;
+		}
+		else if (opt == '?')
+		{
+			if (isprint(opt)) {
+				sprintf(temp_string, "Try `%s --help' for more information.\n", argv[0]);
+			} else {
+				sprintf(temp_string, "Unknown option character `\\x%x'.\n", opt);
+			}
+			append_string(&err_string, temp_string);
+			break;
+		}
+
+		if (opt == 'e' || opt == 'y' || opt == 'L' || opt == 'r' || opt == 'q' || opt == 'Q' || opt == 'J' ||
+			opt == 'I' || opt == 'O' || opt == 'M' || opt == 'K' || opt == 'c' ||
+			opt == 'N' || opt == 'C' || opt == 'a' || opt == 'b' || opt == 'u' || opt == 'w' || opt == 'H' || opt == 'g' || opt == 'T' ||
+			opt == 'B' || opt == 'j' || opt == 'k' || opt == 'Y' || opt == 'G' || opt == 'E' || opt == 'F' || opt == 'P' ||
+			opt == 'l')
+		{
+			if (is_string_number(optarg))
+			{
+				sprintf(temp_string, "Option '--%s' require a valid numeric value as an argument\n\n", long_options[long_index].name);
+				append_string(&err_string, temp_string);
+				show_usage_on_err = true;
+				break;
+			}
+			if (*optarg == '-') {
+				sprintf(temp_string, "Option '--%s', Negative values are not accepted\n\n", long_options[long_index].name);
+				append_string(&err_string, temp_string);
+				break;
+			}
+		}
+		if (opt == 'N' || opt == 'C' || opt == 'a' || opt == 'b' || opt == 'u' || opt == 'w' || opt == 'H' || opt == 'g' || opt == 'T' ||
+			opt == 'j' || opt == 'k' || opt == 'Y' || opt == 'E' || opt == 'F' || opt == 'P')
+		{
+			// make sure optind is valid  ... or another option
+			if (optind >= argc) {
+				sprintf(temp_string, "\nOption '--%s' require TWO arguments <index>  <set_value>\n\n", long_options[long_index].name);
+				append_string(&err_string, temp_string);
+				show_usage_on_err = true;
+				break;
+			}
+			if (opt == 'N' || opt == 'H' || opt == 'g' || opt == 'T')
+			{
+				if (*argv[optind] == '-') {
+					sprintf(temp_string, "\nOption '--%s' requires TWO arguments and value should be non negative\n\n", long_options[long_index].name);
+					append_string(&err_string, temp_string);
+					show_usage_on_err = true;
+					break;
+				}
+				if (!strncmp(argv[optind], "0x", 2) || !strncmp(argv[optind], "0X", 2))
+				{
+					input_data = strtoul(argv[optind++], &end, 16);
+					if (*end) {
+						sprintf(temp_string, "Option '--%s' requires 2nd argument as valid numeric value\n\n", long_options[long_index].name);
+						append_string(&err_string, temp_string);
+						show_usage_on_err = true;
+						break;
+					}
+				} else {
+					if (is_string_number(argv[optind])) {
+						sprintf(temp_string, "Option '--%s' requires 2nd argument as valid numeric value\n\n", long_options[long_index].name);
+						append_string(&err_string, temp_string);
+						show_usage_on_err = true;
+						break;
+					}
+					input_data = atol(argv[optind++]);
+				}
+			} else {
+				if (is_string_number(argv[optind])) {
+					sprintf(temp_string, "Option '--%s' requires 2nd argument as valid numeric value\n\n", long_options[long_index].name);
+					append_string(&err_string, temp_string);
+					show_usage_on_err = true;
+					break;
+				}
+				if (*argv[optind] == '-') {
+					sprintf(temp_string, "Option '--%s', Negative values are not accepted\n\n", long_options[long_index].name);
+					append_string(&err_string, temp_string);
+					break;
+				}
+				if (opt == 'C' || opt == 'a' || opt == 'b' || opt == 'u' || opt == 'w' ||
+					opt == 'j' || opt == 'k' || opt == 'Y' || opt == 'E' || opt == 'F' || opt == 'P')
+				{
+					optind++;//Adding Extra Arguments
+				}
+			}
+		}
+		if (opt == 'B')
+		{
+			if ((optind >= argc) || (*optarg == '-') || (*argv[optind] == '-')) {
+				sprintf(temp_string, "\nOption '--%s' requires two valid arguments <arg1> <arg2>\n\n", long_options[long_index].name);
+				append_string(&err_string, temp_string);
+				show_usage_on_err = true;
+				break;
+			}
+			if (opt == 'B') {
+				if (is_string_number(optarg) || !is_string_number(argv[optind])) {
+					sprintf(temp_string, "Option '--%s', Please provide valid link names.\n", long_options[long_index].name);
+					append_string(&err_string, temp_string);
+					break;
+				}
+			}
+			optind++;//Adding Extra Arguments
+		}
+		if (opt == 'G')
+		{
+			if ((optind) >= argc || *argv[optind] == '-') {
+				sprintf(temp_string, "\nOption '--%s' requires two arguments <arg1> <arg2>\n\n", long_options[long_index].name);
+				append_string(&err_string, temp_string);
+				show_usage_on_err = true;
+				break;
+			}
+
+			if (is_string_number(argv[optind])) {
+				sprintf(temp_string, "Option '--%s' requires 2nd value as valid numeric value\n\n", long_options[long_index].name);
+				append_string(&err_string, temp_string);
+				show_usage_on_err = true;
+				break;
+			}
+			optind++;//Adding Extra Arguments
+		}
+		if (opt == 'l') {
+			// make sure optind is valid  ... or another option
+			if ((optind + 2) >= argc ) {
+				sprintf(temp_string, "\nOption '--%s' requires FOUR arguments <socket> <nbioid> <min_value> <max_value>\n\n", long_options[long_index].name);
+				append_string(&err_string, temp_string);
+				show_usage_on_err = true;
+				break;
+			}
+
+			if (is_string_number(argv[optind]) || is_string_number(argv[optind + 1]) || is_string_number(argv[optind + 2])) {
+				sprintf(temp_string, "Option '--%s' requires 2nd, 3rd, 4th argument as valid numeric value\n\n", long_options[long_index].name);
+				append_string(&err_string, temp_string);
+				show_usage_on_err = true;
+				break;
+			}
+			if (*argv[optind] == '-' || *argv[optind + 1] == '-' || *argv[optind + 2] == '-') {
+				sprintf(temp_string, "Option '--%s', Negative values are not accepted\n", long_options[long_index].name);
+				append_string(&err_string, temp_string);
+				break;
+			}
+			optind++;//Adding Extra Arguments
+			optind++;//Adding Extra Arguments
+			optind++;//Adding Extra Arguments
+		}
+		if (opt == 'i')
+		{
+			if (((optind + 1) >= argc) || (*optarg == '-') || (*argv[optind + 1] == '-')) {
+				sprintf(temp_string, "\nOption '--%s' requires three valid arguments <socket> <Link> <BW>\n\n", long_options[long_index].name);
+				append_string(&err_string, temp_string);
+				show_usage_on_err = true;
+				break;
+			}
+			if (opt == 'i') {
+				if (is_string_number(optarg) || !is_string_number(argv[optind]) || !is_string_number(argv[optind + 1])) {
+					sprintf(temp_string, "Option '--%s', Please provide valid arguments <socket> <Link> <BW>.\n", long_options[long_index].name);
+					append_string(&err_string, temp_string);
+					break;
+				}
+			}
+			optind++;//Adding Extra Arguments
+			optind++;//Adding Extra Arguments
+		}
+		if ((opt == 'n') || (opt == 'X')) {
+			// make sure optind is valid  ... or another option
+			if ((optind + 1) >= argc || *argv[optind] == '-' || *argv[optind + 1] == '-') {
+				sprintf(temp_string, "\nOption '--%s' requires THREE arguments <socket> <min_value> <max_value>\n\n", long_options[long_index].name);
+				append_string(&err_string, temp_string);
+				show_usage_on_err = true;
+				break;
+			}
+			if (is_string_number(argv[optind]) || is_string_number(argv[optind + 1])) {
+				sprintf(temp_string, "Option '--%s' requires 2nd, 3rd, as valid numeric value\n\n", long_options[long_index].name);
+				append_string(&err_string, temp_string);
+				show_usage_on_err = true;
+				break;
+			}
+			optind++;//Adding Extra Arguments
+			optind++;//Adding Extra Arguments
+		}
+
+		if ((opt == 0) &&
+			((*long_options[long_index].flag == 12) || (*long_options[long_index].flag == 13) || (*long_options[long_index].flag == 14) ||
+			 (*long_options[long_index].flag == 15) || (*long_options[long_index].flag == 16) || (*long_options[long_index].flag == 17) ||
+			 (*long_options[long_index].flag == 18) || (*long_options[long_index].flag == 19)))
+		{
+			if (*long_options[long_index].flag == 12) {
+				if(print_results != DONT_PRINT_RESULTS)
+					print_results = PRINT_RESULTS_AS_JSON;
+			}
+			else if (*long_options[long_index].flag == 13) {
+				if(print_results != DONT_PRINT_RESULTS)
+					print_results = PRINT_RESULTS_AS_CSV;
+			}
+			else if ((*long_options[long_index].flag == 14) || (*long_options[long_index].flag == 15) || (*long_options[long_index].flag == 16) ||
+					 (*long_options[long_index].flag == 17))
+			{
+				if (is_string_number(optarg)) {
+					sprintf(temp_string, "Option '--%s' require a valid numeric value as an argument\n\n", long_options[long_index].name);
+					append_string(&err_string, temp_string);
+					break;
+				}
+				if(*long_options[long_index].flag == 16)
+				{
+					if (*optarg == '-') {
+						int arg_passed = atoi(optarg);
+						if (arg_passed != -1) {
+							sprintf(temp_string, "Option '--%s', Negative values are not accepted, except -1 for infinite loopcount\n\n", long_options[long_index].name);
+							append_string(&err_string, temp_string);
+							break;
+						}
+					}
+				}
+				else
+				{
+					if (*optarg == '-') {
+						sprintf(temp_string, "Option '--%s', Negative values are not accepted\n\n", long_options[long_index].name);
+						append_string(&err_string, temp_string);
+						break;
+					}
+				}
+			}
+
+			if (*long_options[long_index].flag == 14) {
+				initial_delay_in_secs = atoi(optarg);
+			}
+			else if (*long_options[long_index].flag == 15) {
+				loop_delay_in_secs = atoi(optarg);
+				loop_delay_in_secs_passed = true;
+			}
+			else if (*long_options[long_index].flag == 16) {
+				loop_count = atoi(optarg);
+			}
+			else if (*long_options[long_index].flag == 17) {
+				uint32_t temp = atoi(optarg);
+				if((temp != 0) && (print_results == DONT_PRINT_RESULTS))
+					print_results = PRINT_RESULTS;
+				else if (temp == 0)
+					print_results = DONT_PRINT_RESULTS;
+			}
+			else if (*long_options[long_index].flag == 18) {
+				append_string(&log_file_name, optarg);
+				log_to_file = LOG_TO_FILE;
+				create_log_header = true;
+			}
+			else if (*long_options[long_index].flag == 19) {
+				append_string(&stoploop_file_name, optarg);
+			}
+
+			if ((*long_options[long_index].flag == 14) || (*long_options[long_index].flag == 15)) {
+				if (optind < argc) {
+					double temp_var = 0;
+					if (!strncmp(argv[optind], "ms", 2) || !strncmp(argv[optind], "MS", 2) || !strncmp(argv[optind], "Ms", 2) || !strncmp(argv[optind], "mS", 2)) {
+						temp_var = .001;
+					}
+					else if (!strncmp(argv[optind], "s", 1) || !strncmp(argv[optind], "S", 1)) {
+						temp_var = 1;
+					}
+					else if (!strncmp(argv[optind], "m", 1) || !strncmp(argv[optind], "M", 1)) {
+						temp_var = 60;
+					}
+					else if (!strncmp(argv[optind], "h", 1) || !strncmp(argv[optind], "H", 1)) {
+						temp_var = 3600;
+					}
+					else if (!strncmp(argv[optind], "d", 1) || !strncmp(argv[optind], "D", 1)) {
+						temp_var = 86400;
+					}
+
+					if (0 != temp_var) {
+						if((*long_options[long_index].flag == 14) && initial_delay_in_secs) initial_delay_in_secs = initial_delay_in_secs*temp_var;
+						if((*long_options[long_index].flag == 15) && loop_delay_in_secs) loop_delay_in_secs = loop_delay_in_secs*temp_var;
+						optind++;
+					}
+				}
+			}
+		}
+
+		if (getuid() != 0) {
 			switch (opt) {
 				/* Below options requires sudo permissions to run */
 				case 'C':
@@ -2290,7 +3580,21 @@ static int parsesmi_args(int argc,char **argv)
 			}
 		}
 	}
+
 	show_smi_message();
+	if(err_string)
+	{
+		printf(MAG "%s" RESET, err_string);
+
+		if(show_usage_on_err)
+			show_usage(argv[0]);
+
+		free(err_string);
+		err_string = NULL;
+
+		return ret_on_err;
+	}
+
 	/* smi monitor objects initialization */
 	ret = esmi_init();
 	if(ret != ESMI_SUCCESS) {
@@ -2318,190 +3622,83 @@ static int parsesmi_args(int argc,char **argv)
 		printf(MAG"\nTry `%s --help' for more information." RESET
 			"\n\n", argv[0]);
 	}
+
+	if(initial_delay_in_secs) {
+		if(print_results == PRINT_RESULTS) printf("\n* InitialDelay(in secs):%f, ...\n", initial_delay_in_secs);
+		sleep_in_milliseconds(initial_delay_in_secs*1000);
+	}
+	int loop_counter = 0;
+	char date_buffer[100];
+	char time_buffer[100];
+
+	do {
+	FILE *log_file_fp =  NULL;
+	if(log_file_name) {
+		log_file_fp = fopen(log_file_name, "a");
+		if(log_file_fp == NULL) {
+			printf("Error: Failed to open log file '%s'", log_file_name);
+			return ESMI_FILE_ERROR;
+		}
+	}
+	FILE *stoploop_file_fp =  NULL;
+	if(stoploop_file_name && loop_count) {
+		stoploop_file_fp = fopen(stoploop_file_name, "r");
+		if(stoploop_file_fp != NULL) {
+			if(print_results == PRINT_RESULTS) printf("stoploop file \"%s\" is present, hence stopped loop\n", stoploop_file_name);
+			break;
+		}
+	}
+
+	if(loop_count) {
+		if(loop_delay_in_secs_passed == false) loop_delay_in_secs = 1;
+		if(print_results == PRINT_RESULTS) printf("\n* LoopCount:%d, LoopDelay(in secs):%f, ...\n",loop_counter, loop_delay_in_secs);
+		if(loop_delay_in_secs) sleep_in_milliseconds(loop_delay_in_secs*1000);
+	}
+
+	struct timeval tp;
+	gettimeofday(&tp, NULL);
+	long int ms = tp.tv_usec / 1000;
+
+	time_t current_time = time (0);
+	strftime (date_buffer, 100, "%Y-%m-%d", localtime (&current_time));
+	strftime (time_buffer, 100, "%H:%M:%S", localtime (&current_time));
+	char temp_string[100] = {'\0'};
+	sprintf(temp_string, ":%lu", ms);
+	strcat(time_buffer, temp_string);
+
+	if(loop_count) {
+		if(print_results == PRINT_RESULTS) printf ("* CurrentTime:%s,%s\n", date_buffer, time_buffer);
+	}
+
 	optind = 0;
 	while ((opt = getopt_long(argc, argv, helperstring,
 			long_options, &long_index)) != -1) {
-	if (opt == 'e' ||
-	    opt == 'L' ||
-	    opt == 'C' ||
-	    opt == 'a' ||
-	    opt == 'b' ||
-	    opt == 'c' ||
-	    opt == 'y' ||
-	    opt == 'u' ||
-	    opt == 'w' ||
-	    opt == 'l' ||
-	    opt == 'H' ||
-	    opt == 'T' ||
-	    opt == 'g' ||
-	    opt == 'q' ||
-	    opt == 'B' ||
-	    opt == 'j' ||
-	    opt == 'k' ||
-	    opt == 'X' ||
-	    opt == 'n' ||
-	    opt == 'Y' ||
-	    opt == 'r' ||
-	    opt == 'Q' ||
-	    opt == 'J' ||
-	    opt == 'O' ||
-	    opt == 'K' ||
-	    opt == 'F' ||
-	    opt == 'P' ||
-	    opt == 'M' ||
-	    opt == 'E' ||
-	    opt == 'N') {
-		if (is_string_number(optarg)) {
-			printf("Option '--%s' requires a valid numeric value"
-					" as an argument\n\n", long_options[long_index].name);
-			show_usage(argv[0]);
-			return ESMI_INVALID_INPUT;
-		}
-		if (*optarg == '-') {
-			printf(MAG "Negative values are not accepted\n\n" RESET);
-			return ESMI_INVALID_INPUT;
-		}
-	}
-	if (opt == 'C' ||
-	    opt == 'u' ||
-	    opt == 'a' ||
-	    opt == 'w' ||
-	    opt == 'H' ||
-	    opt == 'T' ||
-	    opt == 'g' ||
-	    opt == 'j' ||
-	    opt == 'k' ||
-	    opt == 'X' ||
-	    opt == 'n' ||
-	    opt == 'N' ||
-	    opt == 'Y' ||
-	    opt == 'F' ||
-	    opt == 'P' ||
-	    opt == 'E' ||
-	    opt == 'b') {
-		// make sure optind is valid  ... or another option
-		if (optind >= argc) {
-			printf(MAG "\nOption '--%s' requires TWO arguments"
-			 " <index>  <set_value>\n\n" RESET, long_options[long_index].name);
-			show_usage(argv[0]);
-			return ESMI_INVALID_INPUT;
-		}
-		if (opt != 'g' && opt != 'H' && opt != 'T' && opt != 'N') {
-			if (is_string_number(argv[optind])) {
-				printf(MAG "Option '--%s' requires 2nd argument as valid"
-				       " numeric value\n\n" RESET, long_options[long_index].name);
-				show_usage(argv[0]);
-				return ESMI_INVALID_INPUT;
-			}
-			if (*argv[optind] == '-') {
-				printf(MAG "Negative values are not accepted\n\n" RESET);
-				return ESMI_INVALID_INPUT;
-			}
+
+	if (opt == 'N' || opt == 'H' || opt == 'g' || opt == 'T')
+	{
+		if (!strncmp(argv[optind], "0x", 2) || !strncmp(argv[optind], "0X", 2))
+		{
+			input_data = strtoul(argv[optind++], &end, 16);//Adding Extra Arguments
 		} else {
-			if (*argv[optind] == '-') {
-				printf(MAG "\nOption '--%s' requires TWO arguments and value"
-				       " should be non negative\n\n"
-				       RESET, long_options[long_index].name);
-				show_usage(argv[0]);
-				return ESMI_INVALID_INPUT;
-			}
-			if (!strncmp(argv[optind], "0x", 2) || !strncmp(argv[optind], "0X", 2)) {
-				input_data = strtoul(argv[optind++], &end, 16);
-				if (*end) {
-					printf(MAG "Option '--%s' requires 2nd argument as valid"
-					       " numeric value\n\n"
-					       RESET, long_options[long_index].name);
-					show_usage(argv[0]);
-					return ESMI_INVALID_INPUT;
-				}
-			} else {
-				if (is_string_number(argv[optind])) {
-					printf(MAG "Option '--%s' requires 2nd argument as valid"
-					       " numeric value\n\n"
-					       RESET, long_options[long_index].name);
-					show_usage(argv[0]);
-					return ESMI_INVALID_INPUT;
-				}
-				input_data = atol(argv[optind++]);
-			}
+			input_data = atol(argv[optind++]);//Adding Extra Arguments
 		}
 	}
-
-	if (opt == 'l') {
-		// make sure optind is valid  ... or another option
-		if ((optind + 2) >= argc ) {
-			printf("\nOption '--%s' requires FOUR arguments"
-			 " <socket> <nbioid> <min_value> <max_value>\n\n", long_options[long_index].name);
-			show_usage(argv[0]);
-			return ESMI_INVALID_INPUT;
-		}
-
-		if (is_string_number(argv[optind]) || is_string_number(argv[optind + 1])
-		    || is_string_number(argv[optind + 2])) {
-			printf("Option '--%s' requires 2nd, 3rd, 4th argument as valid"
-					" numeric value\n\n", long_options[long_index].name);
-			show_usage(argv[0]);
-			return ESMI_INVALID_INPUT;
-		}
-		if (*argv[optind] == '-' || *argv[optind + 1] == '-' ||
-		    *argv[optind + 2] == '-') {
-			printf(MAG "Negative values are not accepted\n" RESET);
-			return ESMI_INVALID_INPUT;
-		}
-	}
-
-	if (opt == 'B')
+	else if(opt == 0 && (*long_options[long_index].flag == 14 || *long_options[long_index].flag == 15))
 	{
-		if ((optind >= argc) || (*optarg == '-') || (*argv[optind] == '-')) {
-			printf("\nOption '--%s' requires two valid arguments"
-			 " <arg1> <arg2>\n\n", long_options[long_index].name);
-			show_usage(argv[0]);
-			return ESMI_INVALID_INPUT;
-		}
-		if (opt == 'B') {
-			if (is_string_number(optarg) || !is_string_number(argv[optind])) {
-				printf("Please provide valid link names.\n");
-				return ESMI_INVALID_INPUT;
+		if (optind < argc) {
+			if (!strncmp(argv[optind], "ms", 2) || !strncmp(argv[optind], "MS", 2) || !strncmp(argv[optind], "Ms", 2) || !strncmp(argv[optind], "mS", 2) ||
+				!strncmp(argv[optind], "s", 1) || !strncmp(argv[optind], "s", 1) ||
+				!strncmp(argv[optind], "m", 1) || !strncmp(argv[optind], "M", 1) ||
+				!strncmp(argv[optind], "h", 1) || !strncmp(argv[optind], "H", 1) ||
+				!strncmp(argv[optind], "d", 1) || !strncmp(argv[optind], "D", 1)) {
+				optind++;//Adding Extra Arguments
 			}
 		}
 	}
-
-	if (opt == 'i')
-	{
-		if (((optind + 1) >= argc) || (*optarg == '-') || (*argv[optind + 1] == '-')) {
-			printf("\nOption '--%s' requires three valid arguments"
-			 " <socket> <Link> <BW>\n\n", long_options[long_index].name);
-			show_usage(argv[0]);
-			return ESMI_INVALID_INPUT;
-		}
-		if (opt == 'i') {
-			if (is_string_number(optarg) || !is_string_number(argv[optind]) || !is_string_number(argv[optind + 1])) {
-				printf("Please provide valid arguments <socket> <Link> <BW>.\n");
-				return ESMI_INVALID_INPUT;
-			}
-		}
-	}
-
-
-	if ((opt == 'X') || (opt == 'n')) {
-		// make sure optind is valid  ... or another option
-		if ((optind + 1) >= argc || *argv[optind] == '-'
-		    || *argv[optind + 1] == '-') {
-			printf("\nOption '--%s' requires THREE arguments"
-			 " <socket> <min_value> <max_value>\n\n", long_options[long_index].name);
-			show_usage(argv[0]);
-			return ESMI_INVALID_INPUT;
-		}
-
-		if (is_string_number(argv[optind]) || is_string_number(argv[optind + 1])) {
-			printf("Option '--%s' requires 2nd, 3rd, as valid"
-					" numeric value\n\n", long_options[long_index].name);
-			show_usage(argv[0]);
-			return ESMI_INVALID_INPUT;
-		}
-	}
-
 	switch (opt) {
+		case 0:
+			ret = ESMI_SUCCESS;
+			break;
 		case 'e' :
 			/* Get the energy for a given core index */
 			core_id = atoi(optarg);
@@ -2546,7 +3743,6 @@ static int parsesmi_args(int argc,char **argv)
 			/* Set DF Pstate to user specified value */
 			ret = epyc_set_df_pstate(sock_id, pstate);
 			break;
-
 		case 'z' :
 			/* Get Clock Frequencies */
 			ret = epyc_get_clock_freq();
@@ -2761,6 +3957,21 @@ static int parsesmi_args(int argc,char **argv)
 		printf(MAG "Try `%s --help' for more information."
 					RESET "\n\n", argv[0]);
 	}
+	if(log_file_fp)
+	{
+		if(create_log_header) {
+			fprintf(log_file_fp, "Date,Timestamp,%s\n", log_file_header);
+			create_log_header = false;
+		}
+		fprintf(log_file_fp, "%s,%s,%s\n", date_buffer, time_buffer, log_file_data);
+		fclose(log_file_fp);
+		if(log_file_data) {
+			free(log_file_data);
+			log_file_data = NULL;
+		}
+	}
+	loop_counter++;
+	} while((loop_count == -1) || (loop_counter < loop_count));
 
 	return ret;
 }
@@ -2774,6 +3985,19 @@ int main(int argc, char **argv)
 	show_smi_end_message();
 	/* Program termination */
 	esmi_exit();
+
+	if(log_file_header) {
+		free(log_file_header);
+		log_file_header = NULL;
+	}
+	if(log_file_name) {
+		free(log_file_name);
+		log_file_name = NULL;
+	}
+	if(stoploop_file_name) {
+		free(stoploop_file_name);
+		stoploop_file_name = NULL;
+	}
 
 	if (features)
 		free(features);
