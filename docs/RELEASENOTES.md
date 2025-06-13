@@ -7,6 +7,11 @@ The EPYC™ System Management Interface In-band Library, or E-SMI library, is a 
 
 # Changes Notes
 
+## Highlights of release v4.3
+* Adding JSON/CSV format prints for get options.
+* Adding logger(CSV) support for get options.
+* Adding loopcount, loopdelay, initialdelay support for continuous monitoring of data for get options.
+
 ## Highlights of release v4.2
 * amd_hsmp.h is added as part of E-smi library.
 * E-smi installation path is updated.

@@ -306,12 +306,20 @@ For convenience purposes, following is the output from the -h flag on hsmp proto
 
 	Usage: ./e_smi_tool [Option]... <INPUT>...
 
-	Output Option<s>:
-	  -h, --help                                                    Show this help message
-	  -A, --showall                                                 Show all esmi parameter values
-	  -V  --version                                                 Show e-smi library version
-	  --testmailbox [SOCKET] [VALUE<0-0xFFFFFFFF>]                  Test HSMP mailbox interface
-	  --writemsrallowlist                                           Write msr-safe allowlist file
+Output Option<s>:
+  -h, --help                                               Show this help message
+  -A, --showall                                            Show all esmi parameter values
+  -V  --version                                            Show e-smi library version
+  --testmailbox [SOCKET] [VALUE<0-0xFFFFFFFF>]             Test HSMP mailbox interface
+  --writemsrallowlist                                      Write msr-safe allowlist file
+  --json                                                   Print output on console as json format[applicable only for get commands]
+  --csv                                                    Print output on console as csv format[applicable only for get commands]
+  --initialdelay [INITIAL_DELAY] <TIME_RANGE<ms,s,m,h,d>>  Initial delay before start of execution
+  --loopdelay    [LOOP_DELAY]    <TIME_RANGE<ms,s,m,h,d>>  Loop delay before executing each loop
+  --loopcount    [LOOP_COUNT]                              Set the loop count to the specified value[pass "-1" for infinite loop]
+  --stoploop     [STOPLOOP_FILE_NAME]               	   Set the StopLoop file name, loop will stop once the stoploop file is available
+  --printonconsole [ENABLE_PRINT<0-1>]                     Print output on console if set to 1, or 0 to suppress the console output
+  --log [LOG_FILE_NAME]                                    Set the Log file name, in which the data collected need to be logged
 
 	Get Option<s>:
 	  --showcoreenergy [CORE]                                       Show energy for a given CPU (Joules)
@@ -465,5 +473,50 @@ Below is a sample usage to get different system metrics information
 	Data Fabric PState range(max:1 min:2) set successfully
 
 	============================= End of E-SMI ============================
+
+5.	e_smi_library/b$sudo ./e_smi_tool --showsockpower --showprochotstatus --loopdelay 1 s --loopcount 10 --log power.csv --printonconsole 0
+	[sudo] password for user:
+
+	e_smi_library/b$sudo cat power.csv
+	[sudo] password for user:
+	2025-06-10,12:39:37:88,45.951,43.225,400.000,400.000,500.000,500.000,inactive,inactive,
+	2025-06-10,12:39:38:98,39.572,39.175,400.000,400.000,500.000,500.000,inactive,inactive,
+	2025-06-10,12:39:39:105,39.539,38.884,400.000,400.000,500.000,500.000,inactive,inactive,
+	2025-06-10,12:39:40:117,41.892,42.220,400.000,400.000,500.000,500.000,inactive,inactive,
+	2025-06-10,12:39:41:123,40.466,39.659,400.000,400.000,500.000,500.000,inactive,inactive,
+	2025-06-10,12:39:42:134,39.681,39.218,400.000,400.000,500.000,500.000,inactive,inactive,
+	2025-06-10,12:39:43:138,39.349,38.562,400.000,400.000,500.000,500.000,inactive,inactive,
+	2025-06-10,12:39:44:145,39.517,38.807,400.000,400.000,500.000,500.000,inactive,inactive,
+	2025-06-10,12:39:45:148,39.726,39.457,400.000,400.000,500.000,500.000,inactive,inactive,
+	2025-06-10,12:39:46:160,39.393,38.699,400.000,400.000,500.000,500.000,inactive,inactive,
+
+6.	e_smi_library/b$sudo ./e_smi_tool --showsockc0res 0 --showcorebl 0 --showsockc0res 1 --json
+	[sudo] password for user:
+	{
+        {
+                "Socket":0,
+                "C0Residency(%)":0
+        },
+        {
+                "Core":0,
+                "BoostLimit(MHz)":4100
+        },
+        {
+                "Socket":1,
+                "C0Residency(%)":0
+        },
+        {
+                "JSONFormatVersion":1
+        }
+	}
+
+7.	e_smi_library/b$sudo ./e_smi_tool --showsockc0res 0 --showcorebl 0 --showsockc0res 1 --csv
+	[sudo] password for user:
+	Socket,C0Residency(%)
+	0,0
+	Core,BoostLimit(MHz)
+	0,4100
+	Socket,C0Residency(%)
+	1,0
 
 ```
