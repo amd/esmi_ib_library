@@ -474,11 +474,9 @@ Below is a sample usage to get different system metrics information
 
 	============================= End of E-SMI ============================
 
-5.	e_smi_library/b$sudo ./e_smi_tool --showsockpower --showprochotstatus --loopdelay 1 s --loopcount 10 --log power.csv --printonconsole 0
-	[sudo] password for user:
+5.	e_smi_library/b$./e_smi_tool --showsockpower --showprochotstatus --loopdelay 1 s --loopcount 10 --log power.csv --printonconsole 0
 
-	e_smi_library/b$sudo cat power.csv
-	[sudo] password for user:
+	e_smi_library/b$cat power.csv
 	2025-06-10,12:39:37:88,45.951,43.225,400.000,400.000,500.000,500.000,inactive,inactive,
 	2025-06-10,12:39:38:98,39.572,39.175,400.000,400.000,500.000,500.000,inactive,inactive,
 	2025-06-10,12:39:39:105,39.539,38.884,400.000,400.000,500.000,500.000,inactive,inactive,
@@ -490,33 +488,152 @@ Below is a sample usage to get different system metrics information
 	2025-06-10,12:39:45:148,39.726,39.457,400.000,400.000,500.000,500.000,inactive,inactive,
 	2025-06-10,12:39:46:160,39.393,38.699,400.000,400.000,500.000,500.000,inactive,inactive,
 
-6.	e_smi_library/b$sudo ./e_smi_tool --showsockc0res 0 --showcorebl 0 --showsockc0res 1 --json
-	[sudo] password for user:
+6.	e_smi_library/b$./e_smi_tool --showsockc0res 0 --showcorebl 0 --showsockc0res 1 --json
 	{
-        {
+    	    {
                 "Socket":0,
                 "C0Residency(%)":0
-        },
-        {
+            },
+            {
                 "Core":0,
                 "BoostLimit(MHz)":4100
-        },
-        {
+            },
+            {
                 "Socket":1,
                 "C0Residency(%)":0
-        },
-        {
+            },
+            {
                 "JSONFormatVersion":1
-        }
+            }
 	}
 
-7.	e_smi_library/b$sudo ./e_smi_tool --showsockc0res 0 --showcorebl 0 --showsockc0res 1 --csv
-	[sudo] password for user:
+7.	e_smi_library/b$./e_smi_tool --showsockc0res 0 --showcorebl 0 --showsockc0res 1 --csv
 	Socket,C0Residency(%)
 	0,0
 	Core,BoostLimit(MHz)
 	0,4100
 	Socket,C0Residency(%)
 	1,0
+
+8.	//To display the data in the console for a specified number of user-defined loops and loop delay.
+	e_smi_library/b$./e_smi_tool --showsockpower --initialdelay 2 s --loopdelay 1 s --loopcount 2
+
+	============================= E-SMI ===================================
+
+
+	* InitialDelay(in secs):2.000000, ...
+
+	* LoopCount:0, LoopDelay(in secs):1.000000, ...
+	* CurrentTime:2025-06-13,11:40:18:367
+
+	------------------------------------------------------------------------
+	| Sensor Name                    | Socket 0         | Socket 1         |
+	------------------------------------------------------------------------
+	| Power (Watts)                  | 48.148           | 42.990           |
+	| PowerLimit (Watts)             | 400.000          | 400.000          |
+	| PowerLimitMax (Watts)          | 500.000          | 500.000          |
+	------------------------------------------------------------------------
+
+
+	* LoopCount:1, LoopDelay(in secs):1.000000, ...
+	* CurrentTime:2025-06-13,11:40:19:370
+
+	------------------------------------------------------------------------
+	| Sensor Name                    | Socket 0         | Socket 1         |
+	------------------------------------------------------------------------
+	| Power (Watts)                  | 103.711          | 87.128           |
+	| PowerLimit (Watts)             | 400.000          | 400.000          |
+	| PowerLimitMax (Watts)          | 500.000          | 500.000          |
+	------------------------------------------------------------------------
+
+9.	//To output the data to the console and simultaneously record it in log(CSV format) for user-defined loops and loop delay.
+	e_smi_library/b$./e_smi_tool --showsockpower --initialdelay 2 s --loopdelay 1 s --loopcount 2 --log power.csv
+
+	============================= E-SMI ===================================
+
+
+	* InitialDelay(in secs):2.000000, ...
+
+	* LoopCount:0, LoopDelay(in secs):1.000000, ...
+	* CurrentTime:2025-06-13,11:40:18:367
+
+	------------------------------------------------------------------------
+	| Sensor Name                    | Socket 0         | Socket 1         |
+	------------------------------------------------------------------------
+	| Power (Watts)                  | 48.148           | 42.990           |
+	| PowerLimit (Watts)             | 400.000          | 400.000          |
+	| PowerLimitMax (Watts)          | 500.000          | 500.000          |
+	------------------------------------------------------------------------
+
+
+	* LoopCount:1, LoopDelay(in secs):1.000000, ...
+	* CurrentTime:2025-06-13,11:40:19:370
+
+	------------------------------------------------------------------------
+	| Sensor Name                    | Socket 0         | Socket 1         |
+	------------------------------------------------------------------------
+	| Power (Watts)                  | 103.711          | 87.128           |
+	| PowerLimit (Watts)             | 400.000          | 400.000          |
+	| PowerLimitMax (Watts)          | 500.000          | 500.000          |
+	------------------------------------------------------------------------
+
+	e_smi_library/b$cat power.csv
+	Date,Timestamp,Socket0:Power(Watts),Socket1:Power(Watts),Socket0:PowerLimit(Watts),Socket1:PowerLimit(Watts),Socket0:PowerLimitMax(Watts),Socket1:PowerLimitMax(Watts),
+	2025-06-13,11:43:22:587,41.007,39.949,400.000,400.000,500.000,500.000,
+	2025-06-13,11:43:23:590,47.329,46.269,400.000,400.000,500.000,500.000,
+
+10.	//To continuously collect data in the log(CSV format) without interruption until the exit condition is met(such as detecting a stoploop file).
+	[Terminal 1]:
+	  e_smi_library/b$./e_smi_tool --showsockpower --loopdelay 1 s --loopcount -1 --log power.csv --printonconsole 0 --stoploop stresslog.txt
+
+	[Terminal 2]:
+	  //Consider the user initiates a stress test for a random duration, which generates a stresslog.txt file upon completion of stress test.
+	  //For experimental purposes, we manually generate the stresslog.txt file after a random duration.
+	  e_smi_library/b$touch stresslog.txt
+
+	[Terminal 1]:
+	  //The execution of e_smi_tool should have concluded by now, allowing the user to examine power.csv file generated during the stress test.
+	  e_smi_library/b$cat power.csv
+	  Date,Timestamp,Socket0:Power(Watts),Socket1:Power(Watts),Socket0:PowerLimit(Watts),Socket1:PowerLimit(Watts),Socket0:PowerLimitMax(Watts),Socket1:PowerLimitMax(Watts),
+	  2025-06-13,11:53:53:245,40.082,39.281,400.000,400.000,500.000,500.000,
+	  2025-06-13,11:53:54:247,40.521,39.533,400.000,400.000,500.000,500.000,
+	  2025-06-13,11:53:55:249,42.126,40.270,400.000,400.000,500.000,500.000,
+	  2025-06-13,11:53:56:253,42.416,40.861,400.000,400.000,500.000,500.000,
+	  2025-06-13,11:53:57:254,41.132,40.421,400.000,400.000,500.000,500.000,
+	  2025-06-13,11:53:58:258,40.363,39.443,400.000,400.000,500.000,500.000,
+	  2025-06-13,11:53:59:265,41.472,40.382,400.000,400.000,500.000,500.000,
+
+11.	//To continuously display the data in the console for an indefinite duration (press CTRL+C to stop).
+	e_smi_library/b$./e_smi_tool --showsockpower --loopdelay 1 s --loopcount -1
+
+	============================= E-SMI ===================================
+
+
+	* LoopCount:0, LoopDelay(in secs):1.000000, ...
+	* CurrentTime:2025-06-13,12:10:08:350
+
+	------------------------------------------------------------------------
+	| Sensor Name                    | Socket 0         | Socket 1         |
+	------------------------------------------------------------------------
+	| Power (Watts)                  | 43.373           | 40.041           |
+	| PowerLimit (Watts)             | 400.000          | 400.000          |
+	| PowerLimitMax (Watts)          | 500.000          | 500.000          |
+	------------------------------------------------------------------------
+
+
+	* LoopCount:1, LoopDelay(in secs):1.000000, ...
+	* CurrentTime:2025-06-13,12:10:09:353
+
+	------------------------------------------------------------------------
+	| Sensor Name                    | Socket 0         | Socket 1         |
+	------------------------------------------------------------------------
+	| Power (Watts)                  | 40.273           | 39.875           |
+	| PowerLimit (Watts)             | 400.000          | 400.000          |
+	| PowerLimitMax (Watts)          | 500.000          | 500.000          |
+	------------------------------------------------------------------------
+
+
+	* LoopCount:2, LoopDelay(in secs):1.000000, ...
+	^C
 
 ```
