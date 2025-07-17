@@ -25,7 +25,7 @@ set(E_SMI "e_smi")
 set(E_SMI_COMPONENT "lib${E_SMI}")
 set(E_SMI_TARGET "${E_SMI}64")
 set(E_SMI_STATIC "${E_SMI_TARGET}_static")
-set(CMAKE_C_FLAGS "-Wall")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
 
 if(${USE_CLANG})
 	set(CMAKE_C_COMPILER "/usr/bin/clang")
