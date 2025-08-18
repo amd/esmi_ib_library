@@ -236,11 +236,19 @@ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/ESMI_IB_Release_Notes.pdf
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/docs/RELEASENOTES.md
 			DESTINATION ${E_SMI}/doc/)
 
+# Install license file with documentation
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/COPYING
+			DESTINATION ${E_SMI}/doc/)
+
 # General package specific variables
 set(CPACK_GENERATOR "DEB;RPM"  CACHE STRING "Default packaging generators.")
 set(CPACK_PACKAGE_NAME ${E_SMI_PACKAGE})
 set(CPACK_PACKAGE_VERSION ${PKG_VERSION_STR})
 set(CPACK_PROJECT_CONFIG_FILE ${CMAKE_SOURCE_DIR}/package.txt)
+
+# Package metadata: point CPack to the license file and set RPM License field
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/COPYING")
+set(CPACK_RPM_PACKAGE_LICENSE "NCSA")
 
 # DEB package specific variables
 set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")
