@@ -129,6 +129,7 @@ One of these drivers is needed to monitor energy counters.
 * AMD Zen4 based CPU Family `19h` Models `10h-1Fh` and `A0-AFh`.
 * AMD Zen4 based CPU Family `19h` Models `90-9Fh`.
 * AMD Zen5 based CPU Family `1Ah` Models `00-1Fh`.
+* AMD Zen6 based CPU Family `1Ah` Models `50-5Fh`.
 
 # Additional required software for building
 In order to build the E-SMI library, the following components are required. Note that the software versions listed are what is being used in development. Earlier versions are not guaranteed to work:
@@ -302,66 +303,78 @@ For convenience purposes, following is the output from the -h flag on hsmp proto
 
 ```
 
-	============================= E-SMI ===================================
-
-	Usage: ./e_smi_tool [Option]... <INPUT>...
+============================= E-SMI ===================================
 
 Output Option<s>:
-  -h, --help                                               Show this help message
-  -A, --showall                                            Show all esmi parameter values
-  -V  --version                                            Show e-smi library version
-  --testmailbox [SOCKET] [VALUE<0-0xFFFFFFFF>]             Test HSMP mailbox interface
-  --writemsrallowlist                                      Write msr-safe allowlist file
-  --json                                                   Print output on console as json format[applicable only for get commands]
-  --csv                                                    Print output on console as csv format[applicable only for get commands]
-  --initialdelay [INITIAL_DELAY] <TIME_RANGE<ms,s,m,h,d>>  Initial delay before start of execution
-  --loopdelay    [LOOP_DELAY]    <TIME_RANGE<ms,s,m,h,d>>  Loop delay before executing each loop
-  --loopcount    [LOOP_COUNT]                              Set the loop count to the specified value[pass "-1" for infinite loop]
-  --stoploop     [STOPLOOP_FILE_NAME]               	   Set the StopLoop file name, loop will stop once the stoploop file is available
-  --printonconsole [ENABLE_PRINT<0-1>]                     Print output on console if set to 1, or 0 to suppress the console output
-  --log [LOG_FILE_NAME]                                    Set the Log file name, in which the data collected need to be logged
+  -h, --help                                                    Show this help message
+  -A, --showall                                                 Show all esmi parameter values
+  -V  --version                                                 Show e-smi library version
+  --testmailbox [SOCKET] [VALUE<0-0xFFFFFFFF>]                  Test HSMP mailbox interface
+  --writemsrallowlist                                           Write msr-safe allowlist file
+  --json                                                        Print output on console as json format[applicable only for get commands]
+  --csv                                                         Print output on console as csv format[applicable only for get commands]
+  --initialdelay [INITIAL_DELAY] <TIME_RANGE<ms,s,m,h,d>>       Initial delay before start of execution
+  --loopdelay    [LOOP_DELAY]    <TIME_RANGE<ms,s,m,h,d>>       Loop delay before executing each loop
+  --loopcount    [LOOP_COUNT]                                   Set the loop count to the specified value[pass "-1" for infinite loop]
+  --stoploop     [STOPLOOP_FILE_NAME]                           Set the StopLoop file name, loop will stop once the stoploop file is available
+  --printonconsole [ENABLE_PRINT<0-1>]                          Print output on console if set to 1, or 0 to suppress the console output
+  --log [LOG_FILE_NAME]                                         Set the Log file name, in which the data collected need to be logged
 
-	Get Option<s>:
-	  --showcoreenergy [CORE]                                       Show energy for a given CPU (Joules)
-	  --showsockenergy                                              Show energy for all sockets (KJoules)
-	  --showsockpower                                               Show power metrics for all sockets (Watts)
-	  --showcorebl [CORE]                                           Show Boostlimit for a given CPU (MHz)
-	  --showsockc0res [SOCKET]                                      Show c0_residency for a given socket (%%)
-	  --showsmufwver                                                Show SMU FW Version
-	  --showhsmpprotover                                            Show HSMP Protocol Version
-	  --showprochotstatus                                           Show HSMP PROCHOT status for all sockets
-	  --showclocks                                                  Show Clock Metrics (MHz) for all sockets
-	  --showddrbw                                                   Show DDR bandwidth details (Gbps)
-	  --showdimmtemprange [SOCKET] [DIMM_ADDR]                      Show dimm temperature range and refresh rate for a given socket and dimm address
-	  --showdimmthermal [SOCKET] [DIMM_ADDR]                        Show dimm thermal values for a given socket and dimm address
-	  --showdimmpower [SOCKET] [DIMM_ADDR]                          Show dimm power consumption for a given socket and dimm address
-	  --showcclkfreqlimit [CORE]                                    Show current clock frequency limit(MHz) for a given core
-	  --showsvipower                                                Show svi based power telemetry of all rails for all sockets
-	  --showiobw [SOCKET] [LINK<P0-P3,G0-G3>]                       Show IO aggregate bandwidth for a given socket and linkname
-	  --showlclkdpmlevel [SOCKET] [NBIOID<0-3>]                     Show lclk dpm level for a given nbio in a given socket
-	  --showsockclkfreqlimit [SOCKET]                               Show current clock frequency limit(MHz) for a given socket
-	  --showxgmibw [LINK<P1,P3,G0-G3>] [BW<AGG_BW,RD_BW,WR_BW>]     Show xGMI bandwidth for a given socket, linkname and bwtype
-	  --showcurrpwrefficiencymode [SOCKET]                          Show current power effciency mode
-	  --showcpurailisofreqpolicy [SOCKET]                           Show current CPU ISO frequency policy
-	  --showdfcstatectrl [SOCKET]                                   Show current DF C-state status
+Get Option<s>:
+  --showcoreenergy [CORE]                                       Show energy for a given CPU (Joules)
+  --showsockenergy                                              Show energy for all sockets (KJoules)
+  --showsockpower                                               Show power metrics for all sockets (Watts)
+  --showcorebl [CORE]                                           Show BoostLimit for a given CPU (MHz)
+  --showsockc0res [SOCKET]                                      Show C0Residency for a given socket (%%)
+  --showsmufwver                                                Show SMU FW Version
+  --showhsmpdriverver                                           Show HSMP Driver Version
+  --showhsmpprotover                                            Show HSMP Protocol Version
+  --showprochotstatus                                           Show HSMP PROCHOT status for all sockets
+  --showclocks                                                  Show Clock Metrics (MHz) for all sockets
+  --showddrbw                                                   Show DDR bandwidth details (Gbps)
+  --showdimmtemprange [SOCKET] [DIMM_ADDR]                      Show dimm temperature range and refresh rate for a given socket and dimm address
+  --showdimmthermal [SOCKET] [DIMM_ADDR]                        Show dimm thermal values for a given socket and dimm address
+  --showdimmpower [SOCKET] [DIMM_ADDR]                          Show dimm power consumption for a given socket and dimm address
+  --showcclkfreqlimit [CORE]                                    Show current clock frequency limit(MHz) for a given core
+  --showsvipower                                                Show svi based power telemetry of all rails for all sockets
+  --showiobw [SOCKET] [LINK<P0-P2,P4-P5,G0-G2>]                 Show IO aggregate bandwidth for a given socket and linkname
+  --showlclkdpmlevel [SOCKET] [NBIOID<0-3>]                     Show lclk dpm level for a given nbio in a given socket
+  --showsockclkfreqlimit [SOCKET]                               Show current clock frequency limit(MHz) for a given socket
+  --showxgmibw [SOCKET] [LINK<P0-P2,G0-G2>] [BW<AGG_BW,RD_BW,WR_BW>]
+                                                                Show xGMI bandwidth for a given socket, linkname and bwtype
+  --showcurrpwrefficiencymode [SOCKET]                          Show current power effciency mode
+  --showcpurailisofreqpolicy [SOCKET]                           Show current CPU ISO frequency policy
+  --showdfcstatectrl [SOCKET]                                   Show current DF C-state status
+  --getapbstatus [SOCKET]                                       Get APB status and Data Fabric pstate(if APBDisabled)
+  --getxgmiwidth [SOCKET]                                       Get xgmi link width
+  --getdfpstaterange [SOCKET]                                   Get df pstate range for a given socket
+  --getxgmipstaterange [SOCKET]                                 Get xgmi pstate range for a given socket
+  --getccdpower [CORE]                                          Get CCD power for a given core
+  --gettdelta [SOCKET]                                          Get thermal solution behaviour for a given socket
+  --getspdregdata [SOCKET] [DIMM_ADDR] [LID] [OFFSET] [REGSPACE]
+                                                                Get SPD SB register data(REGSPACE:0->Volatile,1->NVM)
+  --getsvi3vrtemp [SOCKET] [TYPE] [RAIL_INDEX(if TYPE=1)]       Get svi3 vr controller temperature(TYPE:0->HottestRail,1->IndividualRail)
+  --getpc6enable [SOCKET]                                       Get the PC6 Enable Control
+  --getcc6enable [SOCKET]                                       Get the CC6 Enable Control
 
-	Set Option<s>:
-	  --setpowerlimit [SOCKET] [POWER]                              Set power limit for a given socket (mWatts)
-	  --setcorebl [CORE] [BOOSTLIMIT]                               Set boost limit for a given core (MHz)
-	  --setsockbl [SOCKET] [BOOSTLIMIT]                             Set Boost limit for a given Socket (MHz)
-	  --apbdisable [SOCKET] [PSTATE<0-2>]                           Set Data Fabric Pstate for a given socket
-	  --apbenable [SOCKET]                                          Enable the Data Fabric performance boost algorithm for a given socket
-	  --setxgmiwidth [MIN<0-2>] [MAX<0-2>]                          Set xgmi link width in a multi socket system (MAX >= MIN)
-	  --setlclkdpmlevel [SOCKET] [NBIOID<0-3>] [MIN<0-3>] [MAX<0-3>]Set lclk dpm level for a given nbio in a given socket (MAX >= MIN)
-	  --setpcielinkratecontrol [SOCKET] [CTL<0-2>]                  Set rate control for pcie link for a given socket
-	  --setdfpstaterange [SOCKET] [MAX<0-2>] [MIN<0-2>]             Set df pstate range for a given socket (MAX <= MIN)
-	  --setgmi3linkwidth [SOCKET] [MIN<0-2>] [MAX<0-2>]             Set gmi3 link width for a given socket (MAX >= MIN)
-	  --setpowerefficiencymode [SOCKET] [MODE<0-5>]                 Set power efficiency mode for a given socket
-	  --setxgmipstaterange [MAX<0,1>] [MIN<0,1>]                    Set xgmi pstate range
-	  --setcpurailisofreqpolicy [SOCKET] [VAL<0,1>]                 Set CPU ISO frequency policy
-	  --dfcctrl [SOCKET] [VAL<0,1>]                                 Enable or disable DF c-state
+Set Option<s>:
+  --setpowerlimit [SOCKET] [POWER]                              Set power limit for a given socket (mWatts)
+  --setcorebl [CORE] [BOOSTLIMIT]                               Set BoostLimit for a given core (MHz)
+  --setsockbl [SOCKET] [BOOSTLIMIT]                             Set BoostLimit for a given Socket (MHz)
+  --apbdisable [SOCKET] [PSTATE<0-2>]                           Set Data Fabric Pstate for a given socket
+  --apbenable [SOCKET]                                          Enable the Data Fabric performance boost algorithm for a given socket
+  --setxgmiwidth [SOCKET] [MIN<0-2>] [MAX<0-2>]                 Set xgmi link width in a multi socket system (MAX >= MIN)
+  --setlclkdpmlevel [SOCKET] [NBIOID<0-3>] [MIN<0-3>] [MAX<0-3>]Set lclk dpm level for a given nbio in a given socket (MAX >= MIN)
+  --setdfpstaterange [SOCKET] [MIN<0-2>] [MAX<0-2>]             Set df pstate range for a given socket (MAX <= MIN)
+  --setpowerefficiencymode [SOCKET] [MODE<0-5>]                 Set power efficiency mode for a given socket
+  --setxgmipstaterange [SOCKET] [MIN<0,1>] [MAX<0,1>]           Set xgmi pstate range
+  --setcpurailisofreqpolicy [SOCKET] [VAL<0,1>]                 Set CPU ISO frequency policy
+  --setdfcctrl [SOCKET] [VAL<0,1>]                              Enable or disable DF c-state
+  --setpc6enable [SOCKET] [val<0,1>]                            Set the PC6 Enable Control
+  --setcc6enable [SOCKET] [val<0,1>]                            Set the CC6 Enable Control
 
-	============================= End of E-SMI ============================
+============================= End of E-SMI ============================
+
 
 ```
 Following are the value ranges and other information needed for passing it to tool
@@ -372,6 +385,7 @@ Following are the value ranges and other information needed for passing it to to
 	  Rolling Stones:P0/P1/P2/P3/G0/G1/G2/G3
 	  Mi300:G0/G1/G2/G3/G4/G5/G6/G7
 	  Family 0x1A, model 0x00-0x1F:P1/P3/G0/G1/G2/G3
+	  Family 0x1A, model 0x50-0x5F:P0/P1/P2/G0/G1/G2
 
 	  BWTYPE : AGG_BW/RD_BW/WR_BW
 
