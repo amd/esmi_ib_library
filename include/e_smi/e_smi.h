@@ -117,15 +117,56 @@ struct dpm_level {
 /**
  * @brief frequency limit source names
  */
-static char * const freqlimitsrcnames[] = {
+static char* const freqlimitsrcnames[] = {
 	"cHTC-Active",
 	"PROCHOT",
-	"TDC limit",
+	"TDC Limit (CPU rail)",
 	"PPT Limit",
 	"OPN Max",
 	"Reliability Limit",
 	"APML Agent",
-	"HSMP Agent"
+	"HSMP Agent",
+	"VRHOT(Voltage Regulator Hot)",
+	"TDC Limit (VDD_MEM_S3 rail)",
+};
+
+typedef union {
+	struct svi3_info_
+	{
+		uint32_t svi3_rail_selection	:1; //00
+		uint32_t svi3_rail_index	:3; //03:01
+		uint32_t svi3_temperature	:28;//31:04
+	}info;
+	uint32_t reg_value;
+}svi3_info_inarg;
+typedef union {
+	struct svi3_getinfo_
+	{
+		uint32_t svi3_temperature	:28;//27:00
+		uint32_t svi3_rail_index	:3; //30:28
+		uint32_t reserved		:1; //31
+	}info;
+	uint32_t reg_value;
+}svi3_getinfo_outarg;
+struct svi3_info {
+	svi3_info_inarg m_svi3_info_inarg;
+	uint32_t temperature;
+};
+
+typedef union {
+	struct spd_info_
+	{
+		uint32_t dimm_addr	:8; //07:00
+		uint32_t lid		:4; //11:08
+		uint32_t reg_offset	:11;//22:12
+		uint32_t reg_space	:1; //23
+		uint32_t reserved	:8; //31:24
+	}info;
+	uint32_t reg_value;
+}spd_info_inarg;
+struct spd_info {
+	spd_info_inarg m_spd_info_inarg;
+	uint32_t data;
 };
 
 /**
@@ -642,6 +683,21 @@ esmi_status_t esmi_pwr_svi_telemetry_all_rails_get(uint32_t sock_ind, uint32_t *
  */
 esmi_status_t esmi_pwr_efficiency_mode_get(uint8_t sock_ind, uint8_t *mode);
 
+/**
+ *  @brief Get CCD power.
+ *
+ *  @details This function returns the average CCD power
+ *
+ *  @param[in] coreid core index.
+ *
+ *  @param[inout] power Input buffer to return the power
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_read_ccd_power(uint32_t coreid, uint32_t *power);
+
 /** @} */  // end of PowerQuer
 
 /*****************************************************************************/
@@ -930,6 +986,39 @@ esmi_status_t esmi_ddr_bw_get(uint8_t sock_ind, struct ddr_bw_metrics *ddr_bw);
  */
 esmi_status_t esmi_socket_temperature_get(uint32_t sock_ind, uint32_t *ptmon);
 
+/**
+ *  @brief Get thermal solution behaviour for a given socket
+ *
+ *  @details This is a mechanism for thermal solution health.
+ *  Supported only on hsmp protocol version-7
+ *
+ *  @param[in] sock_ind a socket index provided.
+ *
+ *  @param[inout] status indicates whether thermal solution is normal(0) or
+ *  out of range(1).
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_read_tdelta(uint8_t sock_ind, uint8_t *status);
+
+/**
+ *  @brief Get temperature of svi3 VR controller rail for a given socket
+ *
+ *  @details Temperature of the hottest rail or the temperature of given rail
+ *  is provided.
+ *  Supported only on hsmp protocol version-7
+ *
+ *  @param[in] sock_ind a socket index provided.
+ *
+ *  @param[inout] inout has input data and contains output data.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_get_svi3_vr_controller_temp(uint8_t sock_ind, struct svi3_info *inout);
 /** @} */  // end of TempQuer
 
 /*****************************************************************************/
@@ -1001,6 +1090,24 @@ esmi_status_t esmi_dimm_power_consumption_get(uint8_t sock_ind, uint8_t dimm_add
  */
 esmi_status_t esmi_dimm_thermal_sensor_get(uint8_t sock_ind, uint8_t dimm_addr,
 					   struct dimm_thermal *dimm_temp);
+
+/**
+ *  @brief Execute a four byte read transaction at a given register offset in a
+ *  specified device on the target DIMM.
+ *  Supported only on hsmp protocol version 7.
+ *
+ *  @param[in] sock_ind Socket index through which the DIMM can be accessed.
+ *
+ *  @param[inout] contains dimm_addr Adddress of the DIMM.
+ *  register offset in given register space.
+ *  type of register offset space, volatile/non volatile.
+ *  output register data.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_spd_sb_reg_read(uint8_t sock_ind, struct spd_info *inout);
 /** @} */  // end of DimmStatisticsQuer
 
 /*****************************************************************************/
@@ -1025,6 +1132,8 @@ esmi_status_t esmi_dimm_thermal_sensor_get(uint8_t sock_ind, uint8_t dimm_addr,
  *  @details This function will set the xgmi width @p min and @p max for all
  *  the sockets in the system
  *
+ *  @param[in] sock_ind Socket index.
+ *
  *  @param[in] min minimum xgmi link width, varies from 0 to 2 with min <= max.
  *
  *  @param[in] max maximum xgmi link width, varies from 0 to 2.
@@ -1033,7 +1142,34 @@ esmi_status_t esmi_dimm_thermal_sensor_get(uint8_t sock_ind, uint8_t dimm_addr,
  *  @retval None-zero is returned upon failure.
  *
  */
-esmi_status_t esmi_xgmi_width_set(uint8_t min, uint8_t max);
+esmi_status_t esmi_xgmi_width_set(uint8_t sock_ind, uint8_t min, uint8_t max);
+
+/**
+ *  @brief Get xgmi width for a multi socket system.
+ *  values range from 0 to 2.
+ *
+ *  0 => 4 lanes on family 19h model 10h and 2 lanes on other models.
+ *
+ *  1 => 8 lanes.
+ *
+ *  2 => 16 lanes.
+ *
+ *  Supported on all protocol version >= 7
+ *
+ *  @details This function will get the xgmi width @p min and @p max for all
+ *  the sockets in the system
+ *
+ *  @param[in] sock_ind Socket index.
+ *
+ *  @param[inout] min minimum xgmi link width, varies from 0 to 2.
+ *
+ *  @param[inout] max maximum xgmi link width, varies from 0 to 2.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_xgmi_width_get(uint32_t sock_ind, uint8_t* min, uint8_t* max);
 
 /** @} */  // end of xGMIBwCont
 
@@ -1122,6 +1258,24 @@ esmi_status_t esmi_apb_enable(uint32_t sock_ind);
 esmi_status_t esmi_apb_disable(uint32_t sock_ind, uint8_t pstate);
 
 /**
+ *  @brief Get APBDisabled status and gets data fabric P-state if APBDisabled
+ *
+ *  @details This function will get the current P-state at @p pstate if APBDisabled.
+ *  Supported on all protocol version >= 7
+ *
+ *  @param[in] sock_ind a socket index
+ *
+ *  @param[inout] apb_disabled Input buffer for apb disabled status.
+ *
+ *  @param[inout] pstate Input buffer for df pstate, during apbdisabled condition.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_apb_status_get(uint32_t sock_ind, uint8_t* apb_disabled, uint8_t* pstate);
+
+/**
  *  @brief Set lclk dpm level
  *
  *  @details This function will set the lclk dpm level / nbio pstate
@@ -1205,15 +1359,33 @@ esmi_status_t esmi_pcie_link_rate_set(uint8_t sock_ind, uint8_t rate_ctrl, uint8
  *
  *  @param[in] sock_ind a socket index.
  *
- *  @param[in] max_pstate Maximum pstate value to be set.
- *
  *  @param[in] min_pstate Minimum pstate value to be set.
+ *
+ *  @param[in] max_pstate Maximum pstate value to be set.
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
  *
  */
-esmi_status_t esmi_df_pstate_range_set(uint8_t sock_ind, uint8_t max_pstate, uint8_t min_pstate);
+esmi_status_t esmi_df_pstate_range_set(uint8_t sock_ind, uint8_t min_pstate, uint8_t max_pstate);
+
+/**
+ *  @brief Get data fabric pstate range.
+ *
+ *  @details This function will get the max and min pstates for the data fabric.
+ *  This function is supported only on hsmp protocol version >= 7.
+ *
+ *  @param[in] sock_ind a socket index.
+ *
+ *  @param[inout] min_pstate Minimum pstate value to be get.
+ *
+ *  @param[inout] max_pstate Maximum pstate value to be get.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_df_pstate_range_get(uint8_t sock_ind, uint8_t *min_pstate, uint8_t *max_pstate);
 
 /**
  *  @brief Set xgmi pstate range.
@@ -1224,15 +1396,102 @@ esmi_status_t esmi_df_pstate_range_set(uint8_t sock_ind, uint8_t max_pstate, uin
  *  XGMI pstate range can be set from both HSMP and APML, the most
  *  recent of the two is enforced.
  *
- *  @param[in] max_pstate Maximum pstate value to be set.
+ *  @param[in] sock_ind a socket index.
  *
  *  @param[in] min_pstate Minimum pstate value to be set.
+ *
+ *  @param[in] max_pstate Maximum pstate value to be set.
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
  *
  */
-esmi_status_t esmi_xgmi_pstate_range_set(uint8_t max_pstate, uint8_t min_pstate);
+esmi_status_t esmi_xgmi_pstate_range_set(uint8_t sock_ind, uint8_t min_state, uint8_t max_state);
+
+/**
+ *  @brief Get xgmi pstate range.
+ *
+ *  @details This function will get the max and min xgmi pstate.
+ *  Supported only on hsmp protocol version >= 7.
+ *
+ *  @param[in] sock_ind a socket index.
+ *
+ *  @param[inout] min_pstate Minimum pstate value to be get.
+ *
+ *  @param[inout] max_pstate Maximum pstate value to be get.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_xgmi_pstate_range_get(uint8_t sock_ind, uint8_t *min_state, uint8_t *max_state);
+
+/**
+ *  @brief Set PC6 enable.
+ *
+ *  @details This function will set the pc6 enable control.
+ *  PC6 is low power state for CCDs, also known as package C6 state.
+ *  Acceptable values are 0(disable) and 1(enable)
+ *  Supported on hsmp protocol version >= 7.
+ *
+ *  @param[in] sock_ind a socket index.
+ *
+ *  @param[in] pc6_enable 0(disable pc6) and 1(enable pc6).
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_pc6_enable_set(uint8_t sock_ind, uint8_t pc6_enable);
+
+ /**
+ *  @brief Get PC6 enable.
+ *
+ *  @details This function will get the pc6 enable control.
+ *  Supported only on hsmp protocol version >= 7.
+ *
+ *  @param[in] sock_ind a socket index.
+ *
+ *  @param[inout] current_pc6_enable will get the pc6 current enable status.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_pc6_enable_get(uint8_t sock_ind, uint8_t* current_pc6_enable);
+
+/**
+ *  @brief Set CC6 enable.
+ *
+ *  @details This function will set the cc6 enable control.
+ *  Acceptable values are 0(disable) and 1(enable)
+ *  Supported only on hsmp protocol version >= 7.
+ *
+ *  @param[in] sock_ind a socket index.
+ *
+ *  @param[in] cc6_enable 0(disable cc6) and 1(enable cc6).
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_cc6_enable_set(uint8_t sock_ind, uint8_t cc6_enable);
+
+ /**
+ *  @brief Get CC6 enable.
+ *
+ *  @details This function will get the cc6 enable control.
+ *  Supported only on hsmp protocol version >= 7.
+ *
+ *  @param[in] sock_ind a socket index.
+ *
+ *  @param[inout] current_cc6_enable will get the cc6 current enable status.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_cc6_enable_get(uint8_t sock_ind, uint8_t* current_cc6_enable);
 
 /** @} */  // end of PStateCont
 
