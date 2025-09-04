@@ -53,9 +53,16 @@ enum hsmp_message_ids {
 	HSMP_SET_XGMI_PSTATE_RANGE,	/* 26h Set xGMI P-state range */
 	HSMP_CPU_RAIL_ISO_FREQ_POLICY,	/* 27h Get/Set Cpu Iso frequency policy */
 	HSMP_DFC_ENABLE_CTRL,		/* 28h Enable/Disable DF C-state */
+	HSMP_PC6_ENABLE,		/* 29h Get/Set PC6 Enable/Disable Status */
+	HSMP_CC6_ENABLE,		/* 2Ah Get/Set CC6 Enable/Disable Status */
 	HSMP_GET_RAPL_UNITS = 0x30,	/* 30h Get scaling factor for energy */
 	HSMP_GET_RAPL_CORE_COUNTER,	/* 31h Get core energy counter value */
 	HSMP_GET_RAPL_PACKAGE_COUNTER,	/* 32h Get package energy counter value */
+	HSMP_SPD_SB_RD,			/* 33h Get data from a specified device on the DIMM.*/
+	HSMP_READ_CCD_POWER,		/* 34h Get the average power consumed by CCD */
+	HSMP_READ_TDELTA,		/* 35h Get thermal solution behaviour */
+	HSMP_GET_SVI3_VR_CTRL_TEMP,	/* 36h Get temperature of SVI3 VR controlller rails */
+	HSMP_GET_ENABLED_HSMP_CMDS,	/* 37h Get/Set supported HSMP commands */
 	HSMP_MSG_ID_MAX,
 };
 
@@ -169,16 +176,18 @@ static const struct hsmp_msg_desc hsmp_msg_desc_table[] = {
 	{0, 1, HSMP_GET},
 
 	/*
-	 * HSMP_SET_XGMI_LINK_WIDTH, num_args = 1, response_sz = 0
-	 * input: args[0] = min link width[15:8] + max link width[7:0]
+	 * HSMP_SET_XGMI_LINK_WIDTH, num_args = 1, response_sz = 0/1
+	 * input: args[0] = set/get XGMI Link width[31] + min link width[15:8] + max link width[7:0]
+	 * output: args[0] = current min link width[15:8] + current max link width[7:0]
 	 */
-	{1, 0, HSMP_SET},
+	{1, 1, HSMP_SET_GET},
 
 	/*
-	 * HSMP_SET_DF_PSTATE, num_args = 1, response_sz = 0
-	 * input: args[0] = df pstate[7:0]
+	 * HSMP_SET_DF_PSTATE, num_args = 1, response_sz = 0/1
+	 * input: args[0] = set/get df pstate[31] + df pstate[7:0]
+	* output: args[0] = APB Enabled/Disabled[8]+current df pstate[7:0]
 	 */
-	{1, 0, HSMP_SET},
+	{1, 1, HSMP_SET_GET},
 
 	/* HSMP_SET_AUTO_DF_PSTATE, num_args = 0, response_sz = 0 */
 	{0, 0, HSMP_SET},
@@ -311,10 +320,11 @@ static const struct hsmp_msg_desc hsmp_msg_desc_table[] = {
 	{1, 1, HSMP_SET_GET},
 
 	/*
-	 * HSMP_SET_PSTATE_MAX_MIN, num_args = 1, response_sz = 0
-	 * input: args[0] = min df pstate[15:8] + max df pstate[7:0]
+	 * HSMP_SET_PSTATE_MAX_MIN, num_args = 1, response_sz = 0/1
+	 * input: args[0] = set/get power mode[31] + min df pstate[15:8] + max df pstate[7:0]
+	* output: args[0] = min df pstate[15:8] + max df pstate[7:0]
 	 */
-	{1, 0, HSMP_SET},
+	{1, 1, HSMP_SET_GET},
 
 	/*
 	 * HSMP_GET_METRIC_TABLE_VER, num_args = 0, response_sz = 1
@@ -335,10 +345,11 @@ static const struct hsmp_msg_desc hsmp_msg_desc_table[] = {
 	{0, 2, HSMP_GET},
 
 	/*
-	 * HSMP_SET_XGMI_PSTATE_RANGE, num_args = 1, response_sz = 0
-	 * input: args[0] = min xGMI p-state[15:8] + max xGMI state[7:0]
+	 * HSMP_SET_XGMI_PSTATE_RANGE, num_args = 1, response_sz = 0/1
+	 * input: args[0] = set/get XGMI pstate range[31] + min xGMI p-state[15:8] + max xGMI state[7:0]
+	* output: args[0] = min xGMI p-state[15:8] + max xGMI state[7:0]
 	 */
-	{1, 0, HSMP_SET},
+	{1, 1, HSMP_SET_GET},
 
 	/*
 	 * HSMP_CPU_RAIL_ISO_FREQ_POLICY, num_args = 1, response_sz = 1
@@ -355,9 +366,21 @@ static const struct hsmp_msg_desc hsmp_msg_desc_table[] = {
 	 */
 	{1, 1, HSMP_SET_GET},
 
-	/* RESERVED(0x29-0x2f) */
-	{0, 0, HSMP_RSVD},
-	{0, 0, HSMP_RSVD},
+	/*
+	 * HSMP_PC6_REQUEST, num_args = 1, response_sz = 0/1
+	 * input: args[0] = set/get PC6 control[31] + disable/enable PC6[0]
+	 * output: args[0] = current PC6 control status[0]
+	 */
+	{1, 1, HSMP_SET_GET},
+
+	/*
+	 * HSMP_CC6_REQUEST, num_args = 1, response_sz = 0/1
+	 * input: args[0] = set/get CC6 control[31] + disable/enable CC6[0]
+	 * output: args[0] = current CC6 control status[0]
+	 */
+	{1, 1, HSMP_SET_GET},
+
+	/* RESERVED(0x2B-0x2F) */
 	{0, 0, HSMP_RSVD},
 	{0, 0, HSMP_RSVD},
 	{0, 0, HSMP_RSVD},
@@ -384,6 +407,49 @@ static const struct hsmp_msg_desc hsmp_msg_desc_table[] = {
 	 * output: args[1] = upper 32 bits of energy
 	 */
 	{0, 2, HSMP_GET},
+
+	/*
+	 * HSMP_SPD_SB_RD, num_args = 1, response_sz = 1
+	 * input: args[0] =
+	 * 		     [07:00] DIMM address
+	 * 		     [11:08] LID of device
+	 * 		     [22:12] Register offset in given reg space
+	 * 		     [23]    Register space
+	 * output: args[0] = [03:00] Read data byte
+	 */
+	{1, 1, HSMP_GET},
+
+	/*
+	 * HSMP_READ_CCD_POWER, num_args = 1, response_sz = 1
+	 * input: args[0] = [15:00] ApicId of core
+	 * output: args[0] = [31:00] CCD power(mWatts)
+	 */
+	{1, 1, HSMP_GET},
+
+	/*
+	 * HSMP_READ_TDELTA, num_args = 0, response_sz = 1
+	 * input: None
+	 * output: args[0] = [31:00] Thermal Behaviour
+	 */
+	{0, 1, HSMP_GET},
+
+	/*
+	 * HSMP_GET_SVI3_VR_CTRL_TEMP, num_args = 1, response_sz = 1
+	 * input: args[0] =
+	 * 		     [00] Read SVI3 temperature data
+	 * 		     [03:01] SVI3 rail index
+	 * output: args[0] =
+	 * 		     [30:28] SVI3 rail index
+	 * 		     [27:00] SVI3 rail temperature(degree C)
+	 */
+	{1, 1, HSMP_GET},
+
+	/*
+	 * HSMP_GET_ENABLED_HSMP_CMDS, num_args = 1, response_sz = 3
+	 * input: args[0] = [00] HSMP command mask
+	 * output: args[0], args[1], args[2] = status of HSMP command
+	 */
+	{1, 3, HSMP_GET},
 };
 
 /* Metrics table (supported only with proto version 6) */
