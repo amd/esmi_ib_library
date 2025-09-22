@@ -351,8 +351,8 @@ Get Option<s>:
   --getxgmipstaterange [SOCKET]                                 Get xgmi pstate range for a given socket
   --getccdpower [CORE]                                          Get CCD power for a given core
   --gettdelta [SOCKET]                                          Get thermal solution behaviour for a given socket
-  --getspdregdata [SOCKET] [DIMM_ADDR] [LID] [OFFSET] [REGSPACE]
-                                                                Get SPD SB register data(REGSPACE:0->Volatile,1->NVM)
+  --getdimmsbdata [SOCKET] [DIMM_ADDR] [LID] [OFFSET] [REGSPACE]
+                                                                Get DIMM SB register data(REGSPACE:0->Volatile,1->NVM)
   --getsvi3vrtemp [SOCKET] [TYPE] [RAIL_INDEX(if TYPE=1)]       Get svi3 vr controller temperature(TYPE:0->HottestRail,1->IndividualRail)
   --getpc6enable [SOCKET]                                       Get the PC6 Enable Control
   --getcc6enable [SOCKET]                                       Get the CC6 Enable Control
