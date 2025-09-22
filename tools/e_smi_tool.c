@@ -3142,20 +3142,20 @@ static esmi_status_t epyc_get_tdelta(uint32_t sock_ind)
 	}
 	return ESMI_SUCCESS;
 }
-static esmi_status_t epyc_read_spd_reg(uint32_t sock_ind, uint8_t dimm_addr, uint8_t lid, uint16_t offset, uint8_t reg_space)
+static esmi_status_t epyc_read_dimm_sb_reg(uint32_t sock_ind, uint8_t dimm_addr, uint8_t lid, uint16_t offset, uint8_t reg_space)
 {
 	esmi_status_t ret;
-	struct spd_info spd_info_;spd_info_.m_spd_info_inarg.reg_value = 0;
+	struct dimm_sb_info dimm_sb_info_;dimm_sb_info_.m_dimm_sb_info_inarg.reg_value = 0;
 	char temp_string[300];
 
-	spd_info_.m_spd_info_inarg.info.dimm_addr = dimm_addr;
-	spd_info_.m_spd_info_inarg.info.lid = lid;
-	spd_info_.m_spd_info_inarg.info.reg_offset = offset;
-	spd_info_.m_spd_info_inarg.info.reg_space = reg_space;
+	dimm_sb_info_.m_dimm_sb_info_inarg.info.dimm_addr = dimm_addr;
+	dimm_sb_info_.m_dimm_sb_info_inarg.info.lid = lid;
+	dimm_sb_info_.m_dimm_sb_info_inarg.info.reg_offset = offset;
+	dimm_sb_info_.m_dimm_sb_info_inarg.info.reg_space = reg_space;
 
-	ret = esmi_spd_sb_reg_read(sock_ind, &spd_info_);
+	ret = esmi_dimm_sb_reg_read(sock_ind, &dimm_sb_info_);
 	if (ret != ESMI_SUCCESS) {
-		printf("Failed: to get socket[%d] SPD SB Reg data\n", sock_ind);
+		printf("Failed: to get socket[%d] DIMM SB Reg data\n", sock_ind);
 		printf(RED "Err[%d]: %s\n" RESET, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
@@ -3167,17 +3167,17 @@ static esmi_status_t epyc_read_spd_reg(uint32_t sock_ind, uint8_t dimm_addr, uin
 	if(print_results == PRINT_RESULTS)
 	{
 		printf("------------------------------------------------------------------------------------------\n");
-		printf("| Socket[%d] DimmAddress[0x%x] Lid[0x%x] Offset[0x%x] RegSpace[%d] SpdSbData | 0x%-2x\t |\n", sock_ind, dimm_addr, lid, offset, reg_space, spd_info_.data);
+		printf("| Socket[%d] DimmAddress[0x%x] Lid[0x%x] Offset[0x%x] RegSpace[%d] DimmSbData | 0x%-2x\t |\n", sock_ind, dimm_addr, lid, offset, reg_space, dimm_sb_info_.data);
 		printf("------------------------------------------------------------------------------------------\n");
 	}
 	else if(print_results == PRINT_RESULTS_AS_CSV)
-		printf("Socket,DimmAddress,Lid,Offset,RegSpace,SpdSbData\n%d,0x%x,0x%x,0x%x,%d,0x%x\n", sock_ind, dimm_addr, lid, offset, reg_space, spd_info_.data);
+		printf("Socket,DimmAddress,Lid,Offset,RegSpace,DimmSbData\n%d,0x%x,0x%x,0x%x,%d,0x%x\n", sock_ind, dimm_addr, lid, offset, reg_space, dimm_sb_info_.data);
 	else if(print_results == PRINT_RESULTS_AS_JSON)
-		printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"Dimm address\":\"0x%x\",\n\t\t\"Lid\":\"0x%x\",\n\t\t\"Offset\":\"0x%x\",\n\t\t\"RegSpace\":%d,\n\t\t\"SpdSbData\":\"0x%x\"\n\t},", sock_ind, dimm_addr, lid, offset, reg_space, spd_info_.data);
+		printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"Dimm address\":\"0x%x\",\n\t\t\"Lid\":\"0x%x\",\n\t\t\"Offset\":\"0x%x\",\n\t\t\"RegSpace\":%d,\n\t\t\"DimmSbData\":\"0x%x\"\n\t},", sock_ind, dimm_addr, lid, offset, reg_space, dimm_sb_info_.data);
 
 	if(log_to_file)
 	{
-		sprintf(temp_string, "0x%x,", spd_info_.data);
+		sprintf(temp_string, "0x%x,", dimm_sb_info_.data);
 		append_string(&log_file_data, temp_string);
 	}
 	return ESMI_SUCCESS;
@@ -3425,7 +3425,7 @@ static char* const feat_ver7_F1A_M50_5F_get[] = {
 	"  --getxgmipstaterange [SOCKET]\t\t\t\t\tGet xgmi pstate range for a given socket",
 	"  --getccdpower [CORE]\t\t\t\t\t\tGet CCD power for a given core",
 	"  --gettdelta [SOCKET]\t\t\t\t\t\tGet thermal solution behaviour for a given socket",
-	"  --getspdregdata [SOCKET] [DIMM_ADDR] [LID] [OFFSET] [REGSPACE] Get SPD SB register data(REGSPACE:0->Volatile,1->NVM)",
+	"  --getdimmsbdata [SOCKET] [DIMM_ADDR] [LID] [OFFSET] [REGSPACE] Get DIMM SB register data(REGSPACE:0->Volatile,1->NVM)",
 	"  --getsvi3vrtemp [SOCKET] [TYPE] [RAIL_INDEX(if TYPE=1)]\tGet svi3 vr controller temperature(TYPE:0->HottestRail,1->IndividualRail)",
 };
 
@@ -3860,7 +3860,7 @@ static int parse_flag_based_options(char **argv, int val)
 				offset = atol(argv[optind++]);//Adding Extra Arguments
 			}
 			reg_space =  atoi(argv[optind++]);
-			ret = epyc_read_spd_reg(sock_id, dimm_addr, lid, offset, reg_space);
+			ret = epyc_read_dimm_sb_reg(sock_id, dimm_addr, lid, offset, reg_space);
 			break;
 		case 23:
 			/* Get svi3 vr temp */
@@ -3990,7 +3990,7 @@ static int parsesmi_args(int argc,char **argv)
 		{"stoploop", 			required_argument, 	&flag, 	19},
 		{"getccdpower",			required_argument, 	&flag, 	20},
 		{"gettdelta",			required_argument, 	&flag, 	21},
-		{"getspdregdata",		required_argument, 	&flag, 	22},
+		{"getdimmsbdata",		required_argument, 	&flag, 	22},
 		{"getsvi3vrtemp",		required_argument, 	&flag, 	23},
 		{0,				0,			0,	0},
 	};
