@@ -154,7 +154,7 @@ struct svi3_info {
 };
 
 typedef union {
-	struct spd_info_
+	struct dimm_sb_info_
 	{
 		uint32_t dimm_addr	:8; //07:00
 		uint32_t lid		:4; //11:08
@@ -163,9 +163,9 @@ typedef union {
 		uint32_t reserved	:8; //31:24
 	}info;
 	uint32_t reg_value;
-}spd_info_inarg;
-struct spd_info {
-	spd_info_inarg m_spd_info_inarg;
+}dimm_sb_info_inarg;
+struct dimm_sb_info {
+	dimm_sb_info_inarg m_dimm_sb_info_inarg;
 	uint32_t data;
 };
 
@@ -1107,7 +1107,7 @@ esmi_status_t esmi_dimm_thermal_sensor_get(uint8_t sock_ind, uint8_t dimm_addr,
  *  @retval None-zero is returned upon failure.
  *
  */
-esmi_status_t esmi_spd_sb_reg_read(uint8_t sock_ind, struct spd_info *inout);
+esmi_status_t esmi_dimm_sb_reg_read(uint8_t sock_ind, struct dimm_sb_info *inout);
 /** @} */  // end of DimmStatisticsQuer
 
 /*****************************************************************************/

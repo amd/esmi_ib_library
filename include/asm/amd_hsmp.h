@@ -58,7 +58,7 @@ enum hsmp_message_ids {
 	HSMP_GET_RAPL_UNITS = 0x30,	/* 30h Get scaling factor for energy */
 	HSMP_GET_RAPL_CORE_COUNTER,	/* 31h Get core energy counter value */
 	HSMP_GET_RAPL_PACKAGE_COUNTER,	/* 32h Get package energy counter value */
-	HSMP_SPD_SB_RD,			/* 33h Get data from a specified device on the DIMM.*/
+	HSMP_DIMM_SB_RD,		/* 33h Get data from a specified device on the DIMM.*/
 	HSMP_READ_CCD_POWER,		/* 34h Get the average power consumed by CCD */
 	HSMP_READ_TDELTA,		/* 35h Get thermal solution behaviour */
 	HSMP_GET_SVI3_VR_CTRL_TEMP,	/* 36h Get temperature of SVI3 VR controlller rails */
@@ -409,7 +409,7 @@ static const struct hsmp_msg_desc hsmp_msg_desc_table[] = {
 	{0, 2, HSMP_GET},
 
 	/*
-	 * HSMP_SPD_SB_RD, num_args = 1, response_sz = 1
+	 * HSMP_DIMM_SB_RD, num_args = 1, response_sz = 1
 	 * input: args[0] =
 	 * 		     [07:00] DIMM address
 	 * 		     [11:08] LID of device

@@ -2362,12 +2362,12 @@ esmi_status_t esmi_cc6_enable_get(uint8_t sock_ind, uint8_t *current_cc6_enable)
 	return errno_to_esmi_status(ret);
 }
 
-esmi_status_t esmi_spd_sb_reg_read(uint8_t sock_ind, struct spd_info *inout)
+esmi_status_t esmi_dimm_sb_reg_read(uint8_t sock_ind, struct dimm_sb_info *inout)
 {
 	struct hsmp_message msg = {};
 	esmi_status_t ret;
 
-	msg.msg_id	= HSMP_SPD_SB_RD;
+	msg.msg_id	= HSMP_DIMM_SB_RD;
 
 	if (check_sup(msg.msg_id))
 		return ESMI_NO_HSMP_MSG_SUP;
@@ -2379,7 +2379,7 @@ esmi_status_t esmi_spd_sb_reg_read(uint8_t sock_ind, struct spd_info *inout)
 
 	msg.num_args	= 1;
 	msg.response_sz = 1;
-	msg.args[0] = inout->m_spd_info_inarg.reg_value;
+	msg.args[0] = inout->m_dimm_sb_info_inarg.reg_value;
 	msg.sock_ind	= sock_ind;
 	ret = hsmp_xfer(&msg, O_RDONLY);
 	if(!ret)
