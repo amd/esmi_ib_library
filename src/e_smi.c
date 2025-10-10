@@ -334,10 +334,12 @@ static esmi_status_t detect_packages(struct system_metrics *psm)
 	}
 	psm->total_cores = ret + 1;
 
-	/* fam 0x1A, model0x00-0x1f are dense sockets and support more than 255 threads,
+	/* fam 0x1A, model0x00-0x1f are dense sockets, Fam 0x1A, Model0x50-0x5F, support more than 255 threads,
 	 * On these systems, number of threads is detected by reading
          * Core::X86::Cpuid::SizeId[NC]+1 */
-	if (psm->cpu_family == 0x1A && psm->cpu_model >= 0x10 && psm->cpu_model <= 0x1f) {
+	if (((psm->cpu_family == 0x1A && psm->cpu_model >= 0x10 && psm->cpu_model <= 0x1f)) ||
+	    ((psm->cpu_family == 0x1A && psm->cpu_model >= 0x50 && psm->cpu_model <= 0x5F)))
+	{
 		if (!__get_cpuid(0x80000008, &eax, &ebx, &ecx, &edx))
 			return ESMI_IO_ERROR;
 		max_cores_socket = (ecx & 0xfff) + 1;
