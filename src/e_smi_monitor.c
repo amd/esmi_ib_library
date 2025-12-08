@@ -240,6 +240,30 @@ int read_msr_drv(monitor_types_t type, uint32_t sensor_id, uint64_t *pval, uint6
         return ret;
 }
 
+int read_msr(monitor_types_t type, uint32_t sensor_id, uint64_t *pval, uint64_t reg)
+{
+	int ret;
+	char file_path[FILEPATHSIZ];
+
+	*pval = 0;
+
+	make_path(type, MSR_PATH, sensor_id, file_path);
+	ret = readmsr_u64(file_path, pval, reg);
+
+	return ret;
+}
+
+int write_msr(monitor_types_t type, uint32_t sensor_id, uint64_t val, uint64_t reg)
+{
+	int ret;
+	char file_path[FILEPATHSIZ];
+
+	make_path(type, MSR_PATH, sensor_id, file_path);
+	ret = writemsr_u64(file_path, val, reg);
+
+	return ret;
+}
+
 int batch_read_energy_drv(uint64_t *pval, uint32_t cpus)
 {
 	char file_path[FILEPATHSIZ];

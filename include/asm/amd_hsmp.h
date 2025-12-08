@@ -63,6 +63,9 @@ enum hsmp_message_ids {
 	HSMP_READ_TDELTA,		/* 35h Get thermal solution behaviour */
 	HSMP_GET_SVI3_VR_CTRL_TEMP,	/* 36h Get temperature of SVI3 VR controlller rails */
 	HSMP_GET_ENABLED_HSMP_CMDS,	/* 37h Get/Set supported HSMP commands */
+	HSMP_SET_GET_FLOOR_LIMIT,       /* 38h Get/Set supported Floor Limit commands */
+	HSMP_DIMM_SB_WR,                /* 39h Set data to a specified device on the DIMM.*/
+	HSMP_SDPS_LIMIT,                /* 3Ah Get/Set SDPSLimit. */
 	HSMP_MSG_ID_MAX,
 };
 
@@ -450,6 +453,54 @@ static const struct hsmp_msg_desc hsmp_msg_desc_table[] = {
 	 * output: args[0], args[1], args[2] = status of HSMP command
 	 */
 	{1, 3, HSMP_GET},
+
+	/*
+	 * HSMP_SET_GET_FLOOR_LIMIT, num_args = 1, response_sz = 1
+	 * input: args[0] =
+	 *                  [31:30]=Set or Get:
+	 *                     00=Set the Floor frequency per core.
+	 *                     01=Set the Floor frequency for all cores.
+	 *                     10=Get the Floor frequency of a core.
+	 * 	               11=Get the Effective Floor frequency per core.
+	 *                  [29:28]=Reserved.
+	 *                  [27:16]=ApicId.
+	 *                 Note: DataIn[27:16] are Reserved if DataIn[31:30]==01.
+	 *
+	 *                 If DataIn[31]=0
+	 *                  [15:0]=Floor frequency limit.
+	 *                 Else
+	 *                  [15:0]=Reserved.
+	 *
+	 * output: args[0] =
+	 *                 If DataIn[31:30]=11
+	 *                  [15:0]=Effective Floor frequency limit(MHz).
+	 *                 Else
+	 *                  [15:0]=Floor frequency limit (MHz).
+	 *                 The output will be None if DataIn[31]=0.
+	 */
+	 {1, 1, HSMP_SET_GET},
+
+	/*
+	 * HSMP_DIMM_SB_WR, num_args = 1, response_sz = 0
+	 * input: args[0] =
+	 *                   [07:00] DIMM address
+	 *                   [11:08] LID of device
+	 *                   [22:12] Register offset in given reg space
+	 *                   [23]    Register space
+	 *                   [31:24] Write Data
+	 * output: None
+	 */
+	{1, 0, HSMP_SET},
+
+	/*
+	 * HSMP_SDPS_LIMIT, num_args = 1, response_sz = 1
+	 * input: args[0] =
+	 *                   [30:00] SDPS Limit
+	 *                   [31] Set/Get
+	 * output: args[0] =
+	 *                   [30:00] SDPS Limit
+	 */
+	{1, 1, HSMP_SET_GET},
 };
 
 /* Metrics table (supported only with proto version 6) */

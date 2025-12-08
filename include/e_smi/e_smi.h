@@ -19,6 +19,10 @@
 
 #define BIT(N)	(1 << N)		//!< macro for mask
 
+#define CORE_0 0
+#define SOCKET_0 0
+#define CPU_MAX_CORES_PER_SOCKET 512
+
 /** \file e_smi.h
  *  Main header file for the E-SMI library.
  *  All required function, structure, enum, etc. definitions should be defined
@@ -160,13 +164,68 @@ typedef union {
 		uint32_t lid		:4; //11:08
 		uint32_t reg_offset	:11;//22:12
 		uint32_t reg_space	:1; //23
-		uint32_t reserved	:8; //31:24
+		uint32_t write_data	:8; //31:24
 	}info;
 	uint32_t reg_value;
 }dimm_sb_info_inarg;
 struct dimm_sb_info {
 	dimm_sb_info_inarg m_dimm_sb_info_inarg;
-	uint32_t data;
+	uint32_t read_data;
+};
+
+struct hsmp_enabled_commands_info {
+	bool read_mask;
+	uint32_t arg0;
+	uint32_t arg1;
+	uint32_t arg2;
+};
+
+union floorlimit_info_inarg{
+	struct floorlimit_info_inarg_
+	{
+		uint32_t floor_limit :16; //15:00
+		uint32_t apic_id	 :12; //27:16
+		uint32_t reserved	 :2;  //29:28
+		uint32_t set_get	 :2;  //31:30
+	}info;
+	uint32_t reg_value;
+};
+union floorlimit_info_outarg{
+	struct floorlimit_info_outarg_
+	{
+		uint32_t floor_limit :16;//15:00
+		uint32_t reserved	 :2;  //31:16
+	}info;
+	uint32_t reg_value;
+};
+
+enum set_get_floorlimit {
+	SET_FLOOR_FREQUENCY_CORE = 00,
+	SET_FLOOR_FREQUENCY_SOCKET = 01,
+	GET_FLOOR_FREQUENCY_CORE = 02,
+	GET_EFF_FLOOR_FREQUENCY_CORE = 03,
+	GET_FLOOR_FREQUENCY_SOCKET = 04,
+	GET_EFF_FLOOR_FREQUENCY_SOCKET = 05
+};
+
+union powereffmode_info{
+	struct powereffmode_info_
+	{
+		uint32_t pwr_mode : 3; //02:00
+		uint32_t util	  : 7; //09:03
+		uint32_t ppt_limit:21; //30:10
+		uint32_t set_get  : 1; //31
+	}info;
+	uint32_t reg_value;
+};
+
+union sdps_limit_info{
+	struct sdps_limit_info_
+	{
+		uint32_t sdps_limit:31; //30:00
+		uint32_t set_get  : 1;  //31
+	}info;
+	uint32_t reg_value;
 };
 
 /**
@@ -674,14 +733,18 @@ esmi_status_t esmi_pwr_svi_telemetry_all_rails_get(uint32_t sock_ind, uint32_t *
  *
  *  @param[in] sock_ind Socket index.
  *
- *  @param[inout] mode Input buffer to return the mode.
- *  Refer \ref esmi_pwr_efficiency_mode_set for details on the modes
+ *  @param[inout] mode Input buffer to return the current power efficiency mode.
+ *  Refer to \ref esmi_pwr_efficiency_mode_set for details on the modes.
+ *
+ *  @param[inout] util Input buffer to return the utilization value for the mode (applicable for Mode 4/5).
+ *
+ *  @param[inout] ppt_limit Input buffer to return the PPT limit value for the mode (applicable for Mode 4/5).
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
  *
  */
-esmi_status_t esmi_pwr_efficiency_mode_get(uint8_t sock_ind, uint8_t *mode);
+esmi_status_t esmi_pwr_efficiency_mode_get(uint8_t sock_ind, uint8_t *mode, uint32_t *util, uint32_t *ppt_limit);
 
 /**
  *  @brief Get CCD power.
@@ -775,12 +838,22 @@ esmi_status_t esmi_socket_power_cap_set(uint32_t socket_idx, uint32_t pcap);
  *  @param[in] sock_ind A socket index.
  *
  *  @param[in] mode Power efficiency mode to be set.
+ *    0 = High performance mode
+ *    1 = Power efficient mode
+ *    2 = IO performance mode
+ *    3 = Balanced Memory Performance Mode
+ *    4 = Balanced Core Performance Mode
+ *    5 = Balanced Core and Memory Performance Mode
+ *
+ *  @param[in] util Utilization value for the mode (applicable for Mode 4/5).
+ *
+ *  @param[in] ppt_limit PPT limit value for the mode (applicable for Mode 4/5).
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
  *
  */
-esmi_status_t esmi_pwr_efficiency_mode_set(uint8_t sock_ind, uint8_t mode);
+esmi_status_t esmi_pwr_efficiency_mode_set(uint8_t sock_ind, uint8_t mode, uint32_t *util, uint32_t *ppt_limit);
 
 /**
  *  @brief Set the CpuRailIsoFreqPolicy.
@@ -853,6 +926,75 @@ esmi_status_t esmi_dfc_enable_set(uint8_t sock_ind, bool *val);
  */
 esmi_status_t esmi_core_boostlimit_get(uint32_t cpu_ind,
 				       uint32_t *pboostlimit);
+
+/**
+ *  @brief Set or get the floorlimit value for a given core or socket.
+ *
+ *  @details This function sets or gets the minimum frequency (floorlimit) currently enforced for
+ *  a particular core or all cores, depending on the type argument. The floorlimit is the lowest
+ *  frequency the core(s) can operate at, as set by system policies or hardware constraints.
+ *  This function is supported only on hsmp protocol version 7 and above.
+ *
+ *  @param[in] core_or_sock_ind Index of the core or socket.
+ *  @param[inout] pfloorlimit Input/output buffer to set or return the floorlimit value.
+ *  @param[in] type Operation type (set/get) as defined by set_get_floorlimit enum.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval Non-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_floorlimit_set_get(uint32_t core_or_sock_ind, uint32_t *pfloorlimit, enum set_get_floorlimit type);
+
+/**
+ *  @brief Set the floorlimit value for a given core or socket.
+ *
+ *  @details This function sets or gets the minimum frequency (floorlimit) currently enforced for
+ *  a particular core or all cores, depending on the type argument. The floorlimit is the lowest
+ *  frequency the core(s) can operate at, as set by system policies or hardware constraints.
+ *  Supported only on HSMP protocol version 7 and above.
+ *
+ *  @param[in] core_or_sock_ind Index of the core or socket.
+ *  @param[inout] msrfloorlimit a uint32_t to the floorlimit value to set.
+ *  @param[in] type Operation type (set) as defined by set_get_floorlimit enum.
+ *  @param[in] fmax of the socket.
+ *
+ *  @retval ::ESMI_SUCCESS Returned upon successful call.
+ *  @retval Non-zero Returned upon failure.
+ *
+ */
+esmi_status_t esmi_msr_floorlimit_set(uint32_t core_or_sock_ind, uint32_t msrfloorlimit, enum set_get_floorlimit type, uint32_t fmax);
+
+/**
+ *  @brief Set SDPS limit.
+ *
+ *  @details This function will set the SDPS limit control.
+ *  Acceptable values depend on platform specification.
+ *  This function is supported only on hsmp protocol version >= 7.
+ *
+ *  @param[in] sock_ind Socket index.
+ *  @param[inout] sdps_limit Value to set/get the SDPS limit.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval Non-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_sdps_limit_set(uint8_t sock_ind, uint32_t* sdps_limit);
+
+/**
+ *  @brief Get SDPS limit.
+ *
+ *  @details This function will get the SDPS limit control.
+ *  Acceptable values depend on platform specification.
+ *  This function is supported only on hsmp protocol version >= 7.
+ *
+ *  @param[in] sock_ind Socket index.
+ *  @param[inout] current_sdps_limit Pointer to receive the SDPS limit value.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval Non-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_sdps_limit_get(uint8_t sock_ind, uint32_t* current_sdps_limit);
 
 /**
  *  @brief Get the c0_residency value for a given socket
@@ -1098,16 +1240,32 @@ esmi_status_t esmi_dimm_thermal_sensor_get(uint8_t sock_ind, uint8_t dimm_addr,
  *
  *  @param[in] sock_ind Socket index through which the DIMM can be accessed.
  *
- *  @param[inout] contains dimm_addr Adddress of the DIMM.
- *  register offset in given register space.
- *  type of register offset space, volatile/non volatile.
- *  output register data.
+ *  @param[inout] inout Structure containing dimm_addr (address of the DIMM),
+ *  lid space, register offset in given register space, type of register offset space (volatile/non-volatile),
+ *  and output register data to be read.
  *
  *  @retval ::ESMI_SUCCESS is returned upon successful call.
  *  @retval None-zero is returned upon failure.
  *
  */
 esmi_status_t esmi_dimm_sb_reg_read(uint8_t sock_ind, struct dimm_sb_info *inout);
+
+/**
+ *  @brief Execute a four byte write transaction at a given register offset in a
+ *  specified device on the target DIMM.
+ *  This function is supported only on hsmp protocol version 7.
+ *
+ *  @param[in] sock_ind Socket index through which the DIMM can be accessed.
+ *
+ *  @param[inout] inout Structure containing dimm_addr (address of the DIMM),
+ *  lid space, register offset in given register space, type of register offset space (volatile/non-volatile),
+ *  and input register data to be written.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_dimm_sb_reg_write(uint8_t sock_ind, struct dimm_sb_info *inout);
 /** @} */  // end of DimmStatisticsQuer
 
 /*****************************************************************************/
@@ -1696,6 +1854,22 @@ esmi_status_t esmi_first_online_core_on_socket(uint32_t socket_idx,
  *  @retval char* value returned upon successful call.
  */
 char * esmi_get_err_msg(esmi_status_t esmi_err);
+
+/**
+ *  @brief Get enabled HSMP commands for a given socket.
+ *
+ *  @details This function returns the enabled HSMP commands and their arguments for the specified socket.
+ *  This function is supported only on hsmp protocol version-7.
+ *
+ *  @param[in] sock_ind Socket index.
+ *
+ *  @param[inout] info Pointer to struct hsmp_enabled_commands_info to receive enabled command info.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval Non-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_get_enabled_commands(uint8_t sock_ind, struct hsmp_enabled_commands_info *info);
 
 /** @} */  // end of AuxilQuer
 

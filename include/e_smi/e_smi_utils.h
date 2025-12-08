@@ -21,5 +21,6 @@ int writesys_u32(char *filepath, uint32_t val);
 int readsys_u64(char *filepath, uint64_t *pval);
 int readsys_str(char *filepath, char *pval, uint32_t val);
 int readmsr_u64(char *filepath, uint64_t *pval, uint64_t reg);
+int writemsr_u64(char *filepath, uint64_t pval, uint64_t reg);
 
 #endif  // INCLUDE_E_SMI_E_SMI_UTILS_H_

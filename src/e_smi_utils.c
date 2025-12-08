@@ -125,3 +125,21 @@ int readmsr_u64(char *filepath, uint64_t *pval, uint64_t reg)
 
 	return 0;
 }
+int writemsr_u64(char *filepath, uint64_t val, uint64_t reg)
+{
+	int fd;
+	ssize_t ret;
+
+	fd = open(filepath, O_WRONLY);
+	if (fd < 0)
+		return errno;
+
+	ret = pwrite(fd, &val, sizeof(uint64_t), reg);
+	if (ret < 0) {
+		close(fd);
+		return errno;
+	}
+	close(fd);
+
+	return 0;
+}

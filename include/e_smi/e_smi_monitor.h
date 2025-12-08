@@ -34,6 +34,11 @@
 #define AMD_ENERGY_UNIT_OFFSET  8
 
 /**
+ * @brief MSR registers used for OspmNominalPerf
+ */
+#define ENERGY_CPPC_REQUEST_2_MSR  0xC00102B5
+
+/**
  * @brief Path used to get the total number of CPUs in the system.
  */
 #define CPU_COUNT_PATH "/sys/devices/system/cpu/present"
@@ -75,6 +80,7 @@ struct system_metrics {
 	esmi_status_t msr_safe_status;	// MSR safe driver status
 	esmi_status_t hsmp_status;	// hsmp driver status
 	struct cpu_mapping *map;
+	struct socket_mapping *map_socket;
 	uint8_t df_pstate_max_limit;	// df pstate maximum limit
 	uint8_t gmi3_link_width_limit;	// gmi3 maximum link width
 	uint8_t pci_gen5_rate_ctl;
@@ -99,6 +105,9 @@ int read_energy_drv(uint32_t sensor_id, uint64_t *val);
 int read_msr_drv(monitor_types_t type, uint32_t sensor_id, uint64_t *pval, uint64_t reg);
 int batch_read_energy_drv(uint64_t *pval, uint32_t cpus);
 int batch_read_msr_drv(monitor_types_t type, uint64_t *pval, uint32_t cpus);
+
+int read_msr(monitor_types_t type, uint32_t sensor_id, uint64_t *pval, uint64_t reg);
+int write_msr(monitor_types_t type, uint32_t sensor_id, uint64_t pval, uint64_t reg);
 
 int find_energy(char *devname, char *hwmon_name);
 int find_msr_safe();

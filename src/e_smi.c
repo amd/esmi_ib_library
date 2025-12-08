@@ -30,6 +30,11 @@ struct cpu_mapping {
 	int apic_id;
 	int sock_id;
 };
+struct socket_mapping {
+	int max_cores;
+	int core_logical_id[CPU_MAX_CORES_PER_SOCKET];
+	int core_apic_id[CPU_MAX_CORES_PER_SOCKET];
+};
 
 #define CPU_INFO_LINE_SIZE	1024
 #define CPU_INFO_PATH		"/proc/cpuinfo"
@@ -285,11 +290,23 @@ static esmi_status_t create_cpu_mappings(struct system_metrics *psm)
 			return ESMI_NO_MEMORY;
 		}
 	}
+	if (!psm->map_socket) {
+		psm->map_socket = malloc(psm->total_sockets * sizeof(struct socket_mapping));
+		if (!psm->map_socket) {
+			free(str);
+			free(psm->map);
+			return ESMI_NO_MEMORY;
+		}
+		for(int loop_count = 0; loop_count < psm->total_sockets; loop_count++) {
+			psm->map_socket[loop_count].max_cores = 0;
+		}
+	}
 
 	fp = fopen(CPU_INFO_PATH, "r");
 	if (!fp) {
 		free(str);
 		free(psm->map);
+		free(psm->map_socket);
 		return ESMI_FILE_ERROR;
 	}
 	while (getline(&str, &size, fp) != -1) {
@@ -298,6 +315,10 @@ static esmi_status_t create_cpu_mappings(struct system_metrics *psm)
 			psm->map[i].proc_id = atoi(tok);
 			parse_lines(&str, fp, &psm->map[i].sock_id, node_str);
 			parse_lines(&str, fp, &psm->map[i].apic_id, apic_str);
+
+			psm->map_socket[psm->map[i].sock_id].core_logical_id[psm->map_socket[psm->map[i].sock_id].max_cores] = psm->map[i].proc_id;
+			psm->map_socket[psm->map[i].sock_id].core_apic_id[psm->map_socket[psm->map[i].sock_id].max_cores] = psm->map[i].apic_id;
+			psm->map_socket[psm->map[i].sock_id].max_cores++;
 			i++;
 		}
 	}
@@ -312,7 +333,7 @@ static esmi_status_t create_cpu_mappings(struct system_metrics *psm)
 static esmi_status_t detect_packages(struct system_metrics *psm)
 {
 	uint32_t eax, ebx, ecx,edx;
-	int max_cores_socket, ret;
+	int max_cores_socket = 0, ret;
 
 	if (NULL == psm) {
 		return ESMI_IO_ERROR;
@@ -334,10 +355,10 @@ static esmi_status_t detect_packages(struct system_metrics *psm)
 	}
 	psm->total_cores = ret + 1;
 
-	/* fam 0x1A, model0x00-0x1f are dense sockets, Fam 0x1A, Model0x50-0x5F, support more than 255 threads,
+	/* fam 0x1A, model 0x00-0x1F are dense sockets, Fam 0x1A, Model0x50-0x5F, support more than 255 threads,
 	 * On these systems, number of threads is detected by reading
          * Core::X86::Cpuid::SizeId[NC]+1 */
-	if (((psm->cpu_family == 0x1A && psm->cpu_model >= 0x10 && psm->cpu_model <= 0x1f)) ||
+	if (((psm->cpu_family == 0x1A && psm->cpu_model >= 0x00 && psm->cpu_model <= 0x1F)) ||
 	    ((psm->cpu_family == 0x1A && psm->cpu_model >= 0x50 && psm->cpu_model <= 0x5F)))
 	{
 		if (!__get_cpuid(0x80000008, &eax, &ebx, &ecx, &edx))
@@ -348,6 +369,9 @@ static esmi_status_t detect_packages(struct system_metrics *psm)
 			return ESMI_IO_ERROR;
 		max_cores_socket = ((ebx >> 16) & 0xff);
 	}
+
+	if(max_cores_socket == 0)
+		return ESMI_IO_ERROR;
 
 	/* Number of sockets in the system */
 	psm->total_sockets = psm->total_cores / max_cores_socket;
@@ -376,23 +400,20 @@ static bool check_for_64bit_rapl_reg(struct system_metrics *psysm)
 
 static void create_energy_monitor(struct system_metrics *psm)
 {
+	if (create_msr_safe_monitor() == ESMI_SUCCESS) {
+		psm->msr_safe_status = ESMI_INITIALIZED;
+	}
+	if (create_msr_monitor() == ESMI_SUCCESS) {
+		psm->msr_status = ESMI_INITIALIZED;
+	}
+
 	if (check_for_64bit_rapl_reg(psm)) {
 		if (psm->hsmp_status == ESMI_INITIALIZED
 		    && psm->hsmp_rapl_reading)
 			return;
 
-		if (create_msr_safe_monitor() == ESMI_SUCCESS) {
-			psm->msr_safe_status = ESMI_INITIALIZED;
-			return;
-		}
-
 		if (create_amd_energy_monitor() == ESMI_SUCCESS) {
 			psm->energy_status = ESMI_INITIALIZED;
-			return;
-		}
-
-		if (create_msr_monitor() == ESMI_SUCCESS) {
-			psm->msr_status = ESMI_INITIALIZED;
 			return;
 		}
 	} else {
@@ -467,6 +488,10 @@ void esmi_exit(void)
 		if (psm->map) {
 			free(psm->map);
 			psm->map = NULL;
+		}
+		if (psm->map_socket) {
+			free(psm->map_socket);
+			psm->map_socket = NULL;
 		}
 		free(psm);
 		psm = NULL;
@@ -546,6 +571,20 @@ esmi_status_t esmi_number_of_sockets_get(uint32_t *sockets)
 			(psm->msr_safe_status == ESMI_NOT_INITIALIZED) && \
 			(psm->hsmp_status == ESMI_NOT_INITIALIZED || !psm->hsmp_rapl_reading)) {\
 		return ESMI_NO_ENERGY_DRV;\
+	}\
+	if (NULL == parg) {\
+		return ESMI_ARG_PTR_NULL;\
+	}\
+
+#define CHECK_MSR_SET_GET_INPUT(parg) \
+	if (NULL == psm) {\
+		return ESMI_IO_ERROR;\
+	}\
+	if (psm->init_status == ESMI_NOT_INITIALIZED) {\
+		return ESMI_NOT_INITIALIZED;\
+	} else if ((psm->msr_status == ESMI_NOT_INITIALIZED) && \
+			(psm->msr_safe_status == ESMI_NOT_INITIALIZED)) {\
+		return ESMI_NO_MSR_DRV;\
 	}\
 	if (NULL == parg) {\
 		return ESMI_ARG_PTR_NULL;\
@@ -1037,8 +1076,156 @@ esmi_status_t esmi_core_boostlimit_get(uint32_t core_ind,
 	ret = hsmp_xfer(&msg, O_RDONLY);
 	if (!ret)
 		*pboostlimit = msg.args[0];
+	return errno_to_esmi_status(ret);
+}
+
+/*
+ * Performance (Floor limit) Monitoring Function
+ *
+ * Function to set/get the FloorLimit or get effective FloorLimit of the Core/Socket with provided
+ * Core/Socket index
+ */
+esmi_status_t esmi_floorlimit_set_get(uint32_t core_or_sock_ind, uint32_t *pfloorlimit, enum set_get_floorlimit type)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
+	union floorlimit_info_inarg floorlimit_inarg;
+	union floorlimit_info_outarg floorlimit_outarg;
+
+	floorlimit_inarg.reg_value = 0;
+	floorlimit_outarg.reg_value = 0;
+
+	msg.msg_id = HSMP_SET_GET_FLOOR_LIMIT;
+	if (check_sup(msg.msg_id))
+		return ESMI_NO_HSMP_MSG_SUP;
+
+	CHECK_HSMP_GET_INPUT(pfloorlimit);
+
+	if((type == SET_FLOOR_FREQUENCY_CORE) || (type == GET_FLOOR_FREQUENCY_CORE) || (type == GET_EFF_FLOOR_FREQUENCY_CORE))
+	{
+		if (core_or_sock_ind >= psm->total_cores) {
+			return ESMI_INVALID_INPUT;
+		}
+	}
+	else if ((type == SET_FLOOR_FREQUENCY_SOCKET) || (type == GET_FLOOR_FREQUENCY_SOCKET) || (type == GET_EFF_FLOOR_FREQUENCY_SOCKET))
+	{
+		if (core_or_sock_ind >= psm->total_sockets) {
+			return ESMI_INVALID_INPUT;
+		}
+	}
+
+	if (!psm->map)
+		return ESMI_IO_ERROR;
+
+	msg.num_args = 1;
+	msg.response_sz = 1;
+
+	if ((type == SET_FLOOR_FREQUENCY_CORE) || (type == GET_FLOOR_FREQUENCY_CORE) || (type == GET_EFF_FLOOR_FREQUENCY_CORE) || (type == SET_FLOOR_FREQUENCY_SOCKET))
+	{
+		floorlimit_inarg.info.set_get = type;
+	}
+	else if(type == GET_FLOOR_FREQUENCY_SOCKET)
+	{
+		floorlimit_inarg.info.set_get = GET_FLOOR_FREQUENCY_CORE;
+	}
+	else if(type == GET_EFF_FLOOR_FREQUENCY_SOCKET)
+	{
+		floorlimit_inarg.info.set_get = GET_EFF_FLOOR_FREQUENCY_CORE;
+	}
+
+	if((type == SET_FLOOR_FREQUENCY_CORE) || (type == GET_FLOOR_FREQUENCY_CORE) || (type == GET_EFF_FLOOR_FREQUENCY_CORE))
+	{
+		msg.sock_ind = psm->map[core_or_sock_ind].sock_id;
+		floorlimit_inarg.info.apic_id = psm->map[core_or_sock_ind].apic_id;
+	}
+	else if (type == SET_FLOOR_FREQUENCY_SOCKET)
+	{
+		msg.sock_ind = core_or_sock_ind;
+		floorlimit_inarg.info.apic_id = 0;
+	}
+	else if ((type == GET_FLOOR_FREQUENCY_SOCKET) || (type == GET_EFF_FLOOR_FREQUENCY_SOCKET))
+	{
+		msg.sock_ind = core_or_sock_ind;
+		floorlimit_inarg.info.apic_id = psm->map_socket[core_or_sock_ind].core_apic_id[CORE_0];
+	}
+
+	if((type == SET_FLOOR_FREQUENCY_CORE) ||(type == SET_FLOOR_FREQUENCY_SOCKET))
+	{
+		floorlimit_inarg.info.floor_limit = *pfloorlimit;
+		msg.args[0] = floorlimit_inarg.reg_value;
+		ret = hsmp_xfer(&msg, O_RDWR);
+	}
+	else if((type == GET_FLOOR_FREQUENCY_CORE) || (type == GET_EFF_FLOOR_FREQUENCY_CORE) || (type == GET_FLOOR_FREQUENCY_SOCKET)|| (type == GET_EFF_FLOOR_FREQUENCY_SOCKET))
+	{
+		floorlimit_inarg.info.floor_limit = 0;
+		msg.args[0] = floorlimit_inarg.reg_value;
+		ret = hsmp_xfer(&msg, O_RDONLY);
+	}
+
+	if (!ret)
+	{
+		floorlimit_outarg.reg_value = msg.args[0];
+		*pfloorlimit = floorlimit_outarg.info.floor_limit;
+	}
 
 	return errno_to_esmi_status(ret);
+}
+
+/*
+ * Performance (Floor limit) Monitoring Function
+ *
+ * Function to set the FloorLimit of the Core/Socket with provided
+ * Core/Socket index
+ */
+esmi_status_t esmi_msr_floorlimit_set(uint32_t core_or_sock_ind, uint32_t msrfloorlimit, enum set_get_floorlimit type, uint32_t fmax)
+{
+	esmi_status_t ret = ESMI_UNKNOWN_ERROR;
+
+	CHECK_MSR_SET_GET_INPUT(&msrfloorlimit);
+	if( msrfloorlimit > fmax) msrfloorlimit = fmax;//Register can hold max of 0xFF so limiting write to Fmax
+
+	if(type == SET_FLOOR_FREQUENCY_CORE)
+	{
+		if (core_or_sock_ind >= psm->total_cores) {
+			return ESMI_INVALID_INPUT;
+		}
+		core_or_sock_ind %= psm->total_cores/psm->threads_per_core;
+
+		uint64_t value_to_write = (msrfloorlimit * 255)/(fmax);
+		uint32_t core_ind = core_or_sock_ind;
+		for(int thread_counter = 0; thread_counter < psm->threads_per_core; thread_counter++)
+		{
+			core_ind = core_or_sock_ind + ((psm->total_cores/psm->threads_per_core) * thread_counter);
+			/* Write to MSR */
+			if (!psm->msr_safe_status)
+				ret = write_msr(MSR_SAFE_TYPE, core_ind, value_to_write, ENERGY_CPPC_REQUEST_2_MSR);
+			else
+				ret = write_msr(MSR_TYPE, core_ind, value_to_write, ENERGY_CPPC_REQUEST_2_MSR);
+			if (ESMI_SUCCESS != ret)
+				return errno_to_esmi_status(ret);
+		}
+		return errno_to_esmi_status(ret);
+	}
+	else if((type == SET_FLOOR_FREQUENCY_SOCKET))
+	{
+		if (core_or_sock_ind >= psm->total_sockets) {
+			return ESMI_INVALID_INPUT;
+		}
+		uint64_t value_to_write = (msrfloorlimit * 255)/(fmax);
+
+		for(int thread_counter = 0; thread_counter < psm->map_socket[core_or_sock_ind].max_cores; thread_counter++)
+		{
+			/* Write to MSR */
+			if (!psm->msr_safe_status)
+				ret = write_msr(MSR_SAFE_TYPE, psm->map_socket[core_or_sock_ind].core_logical_id[thread_counter], value_to_write, ENERGY_CPPC_REQUEST_2_MSR);
+			else
+				ret = write_msr(MSR_TYPE, psm->map_socket[core_or_sock_ind].core_logical_id[thread_counter], value_to_write, ENERGY_CPPC_REQUEST_2_MSR);
+			if (ESMI_SUCCESS != ret)
+				return errno_to_esmi_status(ret);
+		}
+		return errno_to_esmi_status(ret);
+	}
+	return ESMI_INVALID_INPUT;//Getting floor limit using MSR is not supported
 }
 
 /*
@@ -1597,11 +1784,11 @@ esmi_status_t esmi_socket_current_active_freq_limit_get(uint32_t sock_ind, uint1
 	limit = msg.args[0] & 0xFFFF;
 
 	while (limit != 0 && index < src_len) {
-		if ((limit & 1) == 1) {
+		if (( limit & 1) == 1) {
 			src_type[ind] = freqlimitsrcnames[index];
 			ind++;
 		}
-		index += 1;
+		index+= 1;
 		limit = limit >> 1;
 	}
 
@@ -1835,38 +2022,60 @@ esmi_status_t esmi_pcie_link_rate_set(uint8_t sock_ind, uint8_t rate_ctrl, uint8
 	return errno_to_esmi_status(ret);
 }
 
-esmi_status_t esmi_pwr_efficiency_mode_set(uint8_t sock_ind, uint8_t mode)
+esmi_status_t esmi_pwr_efficiency_mode_set(uint8_t sock_ind, uint8_t mode, uint32_t *util, uint32_t *ppt_limit)
 {
 	struct hsmp_message msg = { 0 };
 	esmi_status_t ret;
+	union powereffmode_info powereffmode_info_temp;
+	powereffmode_info_temp.reg_value = 0;
 
 	msg.msg_id	= HSMP_SET_POWER_MODE;
 	if (check_sup(msg.msg_id))
 		return ESMI_NO_HSMP_MSG_SUP;
 
 	CHECK_HSMP_INPUT();
+	CHECK_HSMP_GET_INPUT(util);
+	CHECK_HSMP_GET_INPUT(ppt_limit);
+
+	powereffmode_info_temp.info.pwr_mode = mode;
+	powereffmode_info_temp.info.util = *util;
+	powereffmode_info_temp.info.ppt_limit = *ppt_limit;
+	powereffmode_info_temp.info.set_get = 0;//Set=0
 
 	if (sock_ind >= psm->total_sockets)
 		return ESMI_INVALID_INPUT;
 
 	msg.num_args	= 1;
+	msg.response_sz	= 1;
 	msg.sock_ind	= sock_ind;
-	msg.args[0]	= mode;
+	msg.args[0]	= powereffmode_info_temp.reg_value;
 	ret = hsmp_xfer(&msg, O_RDWR);
+	if (!ret)
+	{
+		powereffmode_info_temp.reg_value = msg.args[0];
+		*util = powereffmode_info_temp.info.util;
+		*ppt_limit = powereffmode_info_temp.info.ppt_limit;
+	}
 
 	return errno_to_esmi_status(ret);
 }
 
-esmi_status_t esmi_pwr_efficiency_mode_get(uint8_t sock_ind, uint8_t *mode)
+esmi_status_t esmi_pwr_efficiency_mode_get(uint8_t sock_ind, uint8_t *mode, uint32_t *util, uint32_t *ppt_limit)
 {
 	struct hsmp_message msg = { 0 };
 	esmi_status_t ret;
+	union powereffmode_info powereffmode_info_temp;
+	powereffmode_info_temp.reg_value = 0;
 
 	msg.msg_id	= HSMP_SET_POWER_MODE;
 	if (check_sup(msg.msg_id))
 		return ESMI_NO_HSMP_MSG_SUP;
 
 	CHECK_HSMP_GET_INPUT(mode);
+	CHECK_HSMP_GET_INPUT(util);
+	CHECK_HSMP_GET_INPUT(ppt_limit);
+
+	powereffmode_info_temp.info.set_get = 1;//Get=1
 
 	if (sock_ind >= psm->total_sockets)
 		return ESMI_INVALID_INPUT;
@@ -1874,11 +2083,17 @@ esmi_status_t esmi_pwr_efficiency_mode_get(uint8_t sock_ind, uint8_t *mode)
 	msg.num_args	= 1;
 	msg.response_sz = 1;
 	msg.sock_ind	= sock_ind;
-	msg.args[0]	= BIT(31);
+	msg.args[0]	= powereffmode_info_temp.reg_value;
 	ret = hsmp_xfer(&msg, O_RDONLY);
 	/* bits 0-2 contain current mode */
 	if (!ret)
+	{
 		*mode =  msg.args[0] & (BIT(3) - 1);
+
+		powereffmode_info_temp.reg_value = msg.args[0];
+		*util = powereffmode_info_temp.info.util;
+		*ppt_limit = powereffmode_info_temp.info.ppt_limit;
+	}
 
 	return errno_to_esmi_status(ret);
 }
@@ -2364,6 +2579,73 @@ esmi_status_t esmi_cc6_enable_get(uint8_t sock_ind, uint8_t *current_cc6_enable)
 	return errno_to_esmi_status(ret);
 }
 
+/*
+ * Function to set SDPS Limit.
+ */
+esmi_status_t esmi_sdps_limit_set(uint8_t sock_ind, uint32_t *sdps_limit)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
+	union sdps_limit_info sdps_limit_info_temp;sdps_limit_info_temp.reg_value = 0;
+	sdps_limit_info_temp.info.sdps_limit = *sdps_limit;
+	sdps_limit_info_temp.info.set_get = 0;//Set=0
+
+	msg.msg_id	= HSMP_SDPS_LIMIT;
+	if (check_sup(msg.msg_id))
+		return ESMI_NO_HSMP_MSG_SUP;
+
+	CHECK_HSMP_INPUT();
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	msg.num_args	= 1;
+	msg.response_sz = 1;
+	msg.args[0]	= sdps_limit_info_temp.reg_value;
+	msg.sock_ind	= sock_ind;
+	ret = hsmp_xfer(&msg, O_WRONLY);
+	if(!ret)
+	{
+		sdps_limit_info_temp.reg_value = msg.args[0];
+		*sdps_limit = sdps_limit_info_temp.info.sdps_limit;
+	}
+
+	return errno_to_esmi_status(ret);
+}
+
+/*
+ * Function to get SDPS Limit.
+ */
+esmi_status_t esmi_sdps_limit_get(uint8_t sock_ind, uint32_t *current_sdps_limit)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
+	union sdps_limit_info sdps_limit_info_temp;sdps_limit_info_temp.reg_value = 0;
+	sdps_limit_info_temp.info.set_get = 1;//Get=1
+
+	msg.msg_id	= HSMP_SDPS_LIMIT;
+	if (check_sup(msg.msg_id))
+		return ESMI_NO_HSMP_MSG_SUP;
+
+	CHECK_HSMP_GET_INPUT(current_sdps_limit);
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	msg.num_args	= 1;
+	msg.response_sz = 1;
+	msg.args[0] = BIT(31);
+	msg.sock_ind	= sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if(!ret)
+	{
+		sdps_limit_info_temp.reg_value = msg.args[0];
+		*current_sdps_limit = sdps_limit_info_temp.info.sdps_limit;
+	}
+
+	return errno_to_esmi_status(ret);
+}
+
 esmi_status_t esmi_dimm_sb_reg_read(uint8_t sock_ind, struct dimm_sb_info *inout)
 {
 	struct hsmp_message msg = {};
@@ -2385,7 +2667,31 @@ esmi_status_t esmi_dimm_sb_reg_read(uint8_t sock_ind, struct dimm_sb_info *inout
 	msg.sock_ind	= sock_ind;
 	ret = hsmp_xfer(&msg, O_RDONLY);
 	if(!ret)
-		inout->data = msg.args[0];
+		inout->read_data = msg.args[0];
+
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_dimm_sb_reg_write(uint8_t sock_ind, struct dimm_sb_info *inout)
+{
+	struct hsmp_message msg = {};
+	esmi_status_t ret;
+
+	msg.msg_id	= HSMP_DIMM_SB_WR;
+
+	if (check_sup(msg.msg_id))
+		return ESMI_NO_HSMP_MSG_SUP;
+
+	CHECK_HSMP_GET_INPUT(inout);
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	msg.num_args	= 1;
+	msg.response_sz = 0;
+	msg.args[0] = inout->m_dimm_sb_info_inarg.reg_value;
+	msg.sock_ind	= sock_ind;
+	ret = hsmp_xfer(&msg, O_WRONLY);
 
 	return errno_to_esmi_status(ret);
 }
@@ -2468,5 +2774,34 @@ esmi_status_t esmi_get_svi3_vr_controller_temp(uint8_t sock_ind, struct svi3_inf
 		inout->m_svi3_info_inarg.info.svi3_temperature = svi3_getinfo_outarg_temp.info.svi3_temperature;
 	}
 
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_get_enabled_commands(uint8_t sock_ind, struct hsmp_enabled_commands_info *info)
+{
+	struct hsmp_message msg = {};
+	esmi_status_t ret;
+
+	msg.msg_id	= HSMP_GET_ENABLED_HSMP_CMDS;
+
+	if (check_sup(msg.msg_id))
+		return ESMI_NO_HSMP_MSG_SUP;
+
+	CHECK_HSMP_GET_INPUT(info);
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	msg.num_args	= 1;
+	msg.response_sz = 3;
+	msg.args[0] = info->read_mask;
+	msg.sock_ind	= sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if(!ret)
+	{
+		info->arg0 = msg.args[0];
+		info->arg1 = msg.args[1];
+		info->arg2 = msg.args[2];
+	}
 	return errno_to_esmi_status(ret);
 }
