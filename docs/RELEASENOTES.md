@@ -1,11 +1,27 @@
 
 # EPYC™ System Management Interface (E-SMI) In-band Library
 
-NEW! E-SMI library beta 5.0 is now available
+NEW! E-SMI library beta 5.2 is now available
 
 The EPYC™ System Management Interface In-band Library, or E-SMI library, is a C library for Linux that provides a user space interface to monitor and control the CPU's power, energy, performance and other system management features.
 
 # Changes Notes
+
+## Highlights of release v5.2
+* Added support for F1A M50-5F
+    * Added HSMP Floor Limit Get at core
+    * Added HSMP EffFloorLimit Get at core
+    * Added Freq and EFFFreq Get for whole Socket Cores with --showall option
+    * Added HSMP Floor Limit Set at core/socket
+    * Added MSR Floor Limit Set core/socket
+
+    * Added Get HSMP Enabled Commands
+    * Added SDPS Limit Get
+    * Added SDPS Limit Set
+    * Added Dimm SPD Set
+    * Added Dimm SPD Get
+Note: All the features of this release work well only with hsmp driver tag 4.0 (https://github.com/amd/amd_hsmp)
+and above.
 
 ## Highlights of release v5.0
 * Added support for F1A M50-5F.
