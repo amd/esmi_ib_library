@@ -583,6 +583,92 @@ struct hsmp_metric_table {
 	__u32 gfxclk_frequency[8];
 };
 
+#define METRICS_TABLE_COLLECTION_SLEEP_TIME 100
+#define F1A_M50_M5F_MAX_CORES_PER_CCD_32 32
+#define F1A_M50_M5F_MAX_FREQ_TABLE_SIZE  4
+#define F1A_M50_M5F_MAX_XGMI             8
+#define F1A_M50_M5F_MAX_PCIE             8
+#define F1A_M50_M5F_MAX_CCD              8
+#define F1A_M50_M5F_MAX_SOCKET           2
+#define MAX_SOCKET                       8
+#define GHZ_TO_MHZ                       1000
+
+/* Metrics table (supported only with proto version 7) */
+typedef struct {
+  __u32 NumOfActiveCCDs;
+  __u32 AccumulationCounter;
+
+  //TEMPERATURE
+  __u64 MaxSocketTempAcc;
+
+  //POWER
+  __u32 SocketPowerLimit;
+  __u32 MaxSocketPowerLimit;
+  __u64 SocketPowerAcc;
+  __u64 CorePowerAcc;
+  __u64 UncorePowerAcc;
+
+  //ENERGY
+  __u64 Timestamp;
+  __u64 SocketEnergyAcc;
+  __u64 CoreEnergyAcc;
+  __u64 UncoreEnergyAcc;
+
+  //FREQUENCY
+  __u64 FclkFreqAcc;
+  __u64 UclkFreqAcc;
+  __u64 DdrRateAcc;
+  __u64 LclkFreqAcc[F1A_M50_M5F_MAX_FREQ_TABLE_SIZE];
+
+  //FREQUENCY RANGE
+  __u32 FclkFreqTable[F1A_M50_M5F_MAX_FREQ_TABLE_SIZE];
+  __u32 UclkFreqTable[F1A_M50_M5F_MAX_FREQ_TABLE_SIZE];
+  __u32 DdrRateTable[F1A_M50_M5F_MAX_FREQ_TABLE_SIZE];
+  __u32 MaxDfPstateRange;
+  __u32 MinDfPstateRange;
+  __u32 LclkFreqTable[F1A_M50_M5F_MAX_FREQ_TABLE_SIZE];
+  __u32 MaxLclkDpmRange;
+  __u32 MinLclkDpmRange;
+
+  //XGMI
+  __u64 XgmiBitrate[F1A_M50_M5F_MAX_XGMI];
+  __u64 XgmiReadBandwidth[F1A_M50_M5F_MAX_XGMI];
+  __u64 XgmiWriteBandwidth[F1A_M50_M5F_MAX_XGMI];
+
+  //ACTIVITY
+  __u64 SocketC0ResidencyAcc;
+  __u64 SocketDFCstateResidencyAcc;
+  __u64 DramReadBandwidthAcc;
+  __u64 DramWriteBandwidthAcc;
+  __u32 MaxDramBandwidth;
+  __u64 PcieBandwidthAcc[F1A_M50_M5F_MAX_PCIE];
+
+  //THROTTLERS
+  __u32 ProchotResidencyAcc;
+  __u32 PptResidencyAcc;
+  __u32 ThmResidencyAcc;
+  __u32 VrHotResidencyAcc;
+  __u32 CpuTdcResidencyAcc;
+  __u32 SocTdcResidencyAcc;
+  __u32 IoMemTdcResidencyAcc;
+  __u32 FitResidencyAcc;
+}hsmp_metric_table_IOD_F1A_M50_M5F_VER_0;
+
+typedef struct {
+  __u32 Core_ApicIdOfThread0[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
+  __u64 Core_C0[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
+  __u64 Core_CC1[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
+  __u64 Core_CC6[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
+  __u64 Core_FREQ[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
+  __u64 Core_FREQEFF[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
+  __u64 Core_POWER[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
+}hsmp_metric_table_CCD_F1A_M50_M5F_VER_0x00700000;
+
+struct hsmp_metric_table_F1A_M50_M5F_VER_0x00700000 {
+	hsmp_metric_table_IOD_F1A_M50_M5F_VER_0			iod;
+	hsmp_metric_table_CCD_F1A_M50_M5F_VER_0x00700000	ccd[F1A_M50_M5F_MAX_CCD];
+};
+
 /* Reset to default packing */
 #pragma pack()
 

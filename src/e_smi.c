@@ -560,6 +560,20 @@ esmi_status_t esmi_number_of_sockets_get(uint32_t *sockets)
 	return ESMI_SUCCESS;
 }
 
+/* get number of physicalcores in the given socket available */
+esmi_status_t esmi_number_of_physicalcores_in_socket_get(uint32_t socket, uint32_t *physicalcores)
+{
+	CHECK_ESMI_GET_INPUT(physicalcores);
+
+	if (socket >= psm->total_sockets) {
+		return ESMI_INVALID_INPUT;
+	}
+
+	*physicalcores = psm->map_socket[socket].max_cores/psm->threads_per_core;
+
+	return ESMI_SUCCESS;
+}
+
 #define CHECK_ENERGY_GET_INPUT(parg) \
 	if (NULL == psm) {\
 		return ESMI_IO_ERROR;\
@@ -2235,7 +2249,59 @@ esmi_status_t esmi_metrics_table_get(uint8_t sock_ind, struct hsmp_metric_table 
 	fclose(fp);
 	return errno_to_esmi_status(ret);
 }
+esmi_status_t esmi_metrics_table_F1A_M50_M5F_get(uint8_t sock_ind, void *metrics_table, size_t table_size)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret = 0;
+	char filepath[FILEPATHSIZ];
+	int fd;
+	int total_read = 0;
+	int bytes_read = 0;
 
+	msg.msg_id = HSMP_GET_METRIC_TABLE;
+	if (check_sup(msg.msg_id))
+		return ESMI_NO_HSMP_MSG_SUP;
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	snprintf(filepath, FILEPATHSIZ, "/sys/devices/platform/AMDI0097:%02d/metrics_bin", sock_ind);
+
+	fd = open(filepath, O_RDONLY);
+	if (fd == -1) {
+		printf("Failed to open file:%s, errno:%d, errno str:%s\n", filepath, errno, strerror(errno));
+		return ESMI_FILE_ERROR;
+	}
+
+	int loopCounter = 0;
+	while (total_read < table_size) {
+		int left_to_read = table_size - total_read;
+		if (left_to_read >= 0x1000)
+		{
+			bytes_read = read(fd, ((uint8_t*)metrics_table + total_read), 0x1000);
+		}
+		else
+		{
+			bytes_read = read(fd, ((uint8_t*)metrics_table + total_read), left_to_read);
+		}
+
+		if ((bytes_read == -1)||(bytes_read == 0)||(loopCounter > 100)) {
+			if (bytes_read == -1)
+				printf("Failed to partially read file:%s, errno:%d, errno str:%s\n", filepath, errno, strerror(errno));
+			else if (bytes_read == 0)
+				printf("Failed to partially read zero data from file:%s, errno:%d, errno str:%s\n", filepath, errno, strerror(errno));
+			else if (loopCounter > 100)
+				printf("Failed to partially read stuck with infinite loops from file:%s, errno:%d, errno str:%s\n", filepath, errno, strerror(errno));
+			close(fd);
+			return ESMI_FILE_ERROR;
+		}
+		total_read += bytes_read;
+		loopCounter++;
+	}
+
+	close(fd);
+	return errno_to_esmi_status(ret);
+}
 /*
  * To get the the dram address of the metrics table
  */
