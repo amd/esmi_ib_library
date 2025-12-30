@@ -265,6 +265,7 @@ typedef enum {
 	ESMI_NO_HSMP_MSG_SUP,	//!< HSMP message/feature not supported.
 	ESMI_PRE_REQ_NOT_SAT,	//!< Prerequisite to execute the command not satisfied
 	ESMI_SMU_BUSY,		//!< SMU is busy
+	ESMI_METRICS_TABLE_NOT_SUPPORTED,		//!< SMU Metrics Table Not Supported
 } esmi_status_t;
 
 /****************************************************************************/
@@ -1734,6 +1735,21 @@ esmi_status_t esmi_metrics_table_version_get(uint32_t *metrics_version);
 esmi_status_t esmi_metrics_table_get(uint8_t sock_ind, struct hsmp_metric_table *metrics_table);
 
 /**
+ *  @brief Get metrics table for F1A, M50, and M5F platforms
+ *
+ *  @details Reads the metrics table for the specified platform and socket.
+ *  The metrics table format and size may vary depending on the platform.
+ *
+ *  @param[in] sock_ind Socket index.
+ *  @param[inout] metrics_table Pointer to buffer to receive the metrics table data.
+ *  @param[in] table_size Size of the metrics table buffer in bytes.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval Non-zero is returned upon failure.
+ */
+esmi_status_t esmi_metrics_table_F1A_M50_M5F_get(uint8_t sock_ind, void *metrics_table, size_t table_size);
+
+/**
  *  @brief Get the DRAM address for the metrics table.
  *
  *  @details Get DRAM address for Metric table transfer
@@ -1829,6 +1845,17 @@ esmi_status_t esmi_number_of_cpus_get(uint32_t *cpus);
  *  @retval None-zero is returned upon failure.
  */
 esmi_status_t esmi_number_of_sockets_get(uint32_t *sockets);
+
+/**
+ *  @brief Get the total number of cores available in the given socket
+ *
+ *  @param[in] socket the socket index.
+ *  @param[inout] physicalcores input buffer to return number of physicalcores in the given socket.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval None-zero is returned upon failure.
+ */
+esmi_status_t esmi_number_of_physicalcores_in_socket_get(uint32_t socket, uint32_t *physicalcores);
 
 /**
  *  @brief Get the first online core on a given socket.
