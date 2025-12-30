@@ -72,6 +72,12 @@ static char* stoploop_file_name   = NULL;
 static char* log_file_header = NULL;
 static char* log_file_data   = NULL;
 static bool create_log_header = false;
+static char* startmetric_file_name  = NULL;
+static char* stopmetric_file_name   = NULL;
+
+static double metric_table_delay_in_secs = 0;
+static bool show_metric_table[MAX_SOCKET] = {false, false, false, false, false, false, false, false};
+static double metric_table_default_delay_in_ms = METRICS_TABLE_COLLECTION_SLEEP_TIME;
 
 typedef enum {
 	DONT_PRINT_RESULTS = 0,
@@ -80,6 +86,12 @@ typedef enum {
 	PRINT_RESULTS_AS_JSON
 }print_results_t;
 static print_results_t print_results = PRINT_RESULTS;
+
+typedef enum {
+	RAW_METRIC_TABLE_FORMAT = 0,
+	HUMAN_READABLE_METRIC_TABLE_FORMAT = 1
+}metric_table_format_t;
+static metric_table_format_t metric_table_format = HUMAN_READABLE_METRIC_TABLE_FORMAT;
 
 typedef enum {
 	DONT_LOG_TO_FILE = 0,
@@ -1531,7 +1543,7 @@ static esmi_status_t epyc_set_msr_floorlimit(uint32_t core_id, uint32_t floorlim
 		printf("Failed, core:%d, to set to Msr FloorLimit(MHz):%u, Err[%d]: %s\n",core_id, flimit, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	sleep_in_milliseconds(1000);
+	sleep_in_milliseconds(100);
 	ret = esmi_floorlimit_set_get(core_id, &flimit, GET_EFF_FLOOR_FREQUENCY_CORE);
 	if(0 == flimit) flimit = floorlimit;
 	//if((fmax) && (flimit > fmax)) flimit = fmax;
@@ -1580,7 +1592,7 @@ static esmi_status_t epyc_set_msr_socket_floorlimit(uint32_t sock_id, uint32_t f
 		printf(RED "Err[%d]: %s\n" RESET, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
-	sleep_in_milliseconds(1000);
+	sleep_in_milliseconds(100);
 	ret = esmi_floorlimit_set_get(sock_id, &flimit, GET_EFF_FLOOR_FREQUENCY_SOCKET);
 	if(0 == flimit) flimit = floorlimit;
 	//if((fmax) && (flimit > fmax)) flimit = fmax;
@@ -2829,7 +2841,7 @@ static int show_smi_all_parameters(void)
 
 static esmi_status_t epyc_get_metrics_table_version(void)
 {
-	uint32_t met_ver;
+	uint32_t met_ver = 0;
 	esmi_status_t ret;
 
 	ret = esmi_metrics_table_version_get(&met_ver);
@@ -2839,7 +2851,7 @@ static esmi_status_t epyc_get_metrics_table_version(void)
 		return ret;
 	}
 	printf("\n------------------------------------------");
-	printf("\n| METRICS TABLE Version   |  %u \t\t |\n", met_ver);
+	printf("\n| METRICS TABLE Version   |  0x%x \t |\n", met_ver);
 	printf("------------------------------------------\n");
 
 	return ESMI_SUCCESS;
@@ -2871,9 +2883,11 @@ uint64_t check_msb_64(uint64_t num)
 		return num;
 }
 
-
-static esmi_status_t epyc_show_metrics_table(uint8_t sock_id)
+static esmi_status_t epyc_show_metric_table_F1A_M90_M9F(uint8_t sock_id, bool initialize_smu_data, bool only_display_results)
 {
+	if(initialize_smu_data)           return ESMI_SUCCESS;
+	if(false == only_display_results) return ESMI_SUCCESS;
+
 	esmi_status_t ret;
 	struct hsmp_metric_table mtbl = {0};
 	time_t rawtime;
@@ -2882,9 +2896,9 @@ static esmi_status_t epyc_show_metrics_table(uint8_t sock_id)
 	uint32_t num1 = 0;
 	uint64_t num2 = 0;
 
-	double fraction_q10 = 1/pow(2,10);
+	double fraction_q10 = 1.0/pow(2,10);
 	double fraction_uq10 = fraction_q10;
-	double fraction_uq16 = 1/pow(2,16) ;
+	double fraction_uq16 = 1.0/pow(2,16) ;
 
 	ret = esmi_metrics_table_get(sock_id, &mtbl);
 	if (ret != ESMI_SUCCESS) {
@@ -3108,7 +3122,699 @@ static esmi_status_t epyc_show_metrics_table(uint8_t sock_id)
 
 	return ESMI_SUCCESS;
 }
+#define MAX_64BITS 0xFFFFFFFFFFFFFFFF
+uint64_t calculate_acc_counter_64bit(uint64_t curr, uint64_t prev)
+{
+	uint64_t acc_counter = 0;
+	if(curr >= prev)
+	{
+		acc_counter = curr - prev;
+	}
+	else
+	{
+		acc_counter = (MAX_64BITS - prev) + curr + 1;
+	}
 
+	return acc_counter;
+}
+
+#define MAX_32BITS 0xFFFFFFFF
+uint32_t calculate_acc_counter_32bit(uint32_t curr, uint32_t prev)
+{
+	uint32_t acc_counter = 0;
+	if(curr >= prev)
+	{
+		acc_counter = curr - prev;
+	}
+	else
+	{
+		acc_counter = (MAX_32BITS - prev) + curr + 1;
+	}
+	return acc_counter;
+}
+
+static esmi_status_t epyc_show_metric_table_F1A_M50_M5F_ver_0x00700000(uint8_t sock_id, uint32_t ver, uint64_t sleep_time_in_milliseconds, bool initialize_smu_data, bool only_display_results)
+{
+	esmi_status_t ret;
+	time_t rawtime;
+	struct tm *timeinfo;
+
+	uint32_t max_cores_per_ccd = 0;
+	if ((ver == 0x00700000) || (ver == 0x00710000)) {
+		max_cores_per_ccd = F1A_M50_M5F_MAX_CORES_PER_CCD_32;
+	}
+
+	double fraction_q10 = 1/pow(2,10);// 1/1024
+	double fraction_uq10 = fraction_q10;
+	double fraction_uq16 = 1/pow(2,16) ;// 1/65536
+
+	static bool first_time_read_socket[F1A_M50_M5F_MAX_SOCKET] = {true, true};
+	static struct hsmp_metric_table_F1A_M50_M5F_VER_0x00700000 mtbl_prev_socket[F1A_M50_M5F_MAX_SOCKET];
+	static struct hsmp_metric_table_F1A_M50_M5F_VER_0x00700000 mtbl_current_socket[F1A_M50_M5F_MAX_SOCKET];
+
+	if(false == only_display_results)
+	{
+		if ((ver == 0x00700000) || (ver == 0x00710000)) {
+			uint64_t hsmp_table_size = 0;
+			hsmp_table_size = sizeof(struct hsmp_metric_table_F1A_M50_M5F_VER_0x00700000);
+
+			if (first_time_read_socket[sock_id]) {
+				ret = esmi_metrics_table_F1A_M50_M5F_get(sock_id, &mtbl_prev_socket[sock_id], hsmp_table_size);
+				if (ret != ESMI_SUCCESS) {
+					printf("Socket:%d, Failed to get Metrics Table, Err[%d]: %s\n",
+						sock_id, ret, esmi_get_err_msg(ret));
+					return ret;
+				}
+				first_time_read_socket[sock_id] = false;
+				if(initialize_smu_data) return ESMI_SUCCESS;
+			}
+			static bool check_stopmetric = false;
+			if(stopmetric_file_name && (false == check_stopmetric)/* && loop_count*/) {
+				check_stopmetric = true;
+
+				int temp_loop_counter = 0;
+				while(1)
+				{
+					sleep_in_milliseconds(100);
+
+					FILE *temp_file_fp =  NULL;
+					temp_file_fp = fopen(stopmetric_file_name, "r");
+					if(temp_file_fp != NULL) {
+						if(print_results == PRINT_RESULTS) printf("StopMetric file \"%s\" is present, ...\n", stopmetric_file_name);
+						fclose(temp_file_fp);
+						temp_file_fp = NULL;
+						break;
+					}
+					else
+					{
+						if((print_results == PRINT_RESULTS) && (0 == temp_loop_counter))
+								printf("StopMetric file \"%s\" is not present, waiting for file \"%s\" to be created to Stop Metric Collection, ...\n", stopmetric_file_name, stopmetric_file_name);
+					}
+					temp_loop_counter++;
+				}
+				if(print_results == PRINT_RESULTS) printf("Stopped Metric Collection, ...\n\n");
+			}
+			if((print_results == PRINT_RESULTS) /*&& (NULL == log_file_name)*/ /*&& ((0 != sleep_time_in_milliseconds) || (NULL != stopmetric_file_name))*/)
+					printf("Socket:%d, Gathering MetricTable Data, ...\n", sock_id);
+			ret = esmi_metrics_table_F1A_M50_M5F_get(sock_id, &mtbl_current_socket[sock_id], hsmp_table_size);
+			if (ret != ESMI_SUCCESS) {
+				printf("Socket:%d, Failed to get Metrics Table, Err[%d]: %s\n",
+						sock_id, ret, esmi_get_err_msg(ret));
+				return ret;
+			}
+		}
+		else
+		{
+			printf("Socket:%d, Failed to get Metric Table, MetricTableVersion:0x%x not Supported\n", sock_id, ver);
+			return ESMI_METRICS_TABLE_NOT_SUPPORTED;
+		}
+		return ESMI_SUCCESS;
+	}
+
+	if(print_results == PRINT_RESULTS)
+		printf("\nSocket:%d, MetricTable, MetricTableVersion:0x%x, Family:0x%X, Model:0x%X", sock_id, ver, sys_info.family, sys_info.model);
+
+	float acc_counter_delta = calculate_acc_counter_32bit(mtbl_current_socket[sock_id].iod.AccumulationCounter, mtbl_prev_socket[sock_id].iod.AccumulationCounter);
+	if(print_results == PRINT_RESULTS)
+	{
+		printf("\n\nSocket:%d, ", sock_id);
+		printf("TimestampRaw:\t\t\t    %llu", mtbl_current_socket[sock_id].iod.Timestamp);
+		char temp_string[100] = "";
+
+		rawtime = (time_t)mtbl_current_socket[sock_id].iod.Timestamp;time (&rawtime);timeinfo = localtime (&rawtime);
+		char date_buffer[100];char time_buffer[100];
+		strftime (date_buffer, 100, "%Y-%m-%d", timeinfo);
+		strftime (time_buffer, 100, "%H:%M:%S", timeinfo);
+
+		printf("\nSocket:%d, ", sock_id);
+		printf("TimestampReadableDate:\t    \"%s\"", date_buffer);
+		printf("\nSocket:%d, ", sock_id);
+		printf("TimestampReadableTime:\t    \"%s\"", time_buffer);
+
+		printf("\n\nSocket:%d, ", sock_id);
+		snprintf(temp_string, sizeof(temp_string), "NumOfActiveCCDs:\t\t    %d", mtbl_current_socket[sock_id].iod.NumOfActiveCCDs);
+		printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+		printf("\n\nSocket:%d, ", sock_id);
+		snprintf(temp_string, sizeof(temp_string), metric_table_format ? "AccumulationCounterDelta:\t    %f" : "AccumulationCounter:\t\t    %.0f", metric_table_format ? acc_counter_delta:mtbl_current_socket[sock_id].iod.AccumulationCounter);
+		printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+		printf("\n\nSocket:%d, ", sock_id);
+		snprintf(temp_string, sizeof(temp_string), metric_table_format ? "MaxSocketTemperatureAcc('C):\t    %3.3lf" : "MaxSocketTemperatureAcc:\t    %.0f", metric_table_format ? (calculate_acc_counter_32bit(mtbl_current_socket[sock_id].iod.MaxSocketTempAcc, mtbl_prev_socket[sock_id].iod.MaxSocketTempAcc)/acc_counter_delta * fraction_q10) : mtbl_current_socket[sock_id].iod.MaxSocketTempAcc);
+		printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+		printf("\n\nSocket:%d, ", sock_id);
+		snprintf(temp_string, sizeof(temp_string), metric_table_format ? "SocketPowerLimit(W):\t\t    %5.3lf" : "SocketPowerLimit:\t\t    %.0f", metric_table_format ? (mtbl_current_socket[sock_id].iod.SocketPowerLimit * fraction_uq10) : mtbl_current_socket[sock_id].iod.SocketPowerLimit);
+		printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+		printf("\nSocket:%d, ", sock_id);
+		snprintf(temp_string, sizeof(temp_string), metric_table_format ? "MaxSocketPowerLimit(W):\t    %5.3lf" : "MaxSocketPowerLimit:\t\t    %.0f", metric_table_format ? (mtbl_current_socket[sock_id].iod.MaxSocketPowerLimit * fraction_uq10) : mtbl_current_socket[sock_id].iod.MaxSocketPowerLimit);
+		printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+		printf("\nSocket:%d, ", sock_id);
+		snprintf(temp_string, sizeof(temp_string), metric_table_format ? "SocketPowerAcc(W):\t\t    %5.3lf" : "SocketPowerAcc:\t\t    %.0f", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.SocketPowerAcc, mtbl_prev_socket[sock_id].iod.SocketPowerAcc)/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.SocketPowerAcc);
+		printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+		printf("\nSocket:%d, ", sock_id);
+		snprintf(temp_string, sizeof(temp_string), metric_table_format ? "CorePowerAcc(W):\t\t    %5.3lf" : "CorePowerAcc:\t\t\t    %.0f", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.CorePowerAcc, mtbl_prev_socket[sock_id].iod.CorePowerAcc)/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.CorePowerAcc);
+		printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+		printf("\nSocket:%d, ", sock_id);
+		snprintf(temp_string, sizeof(temp_string), metric_table_format ? "UncorePowerAcc(W):\t\t    %5.3lf" : "UncorePowerAcc:\t\t    %.0f", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.UncorePowerAcc, mtbl_prev_socket[sock_id].iod.UncorePowerAcc)/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.UncorePowerAcc);
+		printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+
+		printf("\n\nSocket:%d, ", sock_id);
+		snprintf(temp_string, sizeof(temp_string), metric_table_format ? "SocketEnergyAcc(KJ):\t\t    %5.3lf" : "SocketEnergyAcc:\t\t    %.0f", metric_table_format ? ((mtbl_current_socket[sock_id].iod.SocketEnergyAcc * fraction_uq16)/KILO) : mtbl_current_socket[sock_id].iod.SocketEnergyAcc);
+		printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+		printf("\nSocket:%d, ", sock_id);
+		snprintf(temp_string, sizeof(temp_string), metric_table_format ? "CoreEnergyAcc(KJ):\t\t    %5.3lf" : "CoreEnergyAcc:\t\t    %.0f", metric_table_format ? ((mtbl_current_socket[sock_id].iod.CoreEnergyAcc * fraction_uq16)/KILO) : mtbl_current_socket[sock_id].iod.CoreEnergyAcc);
+		printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+		printf("\nSocket:%d, ", sock_id);
+		snprintf(temp_string, sizeof(temp_string), metric_table_format ? "UncoreEnergyAcc(KJ):\t\t    %5.3lf" : "UncoreEnergyAcc:\t\t    %.0f", metric_table_format ? ((mtbl_current_socket[sock_id].iod.UncoreEnergyAcc * fraction_uq16)/KILO) : mtbl_current_socket[sock_id].iod.UncoreEnergyAcc);
+		printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+		printf("\n\nSocket:%d, ", sock_id);
+		snprintf(temp_string, sizeof(temp_string), metric_table_format ? "FclkFrequencyAcc(MHz):\t    %5.3lf" : "FclkFrequencyAcc:\t\t    %.0f", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.FclkFreqAcc, mtbl_prev_socket[sock_id].iod.FclkFreqAcc)/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.FclkFreqAcc);
+		printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+		printf("\nSocket:%d, ", sock_id);
+		snprintf(temp_string, sizeof(temp_string), metric_table_format ? "UclkFrequencyAcc(MHz):\t    %5.3lf" : "UclkFrequencyAcc:\t\t    %.0f", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.UclkFreqAcc, mtbl_prev_socket[sock_id].iod.UclkFreqAcc)/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.UclkFreqAcc);
+		printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+		printf("\nSocket:%d, ", sock_id);
+		snprintf(temp_string, sizeof(temp_string), metric_table_format ? "DdrRateAcc(MHz):\t\t    %5.3lf" : "DdrRateAcc:\t\t\t    %.0f", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.DdrRateAcc, mtbl_prev_socket[sock_id].iod.DdrRateAcc)/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.DdrRateAcc);
+		printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+		printf("\n");
+		for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_FREQ_TABLE_SIZE; loopCount++)
+		{
+			printf("\nSocket:%d Lclk:%d, ", sock_id, loopCount);
+			snprintf(temp_string, sizeof(temp_string), metric_table_format ? "LclkFrequencyAcc(MHz):\t    %5.3lf" : "LclkFrequencyAcc:\t    %.0f", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.LclkFreqAcc[loopCount], mtbl_prev_socket[sock_id].iod.LclkFreqAcc[loopCount])/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.LclkFreqAcc[loopCount]);
+			printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+		}
+
+		printf("\n");
+		for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_FREQ_TABLE_SIZE; loopCount++)
+		{
+			printf("\nSocket:%d Fclk:%d, ", sock_id, loopCount);
+			snprintf(temp_string, sizeof(temp_string), metric_table_format ? "FclkFrequencyTable(MHz):   %5.3lf" : "FclkFrequencyTable:\t    %.0f", metric_table_format ? (mtbl_current_socket[sock_id].iod.FclkFreqTable[loopCount] * fraction_uq10) : mtbl_current_socket[sock_id].iod.FclkFreqTable[loopCount]);
+			printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+		}
+
+		printf("\n");
+		for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_FREQ_TABLE_SIZE; loopCount++)
+		{
+			printf("\nSocket:%d Uclk:%d, ", sock_id, loopCount);
+			snprintf(temp_string, sizeof(temp_string), metric_table_format ? "UclkFrequencyTable(MHz):   %5.3lf" : "UclkFrequencyTable:\t    %.0f", metric_table_format ? (mtbl_current_socket[sock_id].iod.UclkFreqTable[loopCount] * fraction_uq10) : mtbl_current_socket[sock_id].iod.UclkFreqTable[loopCount]);
+			printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+		}
+
+		printf("\n");
+		for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_FREQ_TABLE_SIZE; loopCount++)
+		{
+			printf("\nSocket:%d Ddr:%d, ", sock_id, loopCount);
+			snprintf(temp_string, sizeof(temp_string), metric_table_format ? "DdrRateTable(MHz):\t    %5.3lf" : "DdrRateTable:\t\t    %.0f", metric_table_format ? (mtbl_current_socket[sock_id].iod.DdrRateTable[loopCount] * fraction_uq10) : mtbl_current_socket[sock_id].iod.DdrRateTable[loopCount]);
+			printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+		}
+
+		printf("\n");
+		printf("\nSocket:%d, ", sock_id);
+		printf("MaxDfPstateRange:\t\t    %u", mtbl_current_socket[sock_id].iod.MaxDfPstateRange);
+		printf("\nSocket:%d, ", sock_id);
+		printf("MinDfPstateRange:\t\t    %u", mtbl_current_socket[sock_id].iod.MinDfPstateRange);
+
+		printf("\n");
+		for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_FREQ_TABLE_SIZE; loopCount++)
+		{
+			printf("\nSocket:%d Lclk:%d, ", sock_id, loopCount);
+			snprintf(temp_string, sizeof(temp_string), metric_table_format ? "LclkFrequencyTable(MHz):   %5.3lf" : "LclkFrequencyTable:\t    %.0f", metric_table_format ? (mtbl_current_socket[sock_id].iod.LclkFreqTable[loopCount] * fraction_uq10) : mtbl_current_socket[sock_id].iod.LclkFreqTable[loopCount]);
+			printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+		}
+
+		printf("\n");
+		printf("\nSocket:%d, ", sock_id);
+		printf("MaxLclkDpmRange:\t\t    %u", mtbl_current_socket[sock_id].iod.MaxLclkDpmRange);
+		printf("\nSocket:%d, ", sock_id);
+		printf("MinLclkDpmRange:\t\t    %u", mtbl_current_socket[sock_id].iod.MinLclkDpmRange);
+
+		printf("\n");
+		for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_XGMI; loopCount++)
+		{
+			printf("\nSocket:%d Xgmi:%d, ", sock_id, loopCount);
+			snprintf(temp_string, sizeof(temp_string), metric_table_format ? "XgmiBitrate(GB/sec):\t    %5.3lf" : "XgmiBitrate:\t\t    %.0f", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.XgmiBitrate[loopCount], mtbl_prev_socket[sock_id].iod.XgmiBitrate[loopCount])/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.XgmiBitrate[loopCount]);
+			printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+		}
+
+		printf("\n");
+		for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_XGMI; loopCount++)
+		{
+			printf("\nSocket:%d Xgmi:%d, ", sock_id, loopCount);
+			snprintf(temp_string, sizeof(temp_string), metric_table_format ? "XgmiReadBandwidth(GB/sec): %5.3lf" : "XgmiReadBandwidth:\t    %.0f", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.XgmiReadBandwidth[loopCount], mtbl_prev_socket[sock_id].iod.XgmiReadBandwidth[loopCount])/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.XgmiReadBandwidth[loopCount]);
+			printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+		}
+
+		printf("\n");
+		for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_XGMI; loopCount++)
+		{
+			printf("\nSocket:%d Xgmi:%d, ", sock_id, loopCount);
+			snprintf(temp_string, sizeof(temp_string), metric_table_format ? "XgmiWriteBandwidth(GB/sec):%5.3lf" : "XgmiWriteBandwidth:\t    %.0f", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.XgmiWriteBandwidth[loopCount], mtbl_prev_socket[sock_id].iod.XgmiWriteBandwidth[loopCount])/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.XgmiWriteBandwidth[loopCount]);
+			printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+		}
+
+		printf("\n");
+		if(metric_table_format)
+		{
+			uint32_t total_cores_enabled = 1;
+			esmi_number_of_physicalcores_in_socket_get(sock_id, &total_cores_enabled);
+			printf("\nSocket:%d, ", sock_id);
+			snprintf(temp_string, sizeof(temp_string), "SocketC0ResidencyAcc(%%):\t    %5.3lf", (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.SocketC0ResidencyAcc, mtbl_prev_socket[sock_id].iod.SocketC0ResidencyAcc)/acc_counter_delta * fraction_uq10 * 100) / total_cores_enabled);
+			printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+		}
+
+		printf("\nSocket:%d, ", sock_id);
+		snprintf(temp_string, sizeof(temp_string), metric_table_format ? "SocketC0ResidencyAccSumOfAllCores:%5.3lf" : "SocketC0ResidencyAcc:\t\t    %.0f", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.SocketC0ResidencyAcc, mtbl_prev_socket[sock_id].iod.SocketC0ResidencyAcc)/acc_counter_delta * fraction_uq10 * 100) : mtbl_current_socket[sock_id].iod.SocketC0ResidencyAcc);
+		printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+		printf("\nSocket:%d, ", sock_id);
+		snprintf(temp_string, sizeof(temp_string), metric_table_format ? "SocketDFCstateResidencyAcc(%%):    %5.3lf" : "SocketDFCstateResidencyAcc:\t    %.0f", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.SocketDFCstateResidencyAcc, mtbl_prev_socket[sock_id].iod.SocketDFCstateResidencyAcc)/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.SocketDFCstateResidencyAcc);
+		printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+		printf("\nSocket:%d, ", sock_id);
+		snprintf(temp_string, sizeof(temp_string), metric_table_format ? "DramReadBandwidthAcc(GB/sec):     %5.3lf" : "DramReadBandwidthAcc:\t\t    %.0f", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.DramReadBandwidthAcc, mtbl_prev_socket[sock_id].iod.DramReadBandwidthAcc)/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.DramReadBandwidthAcc);
+		printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+		printf("\nSocket:%d, ", sock_id);
+		snprintf(temp_string, sizeof(temp_string), metric_table_format ? "DramWriteBandwidthAcc(GB/sec):    %5.3lf" : "DramWriteBandwidthAcc:\t    %.0f", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.DramWriteBandwidthAcc, mtbl_prev_socket[sock_id].iod.DramWriteBandwidthAcc)/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.DramWriteBandwidthAcc);
+		printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+		printf("\nSocket:%d, ", sock_id);
+		snprintf(temp_string, sizeof(temp_string), metric_table_format ? "MaxDramBandwidth(GB/sec):\t    %5.3lf" : "MaxDramBandwidth:\t\t    %.0f", metric_table_format ? (mtbl_current_socket[sock_id].iod.MaxDramBandwidth * fraction_uq10) : mtbl_current_socket[sock_id].iod.MaxDramBandwidth);
+		printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+		printf("\n");
+		for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_PCIE; loopCount++)
+		{
+			printf("\nSocket:%d Pcie:%d, ", sock_id, loopCount);
+			snprintf(temp_string, sizeof(temp_string), metric_table_format ? "PcieBandwidthAcc(GB/sec):  %5.3lf" : "PcieBandwidthAcc:\t    %.0f", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.PcieBandwidthAcc[loopCount], mtbl_prev_socket[sock_id].iod.PcieBandwidthAcc[loopCount])/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.PcieBandwidthAcc[loopCount]);
+			printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+		}
+
+		printf("\n");
+		printf("\nSocket:%d, ", sock_id);
+		printf("ProchotResidencyAcc:\t\t    %u", metric_table_format ? calculate_acc_counter_32bit(mtbl_current_socket[sock_id].iod.ProchotResidencyAcc, mtbl_prev_socket[sock_id].iod.ProchotResidencyAcc) : mtbl_current_socket[sock_id].iod.ProchotResidencyAcc);
+		printf("\nSocket:%d, ", sock_id);
+		printf("PptResidencyAcc:\t\t    %u", metric_table_format ? calculate_acc_counter_32bit(mtbl_current_socket[sock_id].iod.PptResidencyAcc, mtbl_prev_socket[sock_id].iod.PptResidencyAcc) : mtbl_current_socket[sock_id].iod.PptResidencyAcc);
+		printf("\nSocket:%d, ", sock_id);
+		printf("ThmResidencyAcc:\t\t    %u", metric_table_format ? calculate_acc_counter_32bit(mtbl_current_socket[sock_id].iod.ThmResidencyAcc, mtbl_prev_socket[sock_id].iod.ThmResidencyAcc) : mtbl_current_socket[sock_id].iod.ThmResidencyAcc);
+		printf("\nSocket:%d, ", sock_id);
+		printf("VrHotResidencyAcc:\t\t    %u", metric_table_format ? calculate_acc_counter_32bit(mtbl_current_socket[sock_id].iod.VrHotResidencyAcc, mtbl_prev_socket[sock_id].iod.VrHotResidencyAcc) : mtbl_current_socket[sock_id].iod.VrHotResidencyAcc);
+		printf("\nSocket:%d, ", sock_id);
+		printf("CpuTdcResidencyAcc:\t\t    %u", metric_table_format ? calculate_acc_counter_32bit(mtbl_current_socket[sock_id].iod.CpuTdcResidencyAcc, mtbl_prev_socket[sock_id].iod.CpuTdcResidencyAcc) : mtbl_current_socket[sock_id].iod.CpuTdcResidencyAcc);
+		printf("\nSocket:%d, ", sock_id);
+		printf("SocTdcResidencyAcc:\t\t    %u", metric_table_format ? calculate_acc_counter_32bit(mtbl_current_socket[sock_id].iod.SocTdcResidencyAcc, mtbl_prev_socket[sock_id].iod.SocTdcResidencyAcc) : mtbl_current_socket[sock_id].iod.SocTdcResidencyAcc);
+		printf("\nSocket:%d, ", sock_id);
+		printf("IoMemTdcResidencyAcc:\t\t    %u", metric_table_format ? calculate_acc_counter_32bit(mtbl_current_socket[sock_id].iod.IoMemTdcResidencyAcc, mtbl_prev_socket[sock_id].iod.IoMemTdcResidencyAcc) : mtbl_current_socket[sock_id].iod.IoMemTdcResidencyAcc);
+		printf("\nSocket:%d, ", sock_id);
+		printf("FitResidencyAcc:\t\t    %u", metric_table_format ? calculate_acc_counter_32bit(mtbl_current_socket[sock_id].iod.FitResidencyAcc, mtbl_prev_socket[sock_id].iod.FitResidencyAcc) : mtbl_current_socket[sock_id].iod.FitResidencyAcc);
+		printf("\n");
+
+		for(int ccdCount = 0; ccdCount < mtbl_current_socket[sock_id].iod.NumOfActiveCCDs; ccdCount++)
+		{
+			int loopCountToDisplay = 0;
+			for(int loopCount = 0; loopCount < max_cores_per_ccd; loopCount++)
+			{
+				if(-1 == mtbl_current_socket[sock_id].ccd[ccdCount].Core_ApicIdOfThread0[loopCount]) continue;
+
+				printf("\nSocket:%d CCD:%02d Core:%02d, ",  sock_id, ccdCount, loopCountToDisplay);
+
+				snprintf(temp_string, sizeof(temp_string), "ApicIdOfThread0:%4d,", mtbl_current_socket[sock_id].ccd[ccdCount].Core_ApicIdOfThread0[loopCount]);
+				printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+				snprintf(temp_string, sizeof(temp_string), metric_table_format ? " C0(%%):%7.3lf," : " C0:%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].ccd[ccdCount].Core_C0[loopCount], mtbl_prev_socket[sock_id].ccd[ccdCount].Core_C0[loopCount])/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].ccd[ccdCount].Core_C0[loopCount]);
+				printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+				snprintf(temp_string, sizeof(temp_string), metric_table_format ? " CC1(%%):%7.3lf," : " CC1:%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].ccd[ccdCount].Core_CC1[loopCount], mtbl_prev_socket[sock_id].ccd[ccdCount].Core_CC1[loopCount])/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].ccd[ccdCount].Core_CC1[loopCount]);
+				printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+				snprintf(temp_string, sizeof(temp_string), metric_table_format ? " CC6(%%):%7.3lf," : " CC6:%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].ccd[ccdCount].Core_CC6[loopCount], mtbl_prev_socket[sock_id].ccd[ccdCount].Core_CC6[loopCount])/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].ccd[ccdCount].Core_CC6[loopCount]);
+				printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+				snprintf(temp_string, sizeof(temp_string), metric_table_format ? " Freq(MHz):%8.3lf," : " Freq:%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].ccd[ccdCount].Core_FREQ[loopCount], mtbl_prev_socket[sock_id].ccd[ccdCount].Core_FREQ[loopCount])/acc_counter_delta * fraction_uq10 * GHZ_TO_MHZ) : mtbl_current_socket[sock_id].ccd[ccdCount].Core_FREQ[loopCount]);
+				printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+				snprintf(temp_string, sizeof(temp_string), metric_table_format ? " FreqEff(MHz):%8.3lf," : " FreqEff:%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].ccd[ccdCount].Core_FREQEFF[loopCount], mtbl_prev_socket[sock_id].ccd[ccdCount].Core_FREQEFF[loopCount])/acc_counter_delta * fraction_uq10 * GHZ_TO_MHZ) : mtbl_current_socket[sock_id].ccd[ccdCount].Core_FREQEFF[loopCount]);
+				printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+				snprintf(temp_string, sizeof(temp_string), metric_table_format ? " Power(W):%7.3lf" : " Power:%.0f", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].ccd[ccdCount].Core_POWER[loopCount], mtbl_prev_socket[sock_id].ccd[ccdCount].Core_POWER[loopCount])/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].ccd[ccdCount].Core_POWER[loopCount]);
+				printf("%s", temp_string);memset(temp_string, 0, sizeof(temp_string));
+
+				loopCountToDisplay++;
+			}
+		}
+		printf("\n\n");
+	}
+
+	if(log_to_file) {
+		char temp_string[300];
+		if(create_log_header) {
+			sprintf(temp_string, "Socket:%d TimestampRaw,", sock_id);append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d TimestampReadableDate,", sock_id);append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d TimestampReadableTime,", sock_id);append_string(&log_file_header, temp_string);
+
+			sprintf(temp_string, "Socket:%d NumOfActiveCCDs,", sock_id);append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d %s,", sock_id, metric_table_format ? "AccumulationCounterDelta" : "AccumulationCounter");append_string(&log_file_header, temp_string);
+
+			sprintf(temp_string, "Socket:%d %s,", sock_id, metric_table_format ? "MaxSocketTemperatureAcc('C)" : "MaxSocketTemperatureAcc");append_string(&log_file_header, temp_string);
+
+			sprintf(temp_string, "Socket:%d %s,", sock_id, metric_table_format ? "SocketPowerLimit(W)" : "SocketPowerLimit");append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d %s,", sock_id, metric_table_format ? "MaxSocketPowerLimit(W)" : "MaxSocketPowerLimit");append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d %s,", sock_id, metric_table_format ? "SocketPowerAcc(W)" : "SocketPowerAcc");append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d %s,", sock_id, metric_table_format ? "CorePowerAcc(W)" : "CorePowerAcc");append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d %s,", sock_id, metric_table_format ? "UncorePowerAcc(W)" : "UncorePowerAcc");append_string(&log_file_header, temp_string);
+
+			sprintf(temp_string, "Socket:%d %s,", sock_id, metric_table_format ? "SocketEnergyAcc(KJ)" : "SocketEnergyAcc");append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d %s,", sock_id, metric_table_format ? "CoreEnergyAcc(KJ)" : "CoreEnergyAcc");append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d %s,", sock_id, metric_table_format ? "UncoreEnergyAcc(KJ)" : "UncoreEnergyAcc");append_string(&log_file_header, temp_string);
+
+			sprintf(temp_string, "Socket:%d %s,", sock_id, metric_table_format ? "FclkFrequencyAcc(MHz)" : "FclkFrequencyAcc");append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d %s,", sock_id, metric_table_format ? "UclkFrequencyAcc(MHz)" : "UclkFrequencyAcc");append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d %s,", sock_id, metric_table_format ? "DdrRateAcc(MHz)" : "DdrRateAcc");append_string(&log_file_header, temp_string);
+
+			for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_FREQ_TABLE_SIZE; loopCount++)
+			{
+				sprintf(temp_string, "Socket:%d Lclk:%d %s,", sock_id, loopCount, metric_table_format ? "LclkFrequencyAcc(MHz)" : "LclkFrequencyAcc");append_string(&log_file_header, temp_string);
+			}
+
+			for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_FREQ_TABLE_SIZE; loopCount++)
+			{
+				sprintf(temp_string, "Socket:%d Fclk:%d %s,", sock_id, loopCount, metric_table_format ? "FclkFrequencyTable(MHz)" : "FclkFrequencyTable");append_string(&log_file_header, temp_string);
+			}
+			for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_FREQ_TABLE_SIZE; loopCount++)
+			{
+				sprintf(temp_string, "Socket:%d Uclk:%d %s,", sock_id, loopCount, metric_table_format ? "UclkFrequencyTable(MHz)" : "UclkFrequencyTable");append_string(&log_file_header, temp_string);
+			}
+			for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_FREQ_TABLE_SIZE; loopCount++)
+			{
+				sprintf(temp_string, "Socket:%d Ddr:%d %s,", sock_id, loopCount, metric_table_format ? "DdrRateTable(MHz)" : "DdrRateTable");append_string(&log_file_header, temp_string);
+			}
+
+			sprintf(temp_string, "Socket:%d MaxDfPstateRange,", sock_id);append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d MinDfPstateRange,", sock_id);append_string(&log_file_header, temp_string);
+			for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_FREQ_TABLE_SIZE; loopCount++)
+			{
+				sprintf(temp_string, "Socket:%d Lclk:%d %s,", sock_id, loopCount, metric_table_format ? "LclkFrequencyTable(MHz)" : "LclkFrequencyTable");append_string(&log_file_header, temp_string);
+			}
+			sprintf(temp_string, "Socket:%d MaxLclkDpmRange,", sock_id);append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d MinLclkDpmRange,", sock_id);append_string(&log_file_header, temp_string);
+
+			for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_XGMI; loopCount++)
+			{
+				sprintf(temp_string, "Socket:%d Xgmi:%d %s,", sock_id, loopCount, metric_table_format ? "XgmiBitrate(GB/sec)" : "XgmiBitrate");append_string(&log_file_header, temp_string);
+			}
+			for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_XGMI; loopCount++)
+			{
+				sprintf(temp_string, "Socket:%d Xgmi:%d %s,", sock_id, loopCount, metric_table_format ? "XgmiReadBandwidth(GB/sec)" : "XgmiReadBandwidth");append_string(&log_file_header, temp_string);
+			}
+			for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_XGMI; loopCount++)
+			{
+				sprintf(temp_string, "Socket:%d Xgmi:%d %s,", sock_id, loopCount, metric_table_format ? "XgmiWriteBandwidth(GB/sec)" : "XgmiWriteBandwidth");append_string(&log_file_header, temp_string);
+			}
+
+			if(metric_table_format)
+			{
+				sprintf(temp_string, "Socket:%d %s,", sock_id, "SocketC0ResidencyAcc(%)");append_string(&log_file_header, temp_string);
+			}
+			sprintf(temp_string, "Socket:%d %s,", sock_id, metric_table_format ? "SocketC0ResidencyAccSumOfAllCores" : "SocketC0ResidencyAcc");append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d %s,", sock_id, metric_table_format ? "SocketDFCstateResidencyAcc(%)" : "SocketDFCstateResidencyAcc");append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d %s,", sock_id, metric_table_format ? "DramReadBandwidthAcc(GB/sec)" : "DramReadBandwidthAcc");append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d %s,", sock_id, metric_table_format ? "DramWriteBandwidthAcc(GB/sec)" : "DramWriteBandwidthAcc");append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d %s,", sock_id, metric_table_format ? "MaxDramBandwidth(GB/sec)" : "MaxDramBandwidth");append_string(&log_file_header, temp_string);
+
+			for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_PCIE; loopCount++)
+			{
+				sprintf(temp_string, "Socket:%d Pcie:%d %s,", sock_id, loopCount, metric_table_format ? "PcieBandwidthAcc(GB/sec)" : "PcieBandwidthAcc");append_string(&log_file_header, temp_string);
+			}
+
+			sprintf(temp_string, "Socket:%d ProchotResidencyAcc,", sock_id);append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d PptResidencyAcc,", sock_id);append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d ThmResidencyAcc,", sock_id);append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d VrHotResidencyAcc,", sock_id);append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d CpuTdcResidencyAcc,", sock_id);append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d SocTdcResidencyAcc,", sock_id);append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d IoMemTdcResidencyAcc,", sock_id);append_string(&log_file_header, temp_string);
+			sprintf(temp_string, "Socket:%d FitResidencyAcc,", sock_id);append_string(&log_file_header, temp_string);
+
+			for(int ccdCount = 0; ccdCount < mtbl_current_socket[sock_id].iod.NumOfActiveCCDs; ccdCount++)
+			{
+				int loopCountToDisplay = 0;
+				for(int loopCount = 0; loopCount < max_cores_per_ccd; loopCount++)
+				{
+					if(-1 == mtbl_current_socket[sock_id].ccd[ccdCount].Core_ApicIdOfThread0[loopCount]) continue;
+					sprintf(temp_string, "Socket:%d CCD:%02d Core:%02d %s,", sock_id, ccdCount, loopCountToDisplay, "ApicIdOfThread0");append_string(&log_file_header, temp_string);
+					loopCountToDisplay++;
+				}
+			}
+			for(int ccdCount = 0; ccdCount < mtbl_current_socket[sock_id].iod.NumOfActiveCCDs; ccdCount++)
+			{
+				int loopCountToDisplay = 0;
+				for(int loopCount = 0; loopCount < max_cores_per_ccd; loopCount++)
+				{
+					if(-1 == mtbl_current_socket[sock_id].ccd[ccdCount].Core_ApicIdOfThread0[loopCount]) continue;
+					sprintf(temp_string, "Socket:%d CCD:%02d Core:%02d %s,", sock_id, ccdCount, loopCountToDisplay, metric_table_format ? "C0(%)" : "C0");append_string(&log_file_header, temp_string);
+					loopCountToDisplay++;
+				}
+			}
+			for(int ccdCount = 0; ccdCount < mtbl_current_socket[sock_id].iod.NumOfActiveCCDs; ccdCount++)
+			{
+				int loopCountToDisplay = 0;
+				for(int loopCount = 0; loopCount < max_cores_per_ccd; loopCount++)
+				{
+					if(-1 == mtbl_current_socket[sock_id].ccd[ccdCount].Core_ApicIdOfThread0[loopCount]) continue;
+					sprintf(temp_string, "Socket:%d CCD:%02d Core:%02d %s,", sock_id, ccdCount, loopCountToDisplay, metric_table_format ? "CC1(%)" : "CC1");append_string(&log_file_header, temp_string);
+					loopCountToDisplay++;
+				}
+			}
+			for(int ccdCount = 0; ccdCount < mtbl_current_socket[sock_id].iod.NumOfActiveCCDs; ccdCount++)
+			{
+				int loopCountToDisplay = 0;
+				for(int loopCount = 0; loopCount < max_cores_per_ccd; loopCount++)
+				{
+					if(-1 == mtbl_current_socket[sock_id].ccd[ccdCount].Core_ApicIdOfThread0[loopCount]) continue;
+					sprintf(temp_string, "Socket:%d CCD:%02d Core:%02d %s,", sock_id, ccdCount, loopCountToDisplay, metric_table_format ? "CC6(%)" : "CC6");append_string(&log_file_header, temp_string);
+					loopCountToDisplay++;
+				}
+			}
+			for(int ccdCount = 0; ccdCount < mtbl_current_socket[sock_id].iod.NumOfActiveCCDs; ccdCount++)
+			{
+				int loopCountToDisplay = 0;
+				for(int loopCount = 0; loopCount < max_cores_per_ccd; loopCount++)
+				{
+					if(-1 == mtbl_current_socket[sock_id].ccd[ccdCount].Core_ApicIdOfThread0[loopCount]) continue;
+					sprintf(temp_string, "Socket:%d CCD:%02d Core:%02d %s,", sock_id, ccdCount, loopCountToDisplay, metric_table_format ? "Freq(MHz)" : "Freq");append_string(&log_file_header, temp_string);
+					loopCountToDisplay++;
+				}
+			}
+			for(int ccdCount = 0; ccdCount < mtbl_current_socket[sock_id].iod.NumOfActiveCCDs; ccdCount++)
+			{
+				int loopCountToDisplay = 0;
+				for(int loopCount = 0; loopCount < max_cores_per_ccd; loopCount++)
+				{
+					if(-1 == mtbl_current_socket[sock_id].ccd[ccdCount].Core_ApicIdOfThread0[loopCount]) continue;
+					sprintf(temp_string, "Socket:%d CCD:%02d Core:%02d %s,", sock_id, ccdCount, loopCountToDisplay, metric_table_format ? "FreqEff(MHz)" : "FreqEff");append_string(&log_file_header, temp_string);
+					loopCountToDisplay++;
+				}
+			}
+			for(int ccdCount = 0; ccdCount < mtbl_current_socket[sock_id].iod.NumOfActiveCCDs; ccdCount++)
+			{
+				int loopCountToDisplay = 0;
+				for(int loopCount = 0; loopCount < max_cores_per_ccd; loopCount++)
+				{
+					if(-1 == mtbl_current_socket[sock_id].ccd[ccdCount].Core_ApicIdOfThread0[loopCount]) continue;
+					sprintf(temp_string, "Socket:%d CCD:%02d Core:%02d %s,", sock_id, ccdCount, loopCountToDisplay, metric_table_format ? "Power(W)" : "Power");append_string(&log_file_header, temp_string);
+					loopCountToDisplay++;
+				}
+			}
+		}
+		sprintf(temp_string, "%llu,", mtbl_current_socket[sock_id].iod.Timestamp);append_string(&log_file_data, temp_string);
+
+		rawtime = (time_t)mtbl_current_socket[sock_id].iod.Timestamp;time (&rawtime);timeinfo = localtime (&rawtime);
+		char date_buffer[100];char time_buffer[100];
+		strftime (date_buffer, 100, "%Y-%m-%d", timeinfo);
+		strftime (time_buffer, 100, "%H:%M:%S", timeinfo);
+
+		sprintf(temp_string, "%s,", date_buffer);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, "%s,", time_buffer);append_string(&log_file_data, temp_string);
+
+		sprintf(temp_string, "%d,", mtbl_current_socket[sock_id].iod.NumOfActiveCCDs);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, metric_table_format ? "%f," : "%.0f,", metric_table_format ? acc_counter_delta:mtbl_current_socket[sock_id].iod.AccumulationCounter);append_string(&log_file_data, temp_string);
+
+		sprintf(temp_string, metric_table_format ? "%3.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_32bit(mtbl_current_socket[sock_id].iod.MaxSocketTempAcc, mtbl_prev_socket[sock_id].iod.MaxSocketTempAcc)/acc_counter_delta * fraction_q10) : mtbl_current_socket[sock_id].iod.MaxSocketTempAcc);append_string(&log_file_data, temp_string);
+
+		sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (mtbl_current_socket[sock_id].iod.SocketPowerLimit * fraction_uq10) : mtbl_current_socket[sock_id].iod.SocketPowerLimit);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (mtbl_current_socket[sock_id].iod.MaxSocketPowerLimit * fraction_uq10) : mtbl_current_socket[sock_id].iod.MaxSocketPowerLimit);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.SocketPowerAcc, mtbl_prev_socket[sock_id].iod.SocketPowerAcc)/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.SocketPowerAcc);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.CorePowerAcc, mtbl_prev_socket[sock_id].iod.CorePowerAcc)/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.CorePowerAcc);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.UncorePowerAcc, mtbl_prev_socket[sock_id].iod.UncorePowerAcc)/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.UncorePowerAcc);append_string(&log_file_data, temp_string);
+
+		sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? ((mtbl_current_socket[sock_id].iod.SocketEnergyAcc * fraction_uq16)/KILO) : mtbl_current_socket[sock_id].iod.SocketEnergyAcc);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? ((mtbl_current_socket[sock_id].iod.CoreEnergyAcc * fraction_uq16)/KILO) : mtbl_current_socket[sock_id].iod.CoreEnergyAcc);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? ((mtbl_current_socket[sock_id].iod.UncoreEnergyAcc * fraction_uq16)/KILO) : mtbl_current_socket[sock_id].iod.UncoreEnergyAcc);append_string(&log_file_data, temp_string);
+
+		sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.FclkFreqAcc, mtbl_prev_socket[sock_id].iod.FclkFreqAcc)/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.FclkFreqAcc);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.UclkFreqAcc, mtbl_prev_socket[sock_id].iod.UclkFreqAcc)/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.UclkFreqAcc);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.DdrRateAcc, mtbl_prev_socket[sock_id].iod.DdrRateAcc)/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.DdrRateAcc);append_string(&log_file_data, temp_string);
+
+		for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_FREQ_TABLE_SIZE; loopCount++)
+		{
+			sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.LclkFreqAcc[loopCount], mtbl_prev_socket[sock_id].iod.LclkFreqAcc[loopCount])/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.LclkFreqAcc[loopCount]);append_string(&log_file_data, temp_string);
+		}
+
+		for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_FREQ_TABLE_SIZE; loopCount++)
+		{
+			sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (mtbl_current_socket[sock_id].iod.FclkFreqTable[loopCount] * fraction_uq10) : mtbl_current_socket[sock_id].iod.FclkFreqTable[loopCount]);append_string(&log_file_data, temp_string);
+		}
+		for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_FREQ_TABLE_SIZE; loopCount++)
+		{
+			sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (mtbl_current_socket[sock_id].iod.UclkFreqTable[loopCount] * fraction_uq10) : mtbl_current_socket[sock_id].iod.UclkFreqTable[loopCount]);append_string(&log_file_data, temp_string);
+		}
+		for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_FREQ_TABLE_SIZE; loopCount++)
+		{
+			sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (mtbl_current_socket[sock_id].iod.DdrRateTable[loopCount] * fraction_uq10) : mtbl_current_socket[sock_id].iod.DdrRateTable[loopCount]);append_string(&log_file_data, temp_string);
+		}
+
+		sprintf(temp_string, "%u,", mtbl_current_socket[sock_id].iod.MaxDfPstateRange);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, "%u,", mtbl_current_socket[sock_id].iod.MinDfPstateRange);append_string(&log_file_data, temp_string);
+		for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_FREQ_TABLE_SIZE; loopCount++)
+		{
+			sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (mtbl_current_socket[sock_id].iod.LclkFreqTable[loopCount] * fraction_uq10) : mtbl_current_socket[sock_id].iod.LclkFreqTable[loopCount]);append_string(&log_file_data, temp_string);
+		}
+		sprintf(temp_string, "%u,", mtbl_current_socket[sock_id].iod.MaxLclkDpmRange);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, "%u,", mtbl_current_socket[sock_id].iod.MinLclkDpmRange);append_string(&log_file_data, temp_string);
+
+		for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_XGMI; loopCount++)
+		{
+			sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.XgmiBitrate[loopCount], mtbl_prev_socket[sock_id].iod.XgmiBitrate[loopCount])/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.XgmiBitrate[loopCount]);append_string(&log_file_data, temp_string);
+		}
+		for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_XGMI; loopCount++)
+		{
+			sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.XgmiReadBandwidth[loopCount], mtbl_prev_socket[sock_id].iod.XgmiReadBandwidth[loopCount])/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.XgmiReadBandwidth[loopCount]);append_string(&log_file_data, temp_string);
+		}
+		for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_XGMI; loopCount++)
+		{
+			sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.XgmiWriteBandwidth[loopCount], mtbl_prev_socket[sock_id].iod.XgmiWriteBandwidth[loopCount])/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.XgmiWriteBandwidth[loopCount]);append_string(&log_file_data, temp_string);
+		}
+
+		if(metric_table_format)
+		{
+			uint32_t total_cores_enabled = 1;
+			esmi_number_of_physicalcores_in_socket_get(sock_id, &total_cores_enabled);
+			sprintf(temp_string, "%5.3lf,", (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.SocketC0ResidencyAcc, mtbl_prev_socket[sock_id].iod.SocketC0ResidencyAcc)/acc_counter_delta * fraction_uq10 * 100) / total_cores_enabled);append_string(&log_file_data, temp_string);
+		}
+		sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.SocketC0ResidencyAcc, mtbl_prev_socket[sock_id].iod.SocketC0ResidencyAcc)/acc_counter_delta * fraction_uq10 * 100) : mtbl_current_socket[sock_id].iod.SocketC0ResidencyAcc);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.SocketDFCstateResidencyAcc, mtbl_prev_socket[sock_id].iod.SocketDFCstateResidencyAcc)/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.SocketDFCstateResidencyAcc);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.DramReadBandwidthAcc, mtbl_prev_socket[sock_id].iod.DramReadBandwidthAcc)/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.DramReadBandwidthAcc);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.DramWriteBandwidthAcc, mtbl_prev_socket[sock_id].iod.DramWriteBandwidthAcc)/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.DramWriteBandwidthAcc);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (mtbl_current_socket[sock_id].iod.MaxDramBandwidth * fraction_uq10) : mtbl_current_socket[sock_id].iod.MaxDramBandwidth);append_string(&log_file_data, temp_string);
+
+		for(int loopCount = 0; loopCount < F1A_M50_M5F_MAX_PCIE; loopCount++)
+		{
+			sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].iod.PcieBandwidthAcc[loopCount], mtbl_prev_socket[sock_id].iod.PcieBandwidthAcc[loopCount])/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].iod.PcieBandwidthAcc[loopCount]);append_string(&log_file_data, temp_string);
+		}
+
+		sprintf(temp_string, "%u,", metric_table_format ? calculate_acc_counter_32bit(mtbl_current_socket[sock_id].iod.ProchotResidencyAcc, mtbl_prev_socket[sock_id].iod.ProchotResidencyAcc) : mtbl_current_socket[sock_id].iod.ProchotResidencyAcc);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, "%u,", metric_table_format ? calculate_acc_counter_32bit(mtbl_current_socket[sock_id].iod.PptResidencyAcc, mtbl_prev_socket[sock_id].iod.PptResidencyAcc) : mtbl_current_socket[sock_id].iod.PptResidencyAcc);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, "%u,", metric_table_format ? calculate_acc_counter_32bit(mtbl_current_socket[sock_id].iod.ThmResidencyAcc, mtbl_prev_socket[sock_id].iod.ThmResidencyAcc) : mtbl_current_socket[sock_id].iod.ThmResidencyAcc);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, "%u,", metric_table_format ? calculate_acc_counter_32bit(mtbl_current_socket[sock_id].iod.VrHotResidencyAcc, mtbl_prev_socket[sock_id].iod.VrHotResidencyAcc) : mtbl_current_socket[sock_id].iod.VrHotResidencyAcc);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, "%u,", metric_table_format ? calculate_acc_counter_32bit(mtbl_current_socket[sock_id].iod.CpuTdcResidencyAcc, mtbl_prev_socket[sock_id].iod.CpuTdcResidencyAcc) : mtbl_current_socket[sock_id].iod.CpuTdcResidencyAcc);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, "%u,", metric_table_format ? calculate_acc_counter_32bit(mtbl_current_socket[sock_id].iod.SocTdcResidencyAcc, mtbl_prev_socket[sock_id].iod.SocTdcResidencyAcc) : mtbl_current_socket[sock_id].iod.SocTdcResidencyAcc);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, "%u,", metric_table_format ? calculate_acc_counter_32bit(mtbl_current_socket[sock_id].iod.IoMemTdcResidencyAcc, mtbl_prev_socket[sock_id].iod.IoMemTdcResidencyAcc) : mtbl_current_socket[sock_id].iod.IoMemTdcResidencyAcc);append_string(&log_file_data, temp_string);
+		sprintf(temp_string, "%u,", metric_table_format ? calculate_acc_counter_32bit(mtbl_current_socket[sock_id].iod.FitResidencyAcc, mtbl_prev_socket[sock_id].iod.FitResidencyAcc) : mtbl_current_socket[sock_id].iod.FitResidencyAcc);append_string(&log_file_data, temp_string);
+
+		for(int ccdCount = 0; ccdCount < mtbl_current_socket[sock_id].iod.NumOfActiveCCDs; ccdCount++)
+		{
+			for(int loopCount = 0; loopCount < max_cores_per_ccd; loopCount++)
+			{
+				if(-1 == mtbl_current_socket[sock_id].ccd[ccdCount].Core_ApicIdOfThread0[loopCount]) continue;
+				sprintf(temp_string, "%d,", mtbl_current_socket[sock_id].ccd[ccdCount].Core_ApicIdOfThread0[loopCount]);append_string(&log_file_data, temp_string);
+			}
+		}
+		for(int ccdCount = 0; ccdCount < mtbl_current_socket[sock_id].iod.NumOfActiveCCDs; ccdCount++)
+		{
+			for(int loopCount = 0; loopCount < max_cores_per_ccd; loopCount++)
+			{
+				if(-1 == mtbl_current_socket[sock_id].ccd[ccdCount].Core_ApicIdOfThread0[loopCount]) continue;
+				sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].ccd[ccdCount].Core_C0[loopCount], mtbl_prev_socket[sock_id].ccd[ccdCount].Core_C0[loopCount])/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].ccd[ccdCount].Core_C0[loopCount]);append_string(&log_file_data, temp_string);
+			}
+		}
+		for(int ccdCount = 0; ccdCount < mtbl_current_socket[sock_id].iod.NumOfActiveCCDs; ccdCount++)
+		{
+			for(int loopCount = 0; loopCount < max_cores_per_ccd; loopCount++)
+			{
+				if(-1 == mtbl_current_socket[sock_id].ccd[ccdCount].Core_ApicIdOfThread0[loopCount]) continue;
+				sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].ccd[ccdCount].Core_CC1[loopCount], mtbl_prev_socket[sock_id].ccd[ccdCount].Core_CC1[loopCount])/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].ccd[ccdCount].Core_CC1[loopCount]);append_string(&log_file_data, temp_string);
+			}
+		}
+		for(int ccdCount = 0; ccdCount < mtbl_current_socket[sock_id].iod.NumOfActiveCCDs; ccdCount++)
+		{
+			for(int loopCount = 0; loopCount < max_cores_per_ccd; loopCount++)
+			{
+				if(-1 == mtbl_current_socket[sock_id].ccd[ccdCount].Core_ApicIdOfThread0[loopCount]) continue;
+				sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].ccd[ccdCount].Core_CC6[loopCount], mtbl_prev_socket[sock_id].ccd[ccdCount].Core_CC6[loopCount])/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].ccd[ccdCount].Core_CC6[loopCount]);append_string(&log_file_data, temp_string);
+			}
+		}
+		for(int ccdCount = 0; ccdCount < mtbl_current_socket[sock_id].iod.NumOfActiveCCDs; ccdCount++)
+		{
+			for(int loopCount = 0; loopCount < max_cores_per_ccd; loopCount++)
+			{
+				if(-1 == mtbl_current_socket[sock_id].ccd[ccdCount].Core_ApicIdOfThread0[loopCount]) continue;
+				sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].ccd[ccdCount].Core_FREQ[loopCount], mtbl_prev_socket[sock_id].ccd[ccdCount].Core_FREQ[loopCount])/acc_counter_delta * fraction_uq10 * GHZ_TO_MHZ) : mtbl_current_socket[sock_id].ccd[ccdCount].Core_FREQ[loopCount]);append_string(&log_file_data, temp_string);
+			}
+		}
+		for(int ccdCount = 0; ccdCount < mtbl_current_socket[sock_id].iod.NumOfActiveCCDs; ccdCount++)
+		{
+			for(int loopCount = 0; loopCount < max_cores_per_ccd; loopCount++)
+			{
+				if(-1 == mtbl_current_socket[sock_id].ccd[ccdCount].Core_ApicIdOfThread0[loopCount]) continue;
+				sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].ccd[ccdCount].Core_FREQEFF[loopCount], mtbl_prev_socket[sock_id].ccd[ccdCount].Core_FREQEFF[loopCount])/acc_counter_delta * fraction_uq10 * GHZ_TO_MHZ) : mtbl_current_socket[sock_id].ccd[ccdCount].Core_FREQEFF[loopCount]);append_string(&log_file_data, temp_string);
+			}
+		}
+		for(int ccdCount = 0; ccdCount < mtbl_current_socket[sock_id].iod.NumOfActiveCCDs; ccdCount++)
+		{
+			for(int loopCount = 0; loopCount < max_cores_per_ccd; loopCount++)
+			{
+				if(-1 == mtbl_current_socket[sock_id].ccd[ccdCount].Core_ApicIdOfThread0[loopCount]) continue;
+				sprintf(temp_string, metric_table_format ? "%5.3lf," : "%.0f,", metric_table_format ? (calculate_acc_counter_64bit(mtbl_current_socket[sock_id].ccd[ccdCount].Core_POWER[loopCount], mtbl_prev_socket[sock_id].ccd[ccdCount].Core_POWER[loopCount])/acc_counter_delta * fraction_uq10) : mtbl_current_socket[sock_id].ccd[ccdCount].Core_POWER[loopCount]);append_string(&log_file_data, temp_string);
+			}
+		}
+	}
+
+	mtbl_prev_socket[sock_id] = mtbl_current_socket[sock_id];
+	return ESMI_SUCCESS;
+}
+
+static esmi_status_t epyc_show_metric_table(uint8_t sock_id, uint64_t sleep_time_in_milliseconds, bool initialize_smu_data, bool only_display_results)
+{
+	uint32_t met_ver;
+	esmi_status_t ret;
+
+	ret = esmi_metrics_table_version_get(&met_ver);
+	if (ret != ESMI_SUCCESS) {
+		printf("Socket:%d, Failed to get Metric Table Version, Err[%d]: %s\n", sock_id, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+	/* Family 0x1A Model 0x50 to 0x5F have different metric table structure */
+	if((sys_info.family == 0x1A) && ((sys_info.model >= 0x50) && (sys_info.model <= 0x5F)))
+	{
+		if((0x00700000 == met_ver))
+			return epyc_show_metric_table_F1A_M50_M5F_ver_0x00700000(sock_id, met_ver, sleep_time_in_milliseconds, initialize_smu_data, only_display_results);
+	}
+	else if((sys_info.family == 0x19) && ((sys_info.model >= 0x90) && (sys_info.model <= 0x9F)))
+		return epyc_show_metric_table_F1A_M90_M9F(sock_id, initialize_smu_data, only_display_results);
+
+	return ESMI_NOT_SUPPORTED;
+}
 static int epyc_get_pwr_efficiency_mode(uint8_t sock_ind)
 {
 	esmi_status_t ret;
@@ -4091,6 +4797,12 @@ static char* const feat_pc6_cc6_enabledcommands_floorlimit_get[] = {
 	"  --getcorefl [CORE]\t\t\t\t\t\tGet FloorLimit for a given CPU/LogicalCore (MHz)",
 	"  --getcoreefffl [CORE]\t\t\t\t\t\tGet EffectiveFloorLimit for a given CPU/LogicalCore (MHz)",
 	"  --getsdpslimit [SOCKET]\t\t\t\t\tGet the SDPS Limit for a given socket (Watts)",
+	"  --showmetrictablever\t\t\t\t\t\tShow Metric Table Version",
+	"  --showmetrictable [SOCKET]\t\t\t\t\tShow Metric Table",
+	"  --rawmetric\t\t\t\t\t\t\tShow as Raw MetricData",
+	"  --metricdelay [METRIC_COLLECTION_DURATION] <TIME_RANGE<ms,s,m,h,d>>\n\t\t\t\t\t\t\t\tStart Metric Collection, then go for MetricDelay before gathering MetricData",
+	"  --startmetric [START_METRIC_FILE_NAME]\t\t\tSet the StartMetric file name, to Start Metric Collection",
+	"  --stopmetric  [STOP_METRIC_FILE_NAME]\t\t\t\tSet the StopMetric file name, to Stop Metric Collection",
 };
 
 static char* const feat_pc6_cc6_floorlimit_set[] = {
@@ -4761,6 +5473,10 @@ static int parsesmi_args(int argc,char **argv)
 		{"setdimmsbdata",		required_argument, 	&flag, 	31},
 		{"getsdpslimit",		required_argument,	&flag,	32},
 		{"setsdpslimit",		required_argument,	&flag,	33},
+		{"metricdelay",			required_argument, 	&flag, 	34},
+		{"rawmetric",			no_argument, 		&flag, 	35},
+		{"startmetric",			required_argument,	&flag,	36},
+		{"stopmetric",			required_argument,	&flag,	37},
 		{0,				0,			0,	0},
 	};
 
@@ -4836,6 +5552,11 @@ static int parsesmi_args(int argc,char **argv)
 				sprintf(temp_string, "Option '--%s', Negative values are not accepted\n\n", long_options[long_index].name);
 				append_string(&err_string, temp_string);
 				break;
+			}
+
+			if (opt == 'J') {
+				sock_id = atoi(argv[optind-1]);
+				show_metric_table[sock_id] = true;
 			}
 		}
 		if (opt == 'N' || opt == 'C' || opt == 'a' || opt == 'b' || opt == 'u' || opt == 'H' || opt == 'g' || opt == 'T' ||
@@ -5058,7 +5779,8 @@ static int parsesmi_args(int argc,char **argv)
 			((*long_options[long_index].flag == 12) || (*long_options[long_index].flag == 13) || (*long_options[long_index].flag == 14) ||
 			 (*long_options[long_index].flag == 15) || (*long_options[long_index].flag == 16) || (*long_options[long_index].flag == 17) ||
 			 (*long_options[long_index].flag == 18) || (*long_options[long_index].flag == 19) || (*long_options[long_index].flag == 22) ||
-			 (*long_options[long_index].flag == 31)))
+			 (*long_options[long_index].flag == 31) || (*long_options[long_index].flag == 34) || (*long_options[long_index].flag == 35) ||
+			 (*long_options[long_index].flag == 36) || (*long_options[long_index].flag == 37)))
 		{
 			if (*long_options[long_index].flag == 12) {
 				if(print_results != DONT_PRINT_RESULTS)
@@ -5068,8 +5790,11 @@ static int parsesmi_args(int argc,char **argv)
 				if(print_results != DONT_PRINT_RESULTS)
 					print_results = PRINT_RESULTS_AS_CSV;
 			}
+			else if (*long_options[long_index].flag == 35) {
+				metric_table_format = RAW_METRIC_TABLE_FORMAT;
+			}
 			else if ((*long_options[long_index].flag == 14) || (*long_options[long_index].flag == 15) || (*long_options[long_index].flag == 16) ||
-					 (*long_options[long_index].flag == 17))
+					 (*long_options[long_index].flag == 17) || (*long_options[long_index].flag == 34))
 			{
 				if (is_string_number(optarg)) {
 					sprintf(temp_string, "Option '--%s' require a valid numeric value as an argument\n\n", long_options[long_index].name);
@@ -5243,10 +5968,31 @@ static int parsesmi_args(int argc,char **argv)
 				create_log_header = true;
 			}
 			else if (*long_options[long_index].flag == 19) {
+				if(stoploop_file_name) {
+					free(stoploop_file_name);
+					stoploop_file_name = NULL;
+				}
 				append_string(&stoploop_file_name, optarg);
 			}
+			else if (*long_options[long_index].flag == 34) {
+				metric_table_delay_in_secs = atoi(optarg);
+			}
+			else if (*long_options[long_index].flag == 36) {
+				if(startmetric_file_name) {
+					free(startmetric_file_name);
+					startmetric_file_name = NULL;
+				}
+				append_string(&startmetric_file_name, optarg);
+			}
+			else if (*long_options[long_index].flag == 37) {
+				if(stopmetric_file_name) {
+					free(stopmetric_file_name);
+					stopmetric_file_name = NULL;
+				}
+				append_string(&stopmetric_file_name, optarg);
+			}
 
-			if ((*long_options[long_index].flag == 14) || (*long_options[long_index].flag == 15)) {
+			if ((*long_options[long_index].flag == 14) || (*long_options[long_index].flag == 15) || (*long_options[long_index].flag == 34)) {
 				if (optind < argc) {
 					double temp_var = 0;
 					if (!strncmp(argv[optind], "ms", 2) || !strncmp(argv[optind], "MS", 2) || !strncmp(argv[optind], "Ms", 2) || !strncmp(argv[optind], "mS", 2)) {
@@ -5268,6 +6014,7 @@ static int parsesmi_args(int argc,char **argv)
 					if (0 != temp_var) {
 						if((*long_options[long_index].flag == 14) && initial_delay_in_secs) initial_delay_in_secs = initial_delay_in_secs*temp_var;
 						if((*long_options[long_index].flag == 15) && loop_delay_in_secs) loop_delay_in_secs = loop_delay_in_secs*temp_var;
+						if((*long_options[long_index].flag == 34) && metric_table_delay_in_secs) metric_table_delay_in_secs = metric_table_delay_in_secs*temp_var;
 						optind++;
 					}
 				}
@@ -5339,10 +6086,97 @@ static int parsesmi_args(int argc,char **argv)
 		if(print_results == PRINT_RESULTS) printf("\n* InitialDelay(in secs):%f, ...\n", initial_delay_in_secs);
 		sleep_in_milliseconds(initial_delay_in_secs*1000);
 	}
+
+	bool metric_table_requested = false;
+	for(int loopcount = 0; loopcount < MAX_SOCKET; loopcount++)
+	{
+		if(show_metric_table[loopcount])
+		{
+			if(false == metric_table_requested)
+			{
+				if(startmetric_file_name/* && loop_count*/) {
+					int temp_loop_counter = 0;
+					while(1)
+					{
+						sleep_in_milliseconds(200);
+
+						FILE *temp_file_fp =  NULL;
+						temp_file_fp = fopen(startmetric_file_name, "r");
+						if(temp_file_fp != NULL) {
+							if(print_results == PRINT_RESULTS) printf("StartMetric file \"%s\" is present, ...\n", startmetric_file_name);
+							fclose(temp_file_fp);
+							temp_file_fp = NULL;
+							break;
+						}
+						else
+						{
+							if((print_results == PRINT_RESULTS) && (0 == temp_loop_counter))
+								printf("StartMetric file \"%s\" is not present, waiting for file \"%s\" to be created to Start Metric Collection, ...\n", startmetric_file_name, startmetric_file_name);
+						}
+						temp_loop_counter++;
+					}
+				}
+			}
+			ret = epyc_show_metric_table(loopcount, metric_table_delay_in_secs*1000, true, false);
+			if(ret != ESMI_SUCCESS)
+				show_metric_table[loopcount] = false;
+			metric_table_requested = true;
+		}
+	}
+	if(metric_table_requested)
+	{
+		if((print_results == PRINT_RESULTS) && ((0 != metric_table_delay_in_secs) || (startmetric_file_name))/*&& (NULL == log_file_name)*/)
+		{
+			printf("Started Metric Collection, ");
+			if(0 != metric_table_delay_in_secs)
+				printf("MetricDelay(in secs):%f, ", (double)metric_table_delay_in_secs);
+			printf(" ...\n");
+		}
+		sleep_in_milliseconds(metric_table_delay_in_secs?metric_table_delay_in_secs*1000:metric_table_default_delay_in_ms);
+	}
+
 	int loop_counter = 0;
 	char date_buffer[100];
 	char time_buffer[100];
 
+	if(log_file_name) {
+		// Check if log_file_name already exists
+		bool log_file_exists = false;
+		FILE *check_fp = fopen(log_file_name, "r");
+		if (check_fp != NULL) {
+			log_file_exists = true;
+			fclose(check_fp);
+		}
+		if(log_file_exists)
+		{
+			char date_buffer[100];
+			char time_buffer[100];
+
+			time_t current_time = time (0);
+			strftime (date_buffer, 100, "_%Y_%m%d_", localtime (&current_time));
+			strftime (time_buffer, 100, "%H%M%S", localtime (&current_time));
+
+			char *dot = strrchr(log_file_name, '.');
+			if (dot) {
+				size_t name_len = dot - log_file_name;
+				char *new_name = malloc(name_len + strlen(date_buffer) + strlen(time_buffer) + strlen(dot) + 1);
+				if (new_name) {
+					strncpy(new_name, log_file_name, name_len);
+					new_name[name_len] = '\0';
+					strcat(new_name, date_buffer);
+					strcat(new_name, time_buffer);
+					strcat(new_name, dot);
+					free(log_file_name);
+					log_file_name = new_name;
+				}
+			} else {
+				append_string(&log_file_name, date_buffer);
+				append_string(&log_file_name, time_buffer);
+			}
+		}
+	}
+
+	//Loop Of Commands Starts
 	do {
 	FILE *log_file_fp =  NULL;
 	if(log_file_name) {
@@ -5352,11 +6186,13 @@ static int parsesmi_args(int argc,char **argv)
 			return ESMI_FILE_ERROR;
 		}
 	}
-	FILE *stoploop_file_fp =  NULL;
+	FILE *temp_file_fp =  NULL;
 	if(stoploop_file_name && loop_count) {
-		stoploop_file_fp = fopen(stoploop_file_name, "r");
-		if(stoploop_file_fp != NULL) {
+		temp_file_fp = fopen(stoploop_file_name, "r");
+		if(temp_file_fp != NULL) {
 			if(print_results == PRINT_RESULTS) printf("stoploop file \"%s\" is present, hence stopped loop\n", stoploop_file_name);
+			fclose(temp_file_fp);
+			temp_file_fp = NULL;
 			break;
 		}
 	}
@@ -5382,6 +6218,17 @@ static int parsesmi_args(int argc,char **argv)
 		if(print_results == PRINT_RESULTS) printf ("* CurrentTime:%s,%s\n", date_buffer, time_buffer);
 	}
 
+	if(metric_table_requested)
+	{
+		for(int loopcount = 0; loopcount < MAX_SOCKET; loopcount++)
+		{
+			if(show_metric_table[loopcount])
+			{
+				ret = epyc_show_metric_table(loopcount, metric_table_delay_in_secs*1000, false, false);
+			}
+		}
+	}
+
 	optind = 0;
 	while ((opt = getopt_long(argc, argv, helperstring,
 			long_options, &long_index)) != -1) {
@@ -5395,7 +6242,7 @@ static int parsesmi_args(int argc,char **argv)
 			input_data = atol(argv[optind++]);//Adding Extra Arguments
 		}
 	}
-	else if((opt == 0) && ((*long_options[long_index].flag == 14) || (*long_options[long_index].flag == 15)))
+	else if((opt == 0) && ((*long_options[long_index].flag == 14) || (*long_options[long_index].flag == 15) || (*long_options[long_index].flag == 34)))
 	{
 		if (optind < argc) {
 			if (!strncmp(argv[optind], "ms", 2) || !strncmp(argv[optind], "MS", 2) || !strncmp(argv[optind], "Ms", 2) || !strncmp(argv[optind], "mS", 2) ||
@@ -5596,7 +6443,8 @@ static int parsesmi_args(int argc,char **argv)
 		case 'J' :
 			/* Get Metrics Table */
 			sock_id = atoi(optarg);
-			ret = epyc_show_metrics_table(sock_id);
+			if(true == show_metric_table[sock_id])
+				ret = epyc_show_metric_table(sock_id, metric_table_delay_in_secs*1000, false, true);
 			break;
 		case 'N' :
 			/* Test HSMP mailbox i/f */
@@ -5719,6 +6567,14 @@ int main(int argc, char **argv)
 	if(stoploop_file_name) {
 		free(stoploop_file_name);
 		stoploop_file_name = NULL;
+	}
+	if(startmetric_file_name) {
+		free(startmetric_file_name);
+		startmetric_file_name = NULL;
+	}
+	if(stopmetric_file_name) {
+		free(stopmetric_file_name);
+		stopmetric_file_name = NULL;
 	}
 
 	if (features)
