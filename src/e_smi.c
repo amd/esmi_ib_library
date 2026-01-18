@@ -1723,6 +1723,37 @@ esmi_status_t esmi_dimm_power_consumption_get(uint8_t sock_ind, uint8_t dimm_add
 	return errno_to_esmi_status(ret);
 }
 
+esmi_status_t esmi_dimm_power_consumption_data_get(uint8_t sock_ind, union dimm_power_inarg dimm_pow_in, struct dimm_power *dimm_pow)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
+
+	msg.msg_id	= HSMP_GET_DIMM_POWER;
+	if (check_sup(msg.msg_id))
+		return ESMI_NO_HSMP_MSG_SUP;
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	CHECK_HSMP_GET_INPUT(dimm_pow);
+
+	msg.response_sz	= 1;
+	msg.num_args	= 1;
+	msg.args[0]	= dimm_pow_in.reg_value;
+	msg.sock_ind	= sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret) {
+		union dimm_power_outarg dimm_power_outarg_temp;
+		dimm_power_outarg_temp.reg_value = msg.args[0];
+
+		dimm_pow->power = dimm_power_outarg_temp.info.dimm_power;
+		dimm_pow->update_rate = dimm_power_outarg_temp.info.dimm_update_rate;
+		dimm_pow->dimm_addr = dimm_power_outarg_temp.info.dimm_addr;
+	}
+
+	return errno_to_esmi_status(ret);
+}
+
 #define SCALING_FACTOR  0.25
 
 static void decode_dimm_temp(uint16_t raw, float *temp)
@@ -1757,6 +1788,38 @@ esmi_status_t esmi_dimm_thermal_sensor_get(uint8_t sock_ind, uint8_t dimm_addr,
 		dimm_temp->sensor = msg.args[0] >> 21;
 		dimm_temp->update_rate = msg.args[0] >> 8;
 		dimm_temp->dimm_addr = msg.args[0];
+		decode_dimm_temp(dimm_temp->sensor, &dimm_temp->temp);
+	}
+
+	return errno_to_esmi_status(ret);
+}
+
+esmi_status_t esmi_dimm_thermal_sensor_data_get(uint8_t sock_ind, union dimm_temp_inarg dimm_temp_in, struct dimm_thermal *dimm_temp)
+{
+	struct hsmp_message msg = { 0 };
+	esmi_status_t ret;
+
+	msg.msg_id	= HSMP_GET_DIMM_THERMAL;
+	if (check_sup(msg.msg_id))
+		return ESMI_NO_HSMP_MSG_SUP;
+
+	if (sock_ind >= psm->total_sockets)
+		return ESMI_INVALID_INPUT;
+
+	CHECK_HSMP_GET_INPUT(dimm_temp);
+
+	msg.response_sz = 1;
+	msg.num_args	= 1;
+	msg.args[0]	= dimm_temp_in.reg_value;
+	msg.sock_ind	= sock_ind;
+	ret = hsmp_xfer(&msg, O_RDONLY);
+	if (!ret) {
+		union dimm_temp_outarg dimm_temp_outarg_temp;
+		dimm_temp_outarg_temp.reg_value = msg.args[0];
+
+		dimm_temp->sensor = dimm_temp_outarg_temp.info.dimm_sensor;
+		dimm_temp->update_rate = dimm_temp_outarg_temp.info.dimm_update_rate;
+		dimm_temp->dimm_addr = dimm_temp_outarg_temp.info.dimm_addr;
 		decode_dimm_temp(dimm_temp->sensor, &dimm_temp->temp);
 	}
 
