@@ -78,6 +78,54 @@ struct dimm_power {
 	uint8_t dimm_addr;              //!< Dimm address[7:0](8 bit data)
 };
 
+typedef enum {
+	DIMM_POWER = 00,
+	MAX_DIMM_POWER = 01,
+	TOTAL_DIMM_POWER = 02
+}GET_DIMM_POWER;
+union dimm_power_inarg {
+	struct dimm_power_info_
+	{
+		uint32_t dimm_addr	:8; //07:00
+		uint32_t reserved	:22;//29:08
+		uint32_t dimm_flag	:2; //31:30
+	}info;
+	uint32_t reg_value;
+};
+union dimm_power_outarg {
+	struct dimm_power_getinfo_
+	{
+		uint32_t dimm_addr			:8; //07:00
+		uint32_t dimm_update_rate	:9; //16:8
+		uint32_t dimm_power			:15; //31:17
+	}info;
+	uint32_t reg_value;
+};
+
+typedef enum {
+	DIMM_TEMP = 00,
+	MAX_DIMM_TEMP = 01
+}GET_DIMM_TEMP;
+union dimm_temp_inarg {
+	struct dimm_temp_info_
+	{
+		uint32_t dimm_addr	:8; //07:00
+		uint32_t reserved	:23;//30:08
+		uint32_t dimm_flag	:1; //31
+	}info;
+	uint32_t reg_value;
+};
+union dimm_temp_outarg{
+	struct dimm_temp_getinfo_
+	{
+		uint32_t dimm_addr			:8; //07:00
+		uint32_t dimm_update_rate	:9; //16:8
+		uint32_t reserved			:4; //20:17
+		uint32_t dimm_sensor		:11;//31:21
+	}info;
+	uint32_t reg_value;
+};
+
 /**
  * @brief DIMM temperature(°C) and update rate(ms) and dimm address
  */
@@ -132,6 +180,7 @@ static char* const freqlimitsrcnames[] = {
 	"HSMP Agent",
 	"VRHOT(Voltage Regulator Hot)",
 	"TDC Limit (VDD_MEM_S3 rail)",
+	"SOC and DIMM Power Limit",
 };
 
 typedef union {
@@ -1212,6 +1261,25 @@ esmi_status_t esmi_dimm_power_consumption_get(uint8_t sock_ind, uint8_t dimm_add
 					      struct dimm_power *dimm_pow);
 
 /**
+ *  @brief Get dimm power consumption data using input argument structure
+ *
+ *  @details This function returns the DIMM power and update rate using a structured input argument.
+ *  Supported only on hsmp protocol version 5 and 7.
+ *
+ *  @param[in] sock_ind Socket index through which the DIMM can be accessed.
+ *
+ *  @param[in] dimm_pow_in Input union containing DIMM address and flags.
+ *
+ *  @param[inout] dimm_pow Output buffer of type struct dimm_power containing power(mW),
+ *  update rate(ms) and dimm address.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval Non-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_dimm_power_consumption_data_get(uint8_t sock_ind, union dimm_power_inarg dimm_pow_in, struct dimm_power *dimm_pow);
+
+/**
  *  @brief Get dimm thermal sensor
  *
  *  @details This function will return the DIMM thermal sensor(2 sensors per DIMM)
@@ -1233,6 +1301,25 @@ esmi_status_t esmi_dimm_power_consumption_get(uint8_t sock_ind, uint8_t dimm_add
  */
 esmi_status_t esmi_dimm_thermal_sensor_get(uint8_t sock_ind, uint8_t dimm_addr,
 					   struct dimm_thermal *dimm_temp);
+
+/**
+ *  @brief Get dimm thermal sensor data using input argument structure
+ *
+ *  @details This function returns the DIMM thermal sensor data using a structured input argument.
+ *  Supported only on hsmp protocol version 5 and 7.
+ *
+ *  @param[in] sock_ind Socket index through which the DIMM can be accessed.
+ *
+ *  @param[in] dimm_temp_in Input union containing DIMM address and flags.
+ *
+ *  @param[inout] dimm_temp Output buffer of type struct dimm_thermal containing
+ *  temperature(°C), update rate(ms) and dimm address.
+ *
+ *  @retval ::ESMI_SUCCESS is returned upon successful call.
+ *  @retval Non-zero is returned upon failure.
+ *
+ */
+esmi_status_t esmi_dimm_thermal_sensor_data_get(uint8_t sock_ind, union dimm_temp_inarg dimm_temp_in, struct dimm_thermal *dimm_temp);
 
 /**
  *  @brief Execute a four byte read transaction at a given register offset in a
