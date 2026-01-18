@@ -54,6 +54,7 @@
 #define POWER_EFFICIENCY_MODE_4 0x4
 #define POWER_EFFICIENCY_MODE_5 0x5
 #define MAX_RANGE_0xFF 0xFF
+#define DIMM_POW_MULT_FACTOR 20
 
 /* Total bits required to represent integer */
 #define NUM_OF_32BITS		(sizeof(uint32_t) * 8)
@@ -1747,6 +1748,77 @@ static esmi_status_t epyc_get_dimm_power(uint8_t sock_id, uint8_t dimm_addr)
 	return ret;
 }
 
+static esmi_status_t epyc_get_dimm_power_data(uint8_t sock_id, union dimm_power_inarg dimm_power_inarg)
+{
+	esmi_status_t ret;
+	struct dimm_power d_power;
+	char temp_string[300];
+	char dimm_prefix_name[15] = {0};
+	if(dimm_power_inarg.info.dimm_flag == MAX_DIMM_POWER)
+		sprintf(dimm_prefix_name, "MaxPower");
+	else if(dimm_power_inarg.info.dimm_flag == TOTAL_DIMM_POWER)
+		sprintf(dimm_prefix_name, "Total");
+
+	ret = esmi_dimm_power_consumption_data_get(sock_id, dimm_power_inarg, &d_power);
+	if (ret) {
+		printf("Failed to get socket[%u] DIMM power and update rate, Err[%d]: %s\n",
+			sock_id, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+
+	if(log_to_file && create_log_header) {
+		if(dimm_power_inarg.info.dimm_flag == TOTAL_DIMM_POWER)
+			sprintf(temp_string, "Socket:%d %sDimmPower(Watts),Socket:%d %sDimmPowerUpdateRate(ms),", sock_id, dimm_prefix_name, sock_id, dimm_prefix_name);
+		else
+			sprintf(temp_string, "Socket:%d %sDimmAddress:0x%x Power(Watts),Socket:%d %sDimmAddress:0x%x PowerUpdateRate(ms),", sock_id, dimm_prefix_name, d_power.dimm_addr, sock_id, dimm_prefix_name, d_power.dimm_addr);
+		append_string(&log_file_header, temp_string);
+	}
+
+	if(print_results == PRINT_RESULTS) {
+		printf("----------------------------------------------------------------------");
+		if(dimm_power_inarg.info.dimm_flag == TOTAL_DIMM_POWER)
+		{
+			printf("\n| Socket[%d] %sDimmPower(Watts)\t\t\t|", sock_id, dimm_prefix_name);
+			printf(" %-10.3f |", (double)d_power.power*DIMM_POW_MULT_FACTOR/1000);
+			printf("\n| Socket[%d] %sDimmPowerUpdateRate(ms)\t\t|", sock_id, dimm_prefix_name);
+		}
+		else
+		{
+			printf("\n| Socket[%d] %sDimmAddress[0x%x] Power(Watts)\t|", sock_id, dimm_prefix_name, d_power.dimm_addr);
+			printf(" %-10.3f |", (double)d_power.power/1000);
+			printf("\n| Socket[%d] %sDimmAddress[0x%x] PowerUpdateRate(ms)|", sock_id, dimm_prefix_name, d_power.dimm_addr);
+		}
+		printf(" %-10u |", d_power.update_rate);
+
+		printf("\n----------------------------------------------------------------------\n");
+	}
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+	{
+		if(dimm_power_inarg.info.dimm_flag == TOTAL_DIMM_POWER)
+			printf("Socket,%sDimmPower(Watts),%sDimmPowerUpdateRate(ms)\n%d,%.3f,%u\n", dimm_prefix_name, dimm_prefix_name, sock_id, (double)d_power.power*DIMM_POW_MULT_FACTOR/1000, d_power.update_rate);
+		else
+			printf("Socket,%sDimmAddress,Power(Watts),PowerUpdateRate(ms)\n%d,0x%x,%.3f,%u\n", dimm_prefix_name, sock_id, d_power.dimm_addr, (double)d_power.power/1000, d_power.update_rate);
+	}
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+	{
+		if(dimm_power_inarg.info.dimm_flag == TOTAL_DIMM_POWER)
+			printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"%sDimmPower(Watts)\":%.3f,\n\t\t\"%sDimmPowerUpdateRate(ms)\":%d\n\t},", sock_id, dimm_prefix_name, (double)d_power.power*DIMM_POW_MULT_FACTOR/1000, dimm_prefix_name, d_power.update_rate);
+		else
+			printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"%sDimmAddress\":\"0x%x\",\n\t\t\"Power(Watts)\":%.3f,\n\t\t\"PowerUpdateRate(ms)\":%d\n\t},", sock_id, dimm_prefix_name, d_power.dimm_addr, (double)d_power.power/1000, d_power.update_rate);
+	}
+
+	if(log_to_file)
+	{
+		if(dimm_power_inarg.info.dimm_flag == TOTAL_DIMM_POWER)
+			sprintf(temp_string, "%.3f,%u,", (double)d_power.power*DIMM_POW_MULT_FACTOR/1000, d_power.update_rate);
+		else
+			sprintf(temp_string, "%.3f,%u,", (double)d_power.power/1000, d_power.update_rate);
+		append_string(&log_file_data, temp_string);
+	}
+
+	return ret;
+}
+
 static esmi_status_t epyc_get_dimm_thermal(uint8_t sock_id, uint8_t dimm_addr)
 {
 	struct dimm_thermal d_sensor;
@@ -1777,6 +1849,49 @@ static esmi_status_t epyc_get_dimm_thermal(uint8_t sock_id, uint8_t dimm_addr)
 		printf("Socket,DimmAddress,Temperature('C),TemperatureUpdateRate(ms)\n%d,0x%x,%.3f,%u\n", sock_id, d_sensor.dimm_addr, d_sensor.temp, d_sensor.update_rate);
 	else if(print_results == PRINT_RESULTS_AS_JSON)
 		printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"DimmAddress\":\"0x%x\",\n\t\t\"Temperature('C)\":%.3f,\n\t\t\"TemperatureUpdateRate(ms)\":%d\n\t},", sock_id, d_sensor.dimm_addr, d_sensor.temp, d_sensor.update_rate);
+
+	if(log_to_file)
+	{
+		sprintf(temp_string, "%.3f,%u,", d_sensor.temp, d_sensor.update_rate);
+		append_string(&log_file_data, temp_string);
+	}
+
+	return ret;
+}
+
+static esmi_status_t epyc_get_dimm_thermal_data(uint8_t sock_id, union dimm_temp_inarg dimm_temp_inarg)
+{
+	struct dimm_thermal d_sensor;
+	esmi_status_t ret;
+	char temp_string[300];
+	char dimm_prefix_name[15] = {0};
+	if(dimm_temp_inarg.info.dimm_flag == MAX_DIMM_TEMP)
+		sprintf(dimm_prefix_name, "MaxTemperature");
+
+	ret = esmi_dimm_thermal_sensor_data_get(sock_id, dimm_temp_inarg, &d_sensor);
+	if (ret) {
+		printf("Failed to get socket[%u] %sDIMM temperature and update rate,"
+			" Err[%d]: %s\n", sock_id, dimm_prefix_name, ret, esmi_get_err_msg(ret));
+		return ret;
+	}
+
+	if(log_to_file && create_log_header) {
+		sprintf(temp_string, "Socket:%d %sDimmAddress:0x%x Temperature('C),Socket:%d %sDimmAddress:0x%x TemperatureUpdateRate(ms),", sock_id, dimm_prefix_name, d_sensor.dimm_addr, sock_id, dimm_prefix_name, d_sensor.dimm_addr);
+		append_string(&log_file_header, temp_string);
+	}
+
+	if(print_results == PRINT_RESULTS) {
+		printf("--------------------------------------------------------------------------------------");
+		printf("\n| Socket[%d] %sDimmAddress[0x%x] Temperature('C)\t\t|", sock_id, dimm_prefix_name, d_sensor.dimm_addr);
+		printf(" %-10.3f |", d_sensor.temp);
+		printf("\n| Socket[%d] %sDimmAddress[0x%x] TemperatureUpdateRate(ms)\t|", sock_id, dimm_prefix_name, d_sensor.dimm_addr);
+		printf(" %-10u |", d_sensor.update_rate);
+		printf("\n--------------------------------------------------------------------------------------\n");
+	}
+	else if(print_results == PRINT_RESULTS_AS_CSV)
+		printf("Socket,%sDimmAddress,Temperature('C),TemperatureUpdateRate(ms)\n%d,0x%x,%.3f,%u\n", dimm_prefix_name, sock_id, d_sensor.dimm_addr, d_sensor.temp, d_sensor.update_rate);
+	else if(print_results == PRINT_RESULTS_AS_JSON)
+		printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"%sDimmAddress\":\"0x%x\",\n\t\t\"Temperature('C)\":%.3f,\n\t\t\"TemperatureUpdateRate(ms)\":%d\n\t},", sock_id, dimm_prefix_name, d_sensor.dimm_addr, d_sensor.temp, d_sensor.update_rate);
 
 	if(log_to_file)
 	{
@@ -4683,8 +4798,11 @@ static char* const feat_ver5_F1A_M50_5F_get[] = {
 	" refresh rate for a given socket and dimm address",
 	"  --showdimmthermal [SOCKET] [DIMM_ADDR]\t\t\tShow dimm thermal values for a given socket"
 	" and dimm address",
+	"  --showmaxdimmthermal [SOCKET]\t\t\t\t\tShow hottest dimm thermal values for a given socket",
 	"  --showdimmpower [SOCKET] [DIMM_ADDR]\t\t\t\tShow dimm power consumption for a given socket"
 	" and dimm address",
+	"  --showmaxdimmpower [SOCKET]\t\t\t\t\tShow highest dimm power consumption for a given socket",
+	"  --showtotaldimmpower [SOCKET]\t\t\t\t\tShow total dimm power consumption for a given socket",
 	"  --showcclkfreqlimit [CORE]\t\t\t\t\tShow current clock frequency limit(MHz) for a given core",
 	"  --showsvipower \t\t\t\t\t\tShow svi based power telemetry of all rails for all sockets",
 	"  --showiobw [SOCKET] [LINK<P0-P2,P4-P5,G0-G2>]\t\t\tShow IO aggregate bandwidth for a given socket and"
@@ -4787,7 +4905,7 @@ static char* const feat_ver7_F1A_M50_5F_get[] = {
 	"  --getccdpower [CORE]\t\t\t\t\t\tGet CCD power for a given core",
 	"  --gettdelta [SOCKET]\t\t\t\t\t\tGet thermal solution behaviour for a given socket",
 	"  --getsvi3vrtemp [SOCKET] [TYPE] [RAIL_INDEX(if TYPE=1)]\tGet svi3 vr controller temperature(TYPE:0->HottestRail,1->IndividualRail)",
-	"  --getdimmsbdata [SOCKET] [DIMM_ADDR] [LID] [OFFSET] [REGSPACE]\n\t\t\t\t\t\t\t\tGet DIMM SB register data\n\t\t\t\t\t\t\t\t(LID:0x2->TS0,0x6->TS1,0xA->SPDHub)(REGSPACE:0->Volatile,1->NVM)",
+	"  --getdimmsbdata [SOCKET] [DIMM_ADDR] [LID] [OFFSET] [REGSPACE]\n\t\t\t\t\t\t\t\tGet DIMM SB register data\n\t\t\t\t\t\t\t\t(LID:0x2->TS0,0x6->TS1,0x9->PMIC0,0xA->SPDHub)(REGSPACE:0->Volatile,1->NVM)",
 };
 
 static char* const feat_pc6_cc6_enabledcommands_floorlimit_get[] = {
@@ -4806,7 +4924,7 @@ static char* const feat_pc6_cc6_enabledcommands_floorlimit_get[] = {
 };
 
 static char* const feat_pc6_cc6_floorlimit_set[] = {
-	"  --setdimmsbdata [SOCKET] [DIMM_ADDR] [LID] [OFFSET] [REGSPACE] [REGDATA]\n\t\t\t\t\t\t\t\tSet DIMM SB register data\n\t\t\t\t\t\t\t\t(LID:0x2->TS0,0x6->TS1,0xA->SPDHub)(REGSPACE:0->Volatile,1->NVM)",
+	"  --setdimmsbdata [SOCKET] [DIMM_ADDR] [LID] [OFFSET] [REGSPACE] [REGDATA]\n\t\t\t\t\t\t\t\tSet DIMM SB register data\n\t\t\t\t\t\t\t\t(LID:0x2->TS0,0x6->TS1,0x9->PMIC0,0xA->SPDHub)(REGSPACE:0->Volatile,1->NVM)",
     "  --setpc6enable [SOCKET] [val<0,1>]\t\t\t\tSet the PC6 Enable Control",
     "  --setcc6enable [SOCKET] [val<0,1>]\t\t\t\tSet the CC6 Enable Control",
 	"  --setcorefl [CORE] [FLOORLIMIT]\t\t\t\tSet FloorLimit for a given core (MHz)",
@@ -5170,6 +5288,7 @@ static int parse_flag_based_options(char **argv, int val)
 	uint64_t dimm_addr;
 	uint64_t lid;
 	char *end = 0;
+	union dimm_power_inarg power_inarg;
 	switch(val)
 		{
 		case 1:
@@ -5335,6 +5454,28 @@ static int parse_flag_based_options(char **argv, int val)
 			limit_received = atoi(argv[optind++]);
 			ret = epyc_set_sdps_limit(sock_id, limit_received);
 			break;
+		case 38:
+			/* Get MAX DIMM temperature */
+			sock_id = atoi(optarg);
+			union dimm_temp_inarg temp_inarg;
+			temp_inarg.info.dimm_flag = MAX_DIMM_TEMP;
+			ret = epyc_get_dimm_thermal_data(sock_id, temp_inarg);
+			break;
+		case 39:
+			/* Get MAX DIMM power consumption */
+			sock_id = atoi(optarg);
+			power_inarg.reg_value = 0;
+			power_inarg.info.dimm_flag = MAX_DIMM_POWER;
+			ret  = epyc_get_dimm_power_data(sock_id, power_inarg);
+			break;
+		case 40:
+			/* Get TOTAL DIMM power consumption */
+			sock_id = atoi(optarg);
+
+			power_inarg.reg_value = 0;
+			power_inarg.info.dimm_flag = TOTAL_DIMM_POWER;
+			ret  = epyc_get_dimm_power_data(sock_id, power_inarg);
+			break;
 		default:
 			break;
 		}
@@ -5349,6 +5490,7 @@ static bool check_flag_option_for_1arg(int flag)
 	case 20 ... 21:
 	case 23 ... 30:
 	case 32 ... 33:
+	case 38 ... 40:
 		return true;
 	default:
 		return false;
@@ -5477,6 +5619,9 @@ static int parsesmi_args(int argc,char **argv)
 		{"rawmetric",			no_argument, 		&flag, 	35},
 		{"startmetric",			required_argument,	&flag,	36},
 		{"stopmetric",			required_argument,	&flag,	37},
+		{"showmaxdimmthermal",	required_argument,	&flag,	38},
+		{"showmaxdimmpower",	required_argument,	&flag,	39},
+		{"showtotaldimmpower",	required_argument,	&flag,	40},
 		{0,				0,			0,	0},
 	};
 
