@@ -183,6 +183,17 @@ static char* const freqlimitsrcnames[] = {
 	"SOC and DIMM Power Limit",
 };
 
+/**
+ * @brief SVI3 VR controller PLANE to SVI3_Rail_Index mapping for HSMP
+ */
+static char* const svi3_rail_index_names[] = {
+	"VDDCR_CPU0",
+	"VDDCR_CPU1",
+	"VDDCR_SOC",
+	"VDDIO",
+	"VDDIO_MEM_S3",
+};
+
 typedef union {
 	struct svi3_info_
 	{
