@@ -4492,6 +4492,7 @@ static esmi_status_t epyc_get_svi3_vr_temp(uint32_t sock_ind, uint8_t svi3_rail_
 	esmi_status_t ret;
 	struct svi3_info svi3_info_;svi3_info_.m_svi3_info_inarg.reg_value = 0;
 	char temp_string[300];
+	char svi3_rail_string[20];
 
 	svi3_info_.m_svi3_info_inarg.info.svi3_rail_selection = svi3_rail_selection;
 	if (svi3_rail_selection)
@@ -4513,11 +4514,17 @@ static esmi_status_t epyc_get_svi3_vr_temp(uint32_t sock_ind, uint8_t svi3_rail_
 		printf(RED "Err[%d]: %s\n" RESET, ret, esmi_get_err_msg(ret));
 		return ret;
 	}
+	if (svi3_info_.m_svi3_info_inarg.info.svi3_rail_index < ARRAY_SIZE(svi3_rail_index_names)) {
+		sprintf(svi3_rail_string, "%s", svi3_rail_index_names[svi3_info_.m_svi3_info_inarg.info.svi3_rail_index]);
+	} else {
+		sprintf(svi3_rail_string, "Unknown_Rail");
+	}
+
 	if(log_to_file && create_log_header) {
 		if (!svi3_rail_selection)
-			sprintf(temp_string, "Socket:%d HottestSvi3VrRail('C),Socket:%d HottestSvi3VrTemperature('C),", sock_ind, sock_ind);
+			sprintf(temp_string, "Socket:%d HottestSvi3VrRail,Socket:%d HottestSvi3VrRailName,Socket:%d HottestSvi3VrTemperature('C),", sock_ind, sock_ind, sock_ind);
 		else
-			sprintf(temp_string, "Socket:%d Svi3VrRail:%d Svi3VrTemperature('C),", sock_ind, svi3_info_.m_svi3_info_inarg.info.svi3_rail_index);
+			sprintf(temp_string, "Socket:%d Svi3VrRail:%d Svi3VrRailName:%s Svi3VrTemperature('C),", sock_ind, svi3_info_.m_svi3_info_inarg.info.svi3_rail_index, svi3_rail_string);
 
 		append_string(&log_file_header, temp_string);
 	}
@@ -4526,36 +4533,36 @@ static esmi_status_t epyc_get_svi3_vr_temp(uint32_t sock_ind, uint8_t svi3_rail_
 	{
 		if (!svi3_rail_selection)
 		{
-			printf("--------------------------------------------------------------------------\n");
-			printf("| Socket[%d] HottestSvi3VrRail[%d] HottestSvi3VrTemperature('C)\t | %d\t |\n", sock_ind, svi3_info_.m_svi3_info_inarg.info.svi3_rail_index, svi3_info_.m_svi3_info_inarg.info.svi3_temperature);
-			printf("--------------------------------------------------------------------------\n");
+			printf("----------------------------------------------------------------------------------------------------------\n");
+			printf("| Socket[%d] HottestSvi3VrRail[%d] HottestSvi3VrRailName[%s] HottestSvi3VrTemperature('C)\t | %d\t |\n", sock_ind, svi3_info_.m_svi3_info_inarg.info.svi3_rail_index, svi3_rail_string, svi3_info_.m_svi3_info_inarg.info.svi3_temperature);
+			printf("----------------------------------------------------------------------------------------------------------\n");
 		}
 		else
 		{
-			printf("----------------------------------------------------------\n");
-			printf("| Socket[%d] Svi3VrRail[%d] Svi3VrTemperature('C)\t | %d\t |\n", sock_ind, svi3_info_.m_svi3_info_inarg.info.svi3_rail_index, svi3_info_.m_svi3_info_inarg.info.svi3_temperature);
-			printf("----------------------------------------------------------\n");
+			printf("------------------------------------------------------------------------------------------\n");
+			printf("| Socket[%d] Svi3VrRail[%d] Svi3VrRailName[%s] Svi3VrTemperature('C)\t%s | %d\t |\n", sock_ind, svi3_info_.m_svi3_info_inarg.info.svi3_rail_index, svi3_rail_string, (svi3_info_.m_svi3_info_inarg.info.svi3_rail_index==3)?"\t":"", svi3_info_.m_svi3_info_inarg.info.svi3_temperature);
+			printf("------------------------------------------------------------------------------------------\n");
 		}
 	}
 	else if(print_results == PRINT_RESULTS_AS_CSV)
 	{
 		if (!svi3_rail_selection)
-			printf("Socket,HottestSvi3VrRail,HottestSvi3VrTemperature('C)\n%d,%d,%d\n", sock_ind, svi3_info_.m_svi3_info_inarg.info.svi3_rail_index, svi3_info_.m_svi3_info_inarg.info.svi3_temperature);
+			printf("Socket,HottestSvi3VrRail,HottestSvi3VrRailName,HottestSvi3VrTemperature('C)\n%d,%d,%s,%d\n", sock_ind, svi3_info_.m_svi3_info_inarg.info.svi3_rail_index, svi3_rail_string, svi3_info_.m_svi3_info_inarg.info.svi3_temperature);
 		else
-			printf("Socket,Svi3VrRail,Svi3VrTemperature('C)\n%d,%d,%d\n", sock_ind, svi3_info_.m_svi3_info_inarg.info.svi3_rail_index, svi3_info_.m_svi3_info_inarg.info.svi3_temperature);
+			printf("Socket,Svi3VrRail,Svi3VrRailName,Svi3VrTemperature('C)\n%d,%d,%s,%d\n", sock_ind, svi3_info_.m_svi3_info_inarg.info.svi3_rail_index, svi3_rail_string, svi3_info_.m_svi3_info_inarg.info.svi3_temperature);
 	}
 	else if(print_results == PRINT_RESULTS_AS_JSON)
 	{
 		if (!svi3_rail_selection)
-			printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"HottestSvi3VrRail\":%d,\n\t\t\"HottestSvi3VrTemperature('C)\":%d\n\t},", sock_ind, svi3_info_.m_svi3_info_inarg.info.svi3_rail_index, svi3_info_.m_svi3_info_inarg.info.svi3_temperature);
+			printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"HottestSvi3VrRail\":%d,\n\t\t\"HottestSvi3VrRailName\":\"%s\",\n\t\t\"HottestSvi3VrTemperature('C)\":%d\n\t},", sock_ind, svi3_info_.m_svi3_info_inarg.info.svi3_rail_index, svi3_rail_string, svi3_info_.m_svi3_info_inarg.info.svi3_temperature);
 		else
-			printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"Svi3VrRail\":%d,\n\t\t\"Svi3VrTemperature('C)\":%d\n\t},", sock_ind, svi3_info_.m_svi3_info_inarg.info.svi3_rail_index, svi3_info_.m_svi3_info_inarg.info.svi3_temperature);
+			printf("\n\t{\n\t\t\"Socket\":%d,\n\t\t\"Svi3VrRail\":%d,\n\t\t\"Svi3VrRailName\":\"%s\",\n\t\t\"Svi3VrTemperature('C)\":%d\n\t},", sock_ind, svi3_info_.m_svi3_info_inarg.info.svi3_rail_index, svi3_rail_string, svi3_info_.m_svi3_info_inarg.info.svi3_temperature);
 	}
 
 	if(log_to_file)
 	{
 		if (!svi3_rail_selection)
-			sprintf(temp_string, "%d,%d,", svi3_info_.m_svi3_info_inarg.info.svi3_rail_index, svi3_info_.m_svi3_info_inarg.info.svi3_temperature);
+			sprintf(temp_string, "%d,%s,%d,", svi3_info_.m_svi3_info_inarg.info.svi3_rail_index, svi3_rail_string, svi3_info_.m_svi3_info_inarg.info.svi3_temperature);
 		else
 			sprintf(temp_string, "%d,", svi3_info_.m_svi3_info_inarg.info.svi3_temperature);
 		append_string(&log_file_data, temp_string);
@@ -4841,7 +4848,7 @@ static char* const feat_ver5_xgmibw_F1A_M50_5F_get[] = {
 static char* const feat_ver5_F1A_M00_1F_set[] = {
 	"  --setpowerefficiencymode [SOCKET] [MODE<0-5>]\t\t\tSet power efficiency mode"
 	" for a given socket",
-	"  --setxgmipstaterange [SOCKET] [MIN<0,1>] [MAX<0,1>]\t\tSet xgmi pstate range",
+	"  --setxgmipstaterange [SOCKET] [MIN<0,1>] [MAX<0,1>]\t\tSet xgmi pstate range (MAX <= MIN)",
 	"  --setcpurailisofreqpolicy [SOCKET] [VAL<0,1>]\t\t\tSet CPU ISO frequency policy",
 	"  --setdfcctrl [SOCKET] [VAL<0,1>]\t\t\t\tEnable or disable DF c-state"
 };
@@ -4851,7 +4858,7 @@ static char* const feat_ver7_F1A_M50_5F_set[] = {
 	" for a given socket.\n\t\t\t\t\t\t\t\tIf Mode=4/5, UTIL(%)<0-100> and PPTLimit(mW) are mandatory",
 	" \t\t\t\t\t\t\t\t\t0=HighPerformance,\n\t\t\t\t\t\t\t\t\t1=PowerEfficiency,\n\t\t\t\t\t\t\t\t\t2=IOPerformance,\n\t\t\t\t\t\t\t\t\t3=BalancedMemory,",
 	" \t\t\t\t\t\t\t\t\t4=BalancedCore,\n\t\t\t\t\t\t\t\t\t5=BalancedCoreMemory",
-	"  --setxgmipstaterange [SOCKET] [MIN<0,1>] [MAX<0,1>]\t\tSet xgmi pstate range",
+	"  --setxgmipstaterange [SOCKET] [MIN<0,1>] [MAX<0,1>]\t\tSet xgmi pstate range (MAX <= MIN)",
 	"  --setcpurailisofreqpolicy [SOCKET] [VAL<0,1>]\t\t\tSet CPU ISO frequency policy",
 	"  --setdfcctrl [SOCKET] [VAL<0,1>]\t\t\t\tEnable or disable DF c-state"
 };
@@ -4904,7 +4911,7 @@ static char* const feat_ver7_F1A_M50_5F_get[] = {
 	"  --getxgmipstaterange [SOCKET]\t\t\t\t\tGet xgmi pstate range for a given socket",
 	"  --getccdpower [CORE]\t\t\t\t\t\tGet CCD power for a given core",
 	"  --gettdelta [SOCKET]\t\t\t\t\t\tGet thermal solution behaviour for a given socket",
-	"  --getsvi3vrtemp [SOCKET] [TYPE] [RAIL_INDEX(if TYPE=1)]\tGet svi3 vr controller temperature(TYPE:0->HottestRail,1->IndividualRail)",
+	"  --getsvi3vrtemp [SOCKET] [TYPE] [RAIL_INDEX(if TYPE=1)]\tGet svi3 vr controller temperature(TYPE:0->HottestRail,1->IndividualRail)\n\t\t\t\t\t\t\t\t(RAIL_INDEX:0->VDDCR_CPU0,1->VDDCR_CPU1,2->VDDCR_SOC,3->VDDIO,4->VDDIO_MEM_S3)",
 	"  --getdimmsbdata [SOCKET] [DIMM_ADDR] [LID] [OFFSET] [REGSPACE]\n\t\t\t\t\t\t\t\tGet DIMM SB register data\n\t\t\t\t\t\t\t\t(LID:0x2->TS0,0x6->TS1,0x9->PMIC0,0xA->SPDHub)(REGSPACE:0->Volatile,1->NVM)",
 };
 
