@@ -61,11 +61,11 @@ enum hsmp_message_ids {
 	HSMP_DIMM_SB_RD,		/* 33h Get data from a specified device on the DIMM.*/
 	HSMP_READ_CCD_POWER,		/* 34h Get the average power consumed by CCD */
 	HSMP_READ_TDELTA,		/* 35h Get thermal solution behaviour */
-	HSMP_GET_SVI3_VR_CTRL_TEMP,	/* 36h Get temperature of SVI3 VR controlller rails */
+	HSMP_GET_SVI3_VR_CTRL_TEMP,	/* 36h Get temperature of SVI3 VR controller rails */
 	HSMP_GET_ENABLED_HSMP_CMDS,	/* 37h Get/Set supported HSMP commands */
-	HSMP_SET_GET_FLOOR_LIMIT,       /* 38h Get/Set supported Floor Limit commands */
-	HSMP_DIMM_SB_WR,                /* 39h Set data to a specified device on the DIMM.*/
-	HSMP_SDPS_LIMIT,                /* 3Ah Get/Set SDPSLimit. */
+	HSMP_SET_GET_FLOOR_LIMIT,       /* 38h Get/Set supported Floor limit commands */
+	HSMP_DIMM_SB_WR,                /* 39h Set data to a specified device on the DIMM */
+	HSMP_SDPS_LIMIT,                /* 3Ah Get/Set SDPS limit */
 	HSMP_MSG_ID_MAX,
 };
 
@@ -310,7 +310,7 @@ static const struct hsmp_msg_desc hsmp_msg_desc_table[] = {
 
 	/*
 	 * HSMP_SET_PCI_RATE, num_args = 1, response_sz = 1
-	 * input: args[0] = link rate control value
+	 * input: args[0] = link rate control value[7:0]
 	 * output: args[0] = previous link rate control value
 	 */
 	{1, 1, HSMP_SET},
@@ -370,14 +370,14 @@ static const struct hsmp_msg_desc hsmp_msg_desc_table[] = {
 	{1, 1, HSMP_SET_GET},
 
 	/*
-	 * HSMP_PC6_REQUEST, num_args = 1, response_sz = 0/1
+	 * HSMP_PC6_ENABLE, num_args = 1, response_sz = 0/1
 	 * input: args[0] = set/get PC6 control[31] + disable/enable PC6[0]
 	 * output: args[0] = current PC6 control status[0]
 	 */
 	{1, 1, HSMP_SET_GET},
 
 	/*
-	 * HSMP_CC6_REQUEST, num_args = 1, response_sz = 0/1
+	 * HSMP_CC6_ENABLE, num_args = 1, response_sz = 0/1
 	 * input: args[0] = set/get CC6 control[31] + disable/enable CC6[0]
 	 * output: args[0] = current CC6 control status[0]
 	 */
@@ -457,48 +457,41 @@ static const struct hsmp_msg_desc hsmp_msg_desc_table[] = {
 	/*
 	 * HSMP_SET_GET_FLOOR_LIMIT, num_args = 1, response_sz = 1
 	 * input: args[0] =
-	 *                  [31:30]=Set or Get:
-	 *                     00=Set the Floor frequency per core.
-	 *                     01=Set the Floor frequency for all cores.
-	 *                     10=Get the Floor frequency of a core.
-	 * 	               11=Get the Effective Floor frequency per core.
-	 *                  [29:28]=Reserved.
-	 *                  [27:16]=ApicId.
-	 *                 Note: DataIn[27:16] are Reserved if DataIn[31:30]==01.
-	 *
-	 *                 If DataIn[31]=0
-	 *                  [15:0]=Floor frequency limit.
-	 *                 Else
-	 *                  [15:0]=Reserved.
+	 *	Set or Get[31:30]
+	 *		Set the Floor frequency per core = 00
+	 *		Set the Floor frequency for all cores = 01
+	 *		Get the Floor frequency of a core = 10
+	 *		Get the Effective Floor frequency per core = 11
+	 *	Reserved[29:28]
+	 *	Apic id / Reserved[27:16]
+	 *		args[27:16] is reserved if arg[31:30] is 01
+	 *	Floor frequency limit / Reserved[15:0]
+	 *		if args[31] = 0, Floor frequency limit, else reserved
 	 *
 	 * output: args[0] =
-	 *                 If DataIn[31:30]=11
-	 *                  [15:0]=Effective Floor frequency limit(MHz).
-	 *                 Else
-	 *                  [15:0]=Floor frequency limit (MHz).
-	 *                 The output will be None if DataIn[31]=0.
+	 *	Effective Floor frequency limit(MHz) / None / Floor frequency limit[15:0]
+	 *		Effective Floor frequency if input args[31:30] = 11
+	 *		None if input args[31] = 0
+	 *		Floor frequency limit (MHz)[15:0] if args[31:30] = 10
 	 */
-	 {1, 1, HSMP_SET_GET},
+	{1, 1, HSMP_SET_GET},
 
 	/*
 	 * HSMP_DIMM_SB_WR, num_args = 1, response_sz = 0
 	 * input: args[0] =
-	 *                   [07:00] DIMM address
-	 *                   [11:08] LID of device
-	 *                   [22:12] Register offset in given reg space
-	 *                   [23]    Register space
-	 *                   [31:24] Write Data
+	 *	Write Data[31:24]
+	 *	Register space[23]
+	 *	Register offset in given reg space[22:12]
+	 *	LID of device[11:8]
+	 *	DIMM address[7:0]
 	 * output: None
 	 */
 	{1, 0, HSMP_SET},
 
 	/*
 	 * HSMP_SDPS_LIMIT, num_args = 1, response_sz = 1
-	 * input: args[0] =
-	 *                   [30:00] SDPS Limit
-	 *                   [31] Set/Get
-	 * output: args[0] =
-	 *                   [30:00] SDPS Limit
+	 * input: args[0] = Set/Get[31] + SDPS Limit[30:0]
+	 * output: args[0] = SDPS Limit[30:0]
 	 */
 	{1, 1, HSMP_SET_GET},
 };
@@ -583,98 +576,95 @@ struct hsmp_metric_table {
 	__u32 gfxclk_frequency[8];
 };
 
-#define METRICS_TABLE_COLLECTION_SLEEP_TIME 100
 #define F1A_M50_M5F_MAX_CORES_PER_CCD_32 32
 #define F1A_M50_M5F_MAX_FREQ_TABLE_SIZE  4
 #define F1A_M50_M5F_MAX_XGMI             8
 #define F1A_M50_M5F_MAX_PCIE             8
 #define F1A_M50_M5F_MAX_CCD              8
-#define F1A_M50_M5F_MAX_SOCKET           2
-#define MAX_SOCKET                       8
-#define GHZ_TO_MHZ                       1000
 
 /* Metrics table (supported only with proto version 7) */
-typedef struct {
-  __u32 NumOfActiveCCDs;
-  __u32 AccumulationCounter;
+struct hsmp_metric_table_f1a_m50_5f_iod {
+	__u32 num_active_ccds;
+	__u32 accumulation_counter;
 
-  //TEMPERATURE
-  __u64 MaxSocketTempAcc;
+	/* TEMPERATURE */
+	__u64 max_socket_temperature_acc;
 
-  //POWER
-  __u32 SocketPowerLimit;
-  __u32 MaxSocketPowerLimit;
-  __u64 SocketPowerAcc;
-  __u64 CorePowerAcc;
-  __u64 UncorePowerAcc;
+	/* POWER */
+	__u32 socket_power_limit;
+	__u32 max_socket_power_limit;
+	__u64 socket_power_acc;
+	__u64 core_power_acc;
+	__u64 uncore_power_acc;
 
-  //ENERGY
-  __u64 Timestamp;
-  __u64 SocketEnergyAcc;
-  __u64 CoreEnergyAcc;
-  __u64 UncoreEnergyAcc;
+	/* ENERGY */
+	__u64 timestamp;
+	__u64 socket_energy_acc;
+	__u64 core_energy_acc;
+	__u64 uncore_energy_acc;
 
-  //FREQUENCY
-  __u64 FclkFreqAcc;
-  __u64 UclkFreqAcc;
-  __u64 DdrRateAcc;
-  __u64 LclkFreqAcc[F1A_M50_M5F_MAX_FREQ_TABLE_SIZE];
+	/* FREQUENCY */
+	__u64 fclk_frequency_acc;
+	__u64 uclk_frequency_acc;
+	__u64 ddr_rate_acc;
+	__u64 lclk_frequency_acc[F1A_M50_M5F_MAX_FREQ_TABLE_SIZE];
 
-  //FREQUENCY RANGE
-  __u32 FclkFreqTable[F1A_M50_M5F_MAX_FREQ_TABLE_SIZE];
-  __u32 UclkFreqTable[F1A_M50_M5F_MAX_FREQ_TABLE_SIZE];
-  __u32 DdrRateTable[F1A_M50_M5F_MAX_FREQ_TABLE_SIZE];
-  __u32 MaxDfPstateRange;
-  __u32 MinDfPstateRange;
-  __u32 LclkFreqTable[F1A_M50_M5F_MAX_FREQ_TABLE_SIZE];
-  __u32 MaxLclkDpmRange;
-  __u32 MinLclkDpmRange;
+	/* FREQUENCY RANGE */
+	__u32 fclk_frequency_table[F1A_M50_M5F_MAX_FREQ_TABLE_SIZE];
+	__u32 uclk_frequency_table[F1A_M50_M5F_MAX_FREQ_TABLE_SIZE];
+	__u32 ddr_rate_table[F1A_M50_M5F_MAX_FREQ_TABLE_SIZE];
+	__u32 max_df_pstate_range;
+	__u32 min_df_pstate_range;
+	__u32 lclk_frequency_table[F1A_M50_M5F_MAX_FREQ_TABLE_SIZE];
+	__u32 max_lclk_dpm_range;
+	__u32 min_lclk_dpm_range;
 
-  //XGMI
-  __u64 XgmiBitrate[F1A_M50_M5F_MAX_XGMI];
-  __u64 XgmiReadBandwidth[F1A_M50_M5F_MAX_XGMI];
-  __u64 XgmiWriteBandwidth[F1A_M50_M5F_MAX_XGMI];
+	/* XGMI */
+	__u64 xgmi_bit_rate[F1A_M50_M5F_MAX_XGMI];
+	__u64 xgmi_read_bandwidth[F1A_M50_M5F_MAX_XGMI];
+	__u64 xgmi_write_bandwidth[F1A_M50_M5F_MAX_XGMI];
 
-  //ACTIVITY
-  __u64 SocketC0ResidencyAcc;
-  __u64 SocketDFCstateResidencyAcc;
-  __u64 DramReadBandwidthAcc;
-  __u64 DramWriteBandwidthAcc;
-  __u32 MaxDramBandwidth;
-  __u64 PcieBandwidthAcc[F1A_M50_M5F_MAX_PCIE];
+	/* ACTIVITY */
+	__u64 socket_c0_residency_acc;
+	__u64 socket_df_cstate_residency_acc;
+	__u64 dram_read_bandwidth_acc;
+	__u64 dram_write_bandwidth_acc;
+	__u32 max_dram_bandwidth;
+	__u64 pcie_bandwidth_acc[F1A_M50_M5F_MAX_PCIE];
 
-  //THROTTLERS
-  __u32 ProchotResidencyAcc;
-  __u32 PptResidencyAcc;
-  __u32 ThmResidencyAcc;
-  __u32 VrHotResidencyAcc;
-  __u32 CpuTdcResidencyAcc;
-  __u32 SocTdcResidencyAcc;
-  __u32 IoMemTdcResidencyAcc;
-  __u32 FitResidencyAcc;
-}hsmp_metric_table_IOD_F1A_M50_M5F_VER_0;
+	/* THROTTLERS */
+	__u32 prochot_residency_acc;
+	__u32 ppt_residency_acc;
+	__u32 thm_residency_acc;
+	__u32 vrhot_residency_acc;
+	__u32 cpu_tdc_residency_acc;
+	__u32 soc_tdc_residency_acc;
+	__u32 io_mem_tdc_residency_acc;
+	__u32 fit_residency_acc;
+};
 
-typedef struct {
-  __u32 Core_ApicIdOfThread0[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
-  __u64 Core_C0[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
-  __u64 Core_CC1[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
-  __u64 Core_CC6[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
-  __u64 Core_FREQ[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
-  __u64 Core_FREQEFF[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
-  __u64 Core_POWER[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
-}hsmp_metric_table_CCD_F1A_M50_M5F_VER_0x00700000;
+struct hsmp_metric_table_f1a_m50_5f_ccd {
+	__u32 core_apicid_of_thread0[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
+	__u64 core_c0[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
+	__u64 core_cc1[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
+	__u64 core_cc6[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
+	__u64 core_frequency[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
+	__u64 core_frequency_effective[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
+	__u64 core_power[F1A_M50_M5F_MAX_CORES_PER_CCD_32];
+};
 
-struct hsmp_metric_table_F1A_M50_M5F_VER_0x00700000 {
-	hsmp_metric_table_IOD_F1A_M50_M5F_VER_0			iod;
-	hsmp_metric_table_CCD_F1A_M50_M5F_VER_0x00700000	ccd[F1A_M50_M5F_MAX_CCD];
+struct hsmp_metric_table_f1a_m50_5f {
+	struct hsmp_metric_table_f1a_m50_5f_iod	 iod;
+	struct hsmp_metric_table_f1a_m50_5f_ccd  ccd[F1A_M50_M5F_MAX_CCD];
 };
 
 /* Reset to default packing */
 #pragma pack()
 
+int hsmp_send_message(struct hsmp_message *msg);
+
 /* Define unique ioctl command for hsmp msgs using generic _IOWR */
 #define HSMP_BASE_IOCTL_NR	0xF8
 #define HSMP_IOCTL_CMD		_IOWR(HSMP_BASE_IOCTL_NR, 0, struct hsmp_message)
-int hsmp_send_message(struct hsmp_message *msg);
 
 #endif /*_ASM_X86_AMD_HSMP_H_*/
