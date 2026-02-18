@@ -22,6 +22,9 @@
 #define CORE_0 0
 #define SOCKET_0 0
 #define CPU_MAX_CORES_PER_SOCKET 512
+#define MAX_SOCKET               8
+#define F1A_M50_M5F_MAX_SOCKET   2
+#define GHZ_TO_MHZ               1000
 
 /** \file e_smi.h
  *  Main header file for the E-SMI library.
