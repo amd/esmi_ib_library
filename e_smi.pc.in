@@ -1,0 +1,11 @@
+prefix=@CPACK_PACKAGING_INSTALL_PREFIX@
+exec_prefix=${prefix}/@E_SMI@
+libdir=${exec_prefix}/lib
+includedir=${exec_prefix}/include
+
+Name: @CPACK_PACKAGE_NAME@
+Description: @CPACK_PACKAGE_DESCRIPTION_SUMMARY@
+Version: @CPACK_PACKAGE_VERSION@
+
+Libs: -L${libdir} -l@E_SMI_TARGET@
+Cflags: -I${includedir}
