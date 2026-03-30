@@ -172,7 +172,7 @@ struct dpm_level {
 /**
  * @brief frequency limit source names
  */
-static char* const freqlimitsrcnames[] = {
+static const char* const freqlimitsrcnames[] = {
 	"cHTC-Active",
 	"PROCHOT",
 	"TDC Limit (CPU rail)",
@@ -189,7 +189,7 @@ static char* const freqlimitsrcnames[] = {
 /**
  * @brief SVI3 VR controller PLANE to SVI3_Rail_Index mapping for HSMP
  */
-static char* const svi3_rail_index_names[] = {
+static const char* const svi3_rail_index_names[] = {
 	"VDDCR_CPU0",
 	"VDDCR_CPU1",
 	"VDDCR_SOC",
