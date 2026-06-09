@@ -374,7 +374,10 @@ static esmi_status_t detect_packages(struct system_metrics *psm)
 		return ESMI_IO_ERROR;
 
 	/* Number of sockets in the system */
-	psm->total_sockets = psm->total_cores / max_cores_socket;
+	psm->total_sockets = (psm->total_cores + max_cores_socket - 1)/ max_cores_socket;
+
+	if (psm->total_sockets == 0)
+		return ESMI_NOT_SUPPORTED;
 
 	return ESMI_SUCCESS;
 }
