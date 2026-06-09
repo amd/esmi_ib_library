@@ -374,8 +374,33 @@ static esmi_status_t detect_packages(struct system_metrics *psm)
 		return ESMI_IO_ERROR;
 
 	/* Number of sockets in the system */
-	psm->total_sockets = psm->total_cores / max_cores_socket;
+	/* Determine the number of sockets from kernel topology*/
+	{
+		int loop_count, pkg_id, max_pkg_id = -1;
+		char path[FILEPATHSIZ];
+		FILE *fp;
 
+		for (loop_count = 0; loop_count < psm->total_cores; loop_count++) {
+			snprintf(path, FILEPATHSIZ,
+				 "%s/cpu%d/topology/physical_package_id",
+				 CPU_SYS_PATH, loop_count);
+			fp = fopen(path, "r");
+			if (!fp) continue;
+			if (fscanf(fp, "%d", &pkg_id) == 1
+			    && pkg_id > max_pkg_id)
+				max_pkg_id = pkg_id;
+			fclose(fp);
+		}
+		if (max_pkg_id >= 0) {
+			psm->total_sockets = (uint32_t)(max_pkg_id + 1);
+		} else {
+			/* Fallback: ceiling division */
+			psm->total_sockets = (psm->total_cores + max_cores_socket - 1)
+					      / max_cores_socket;
+		}
+		if (psm->total_sockets == 0)
+			return ESMI_IO_ERROR;
+	}
 	return ESMI_SUCCESS;
 }
 
