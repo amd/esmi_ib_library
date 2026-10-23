@@ -1,2 +1,5 @@
 #!/bin/bash
 echo -e "/opt/e-sms/e_smi/lib/" > /etc/ld.so.conf.d/x86_64-libesmi_ib_lib.conf && ldconfig
+# Create pkgconfig symlink so pkg-config can find libe_smi64
+mkdir -p /usr/share/pkgconfig
+ln -sf /opt/e-sms/e_smi/lib/pkgconfig/libe_smi64.pc /usr/share/pkgconfig/libe_smi64.pc
