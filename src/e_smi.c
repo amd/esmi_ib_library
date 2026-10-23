@@ -871,6 +871,8 @@ esmi_status_t esmi_all_energies_get(uint64_t *penergy)
 		return read_all_energy_hsmp_drv(penergy, cpus);
 	else if (!psm->energy_status)
 		ret = batch_read_energy_drv(penergy, cpus);
+	else if (!psm->msr_safe_status)
+		ret = batch_read_msr_drv(MSR_SAFE_TYPE, penergy, cpus);
 	else
 		ret = batch_read_msr_drv(MSR_TYPE, penergy, cpus);
 
